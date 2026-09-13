@@ -185,6 +185,7 @@ function Get-AuroraBinary([string]$Path) {
 function Get-AuroraScan([string]$Root, [int]$MaxDirectories=12000, [int]$MaxDepth=18, [int]$Seconds=30) {
     $Root=Get-AuroraPath $Root
     Assert-AuroraGameRoot $Root
+    $watch=[Diagnostics.Stopwatch]::StartNew(); $materialized=0
     $files = New-Object 'Collections.Generic.List[object]'
     $warnings = New-Object 'Collections.Generic.List[string]'
     $queue = New-Object 'Collections.Generic.Queue[object]'
@@ -195,14 +196,22 @@ function Get-AuroraScan([string]$Root, [int]$MaxDirectories=12000, [int]$MaxDept
         }
         $node = $queue.Dequeue(); $count++
         $guard=$null
-        try { $guard=Enter-AuroraPathGuard $node[0] -Directory; $children = @(Get-ChildItem -LiteralPath $node[0] -Force -ErrorAction Stop) }
+        try {
+            $guard=Enter-AuroraPathGuard $node[0] -Directory
+            $directory=New-Object IO.DirectoryInfo($node[0])
+            # Keep Content/Assets/Engine traversal: plugins and alternate EXEs can live
+            # there. Filter at native enumeration instead of allocating every asset.
+            $children=@($directory.EnumerateDirectories())
+            foreach ($pattern in @('*.exe','nvngx_dlss*.dll','sl.*.dll')) { $children+=@($directory.EnumerateFiles($pattern)) }
+            $materialized+=$children.Count
+        }
         catch { $warnings.Add("无法安全读取目录：$($node[0])"); continue }
         finally { if ($guard) { $guard.Dispose() } }
         foreach ($child in $children) {
             if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) {
                 $warnings.Add("已跳过链接：$($child.FullName)"); continue
             }
-            if ($child.PSIsContainer) {
+            if ($child -is [IO.DirectoryInfo]) {
                 if ($child.Name -match '^(OptiScaler|\.git|\.svn|_storage.*|AuroraSetup|RuntimeSync)$') { continue }
                 if ([int]$node[1] -ge $MaxDepth) { $warnings.Add("已达到深度上限：$($child.FullName)"); continue }
                 $queue.Enqueue(@($child.FullName, ([int]$node[1] + 1)))
@@ -211,7 +220,8 @@ function Get-AuroraScan([string]$Root, [int]$MaxDirectories=12000, [int]$MaxDept
             }
         }
     }
-    [pscustomobject]@{ Root=$Root; Files=@($files.ToArray()); Complete=($warnings.Count -eq 0); Warnings=@($warnings.ToArray()) }
+    $watch.Stop()
+    [pscustomobject]@{ Root=$Root; Files=@($files.ToArray()); Complete=($warnings.Count -eq 0); Warnings=@($warnings.ToArray()); Stats=[pscustomobject]@{DirectoriesVisited=$count;EntriesMaterialized=$materialized;RelevantFiles=$files.Count;ElapsedMs=$watch.Elapsed.TotalMilliseconds;Enumeration='NativeFiltered'} }
 }
 function Get-AuroraCandidates($Scan) {
     $runtimes = @($Scan.Files | Where-Object { $_.Extension -ieq '.dll' })
