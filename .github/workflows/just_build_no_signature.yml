@@ -116,8 +116,8 @@ jobs:
     - name: Add Runtime Sync / 添加运行库同步工具
       shell: powershell
       run: |
-        Copy-Item "${{ github.workspace }}\dist\runtime_sync\runtime_sync.ps1" "${{ github.workspace }}\x64\Release\a\runtime_sync.ps1"
-        Copy-Item "${{ github.workspace }}\dist\runtime_sync\Check_DLSS_Runtime.bat" "${{ github.workspace }}\x64\Release\a\Check_DLSS_Runtime.bat"
+        Copy-Item "${{ github.workspace }}\dist\runtime_sync\*.ps1" "${{ github.workspace }}\x64\Release\a\"
+        Copy-Item "${{ github.workspace }}\dist\runtime_sync\*.bat" "${{ github.workspace }}\x64\Release\a\"
 
     - name: Package Aurora / 打包 Aurora
       shell: powershell

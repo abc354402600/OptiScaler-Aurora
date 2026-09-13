@@ -98,88 +98,33 @@ Current bundled NVIDIA runtimes / 当前集成 NVIDIA 运行库：
 
 ---
 
-## ⚡ Automatic Runtime Sync / 自动运行库同步
+## ⚡ Runtime Sync v2 / 运行库检查、修复与恢复
 
-One of Aurora's biggest differences is that users no longer need to manually search through the game folders and replace every DLSS / Streamline DLL themselves.
+新版工具将检查与修复分开：`Check_DLSS_Runtime.bat` 只读检查；需要替换时，在 `Aurora_Setup.bat` 中选择“备份后修复运行库”。安装末尾也可以选择同步。
 
-After `setup_windows.bat` completes installation, Aurora automatically:
+扫描会记录散布在 UE Engine/Plugins、Data、Assets、Unity Plugins 等位置的 DLSS / Streamline 文件。只同步源包中已有、版本和 x64 架构均可识别的文件。游戏中发现 SL1 或未知代际时，整组原生 Streamline 都保留；DLSSNR 只记录，不覆盖。
 
-1. Scans the game directory and common engine runtime locations
-2. Finds matching game-owned DLSS / Streamline runtime files
-3. Creates verified backups of the original game files
-4. Updates compatible runtimes to Aurora's bundled versions while preserving incompatible legacy Streamline 1.x files
-5. Verifies the deployed files with SHA256
-6. Saves restore information for later checking and uninstall recovery
+每次替换前先校验备份，再保存操作清单，最后替换并核对 SHA256。游戏更新或用户修改过的受管理文件不会被静默覆盖；出现冲突会保留当前文件和备份。只读报告不代表已加载或已解锁 6X。
 
-**这是 Aurora 与很多手动整合方案最大的区别之一：不再需要自己到处寻找和替换 DLSS / Streamline 文件。**
+`Remove_Aurora.bat` 先恢复运行库，再按安装清单卸载。修改过的 `OptiScaler.ini`、其他 Mod、原有文件以及恢复记录会保留。不要手动删除 `OptiScaler/RuntimeSync` 和 `OptiScaler/AuroraSetup` 中仍需使用的备份。
 
-运行 `setup_windows.bat` 后，Aurora 会自动：
-
-1. 扫描游戏目录与常见引擎运行库目录
-2. 找到游戏自带的 DLSS / Streamline 文件
-3. 校验并备份游戏原文件
-4. 对兼容的运行库自动更新为 Aurora 集成版本，同时识别并保护不兼容的旧版 Streamline 1.x 文件
-5. 使用 SHA256 校验替换结果
-6. 保存恢复信息，供后续检查与卸载恢复使用
-
-如果 Steam 验证、游戏更新或启动器重新下载了旧版运行库，只需再次运行：
-
-`Check_DLSS_Runtime.bat`
-
-Aurora 会自动重新检查并修复。
-
----
+完整操作说明和限制见 [Aurora Setup / Runtime Sync v2](docs/AURORA_SETUP_RUNTIME_V2.md)。
 
 ## 3-Step Installation / 三步安装
 
-### 1. Extract Aurora beside the real game executable / 把 Aurora 放到游戏真正的主程序目录
+### 1. 完整解压发布包，选择游戏目录
 
-Extract **all files** from the Aurora package into the folder containing the game's real `.exe`.
+可以先把完整发布包解压到独立文件夹，再运行 `setup_windows.bat` 或 `Aurora_Setup.bat`。输入单个游戏的目录或 EXE 路径，安装程序会扫描候选主程序。
 
-For many Unreal Engine games, the path is usually similar to:
+任务管理器可能指向启动器，不能单独作为安装依据。比如异环应核对 `Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe`；Win64 与 Win64r 并存时会同时列出，Win64r 仅作为较高优先级候选，不自动代选。
 
-`GameName\Binaries\Win64`
+### 2. 手动选择游戏程序与 Proxy
 
-最简单的查找方法：
+每个菜单都需要 **输入对应的数字并按 Enter（回车）**。保留全部八种选择：`dxgi.dll`、`winmm.dll`、`version.dll`、`dbghelp.dll`、`d3d12.dll`、`wininet.dll`、`winhttp.dll`、`OptiScaler.asi`。ASI 方式需要已有 ASI Loader。
 
-**启动游戏 → 打开任务管理器 → 右键游戏进程 → 打开文件所在的位置**
-
-然后退出游戏，把 Aurora 压缩包内的全部文件解压到这里。
+核对屏幕上显示的完整安装路径和 Proxy 后安装。已有未知 Proxy 不会被覆盖，其他 OptiScaler Proxy 未卸载时也不会叠加安装。安装末尾先检查，再由你选择是否备份并同步运行库。
 
 ---
-
-### 2. Run `setup_windows.bat` / 运行 `setup_windows.bat`
-
-Run:
-
-`setup_windows.bat`
-
-Then choose the proxy DLL name.
-
-Recommended starting point:
-
-- `dxgi.dll` — default choice for most games
-- `winmm.dll` — useful for Vulkan and some special cases
-- Other available choices include `version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll` and `winhttp.dll`
-
-一般游戏优先尝试：
-
-`dxgi.dll`
-
-部分特殊游戏需要其他 Proxy。
-
-例如：
-
-**Neverness to Everness / 异环：推荐 `winmm.dll`**
-
-After that, Aurora completes the OptiScaler setup and automatically runs Runtime Sync.
-
-之后 Aurora 会自动完成 OptiScaler 安装，并自动同步游戏中的 DLSS / Streamline 运行库。
-
-**无需再手动寻找和替换 DLL。**
-
----
-
 ### 3. Launch the game / 直接进入游戏
 
 After setup completes, launch the game normally.
@@ -406,7 +351,7 @@ If this happens, wait for the launcher to finish updating, then run:
 
 `Check_DLSS_Runtime.bat`
 
-Aurora will check the managed DLSS / Streamline runtime files and repair them when necessary.
+This is a read-only check. To repair, run Aurora_Setup.bat and select runtime repair; changed managed files require resolving the reported conflict first.
 
 **部分游戏启动器、游戏更新或文件验证，会把 Aurora 已替换的运行库重新恢复成游戏原版。**
 
@@ -416,7 +361,7 @@ Aurora will check the managed DLSS / Streamline runtime files and repair them wh
 
 `Check_DLSS_Runtime.bat`
 
-Aurora 会自动检查并重新修复受管理的 DLSS / Streamline 文件。
+工具只读检查。如需修复，请在 Aurora_Setup.bat 中选择运行库修复；受管理文件已变化时，先处理报告中的冲突，不会自动覆盖。
 
 Runtime Sync also keeps restore information and verified backups for managed original game files.
 
@@ -541,7 +486,7 @@ First run:
 
 `Check_DLSS_Runtime.bat`
 
-to repair managed DLSS / Streamline files.
+for a read-only diagnosis, then choose runtime repair in Aurora_Setup.bat if needed.
 
 If the game executable or loading behavior has changed after a major update, you may also need to run:
 
@@ -555,7 +500,7 @@ again and reselect the appropriate proxy DLL.
 
 `Check_DLSS_Runtime.bat`
 
-重新检查并修复运行库。
+只读检查运行库；需要修复时，再运行 Aurora_Setup.bat 选择运行库修复。
 
 如果游戏大版本更新后主程序、加载方式或目录结构发生变化，再重新运行：
 

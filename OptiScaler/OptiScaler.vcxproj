@@ -262,6 +262,8 @@ copy $(SolutionDir)external\FidelityFX-SDK-v2\Kits\FidelityFX\signedbin\amd_fide
 copy $(SolutionDir)external\FidelityFX-SDK-v2\docs\license.md $(SolutionDir)x64\Release\a\Licenses\FidelityFX_v2_LICENSE.md /Y
 copy $(SolutionDir)OptiScaler.ini $(SolutionDir)x64\Release\a\ /Y
 copy $(SolutionDir)setup_windows.bat $(SolutionDir)x64\Release\a\ /Y
+copy "$(SolutionDir)dist\runtime_sync\*.ps1" "$(SolutionDir)x64\Release\a\" /Y
+copy "$(SolutionDir)dist\runtime_sync\*.bat" "$(SolutionDir)x64\Release\a\" /Y
 copy $(SolutionDir)setup_linux.sh $(SolutionDir)x64\Release\a\ /Y
 md $(SolutionDir)x64\Release\a\OptiScaler\D3D12_OptiScaler\
 copy "$(SolutionDir)external\directx_agility_sdk\lib\*.dll" $(SolutionDir)x64\Release\a\OptiScaler\D3D12_OptiScaler\ /Y

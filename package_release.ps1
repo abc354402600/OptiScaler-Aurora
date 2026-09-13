@@ -74,6 +74,14 @@ foreach ($f in $files) {
     else { Write-Host "missing from build output: $f" }
 }
 
+# Always stage the current setup helpers together; runtime_sync.ps1 now shares Aurora_Common.ps1.
+foreach ($name in @('Aurora_Common.ps1', 'Aurora_Diagnostics.ps1', 'Aurora_Setup.ps1', 'runtime_sync.ps1',
+                    'Aurora_Setup.bat', 'Check_DLSS_Runtime.bat', 'Remove_Aurora.bat')) {
+    $helper = Join-Path $root ("dist\runtime_sync\" + $name)
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw "Missing Aurora helper: $name" }
+    Copy-Item -LiteralPath $helper -Destination (Join-Path $stage $name) -Force
+}
+
 foreach ($d in @("Licenses", "OptiScaler")) {
     Copy-Item "$src\$d" "$stage\$d" -Recurse -Force
 }

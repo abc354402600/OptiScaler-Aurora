@@ -1,0 +1,23 @@
+name: Aurora setup and runtime safety tests
+on:
+  push:
+    paths: ['dist/runtime_sync/**', 'tests/Aurora_*_Tests.ps1', '.github/workflows/aurora-tools-test.yml']
+  pull_request:
+    paths: ['dist/runtime_sync/**', 'tests/Aurora_*_Tests.ps1', '.github/workflows/aurora-tools-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-powershell:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          & .\tests\Aurora_Runtime_Tests.ps1
+      - name: Test Chinese diagnostics and module observations
+        shell: powershell
+        run: |
+          & .\tests\Aurora_Diagnostics_Tests.ps1

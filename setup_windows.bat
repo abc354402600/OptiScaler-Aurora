@@ -1,3 +1,17 @@
+@echo off
+setlocal DisableDelayedExpansion
+if /i "%~1"=="--legacy" goto aurora_legacy
+chcp 65001 >nul
+if not exist "%~dp0Aurora_Setup.ps1" (
+    echo 缺少 Aurora_Setup.ps1，请完整解压最新版安装包。
+    pause
+    exit /b 2
+)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Aurora_Setup.ps1"
+set "AURORA_EXIT=%ERRORLEVEL%"
+pause
+exit /b %AURORA_EXIT%
+:aurora_legacy
 REM Setup OptiScaler for your game
 @echo off
 chcp 65001 >nul
