@@ -225,6 +225,7 @@ function Read-AuroraChoice([string]$Title, [string[]]$Options) {
 }
 function Write-AuroraJson([string]$Path, $Value) {
     Assert-AuroraPlainPath $Path
+    Assert-AuroraWritableTarget $Path
     $guard=Enter-AuroraPathGuard $Path -Create
     $dir = [IO.Path]::GetDirectoryName($Path)
     [IO.Directory]::CreateDirectory($dir) | Out-Null
@@ -294,6 +295,7 @@ function Open-AuroraJournal([string]$Path, [string]$Root, [string]$InstallDir) {
 }
 function Copy-AuroraAtomic([string]$Source, [string]$Target, [string]$ExpectedCurrent, [string]$ExpectedSource) {
     Assert-AuroraPlainPath $Source; Assert-AuroraPlainPath $Target
+    Assert-AuroraWritableTarget $Target
     $guard=Enter-AuroraPathGuard $Target -Create
     $dir = [IO.Path]::GetDirectoryName($Target); [IO.Directory]::CreateDirectory($dir) | Out-Null
     $tmp = Join-Path $dir ([Guid]::NewGuid().ToString('N') + '.aurora-tmp')
@@ -313,6 +315,12 @@ function Copy-AuroraAtomic([string]$Source, [string]$Target, [string]$ExpectedCu
         } else { [IO.File]::Move($tmp, $Target) }
         if ((Get-AuroraHash $Target) -ne $ExpectedSource) { throw '写入后的 SHA256 校验失败，请使用恢复操作。' }
     } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }; $guard.Dispose() }
+}
+function Assert-AuroraWritableTarget([string]$Path) {
+    if (Test-Path -LiteralPath $Path) {
+        $attributes=[IO.File]::GetAttributes((Get-AuroraPath $Path))
+        if ($attributes -band ([IO.FileAttributes]::ReadOnly -bor [IO.FileAttributes]::Directory)) { throw "目标只读或不是普通文件，保留现状：$Path" }
+    }
 }
 function Install-AuroraFile($Journal, [string]$JournalPath, [string]$Source, [string]$Target,
     [string]$ExpectedSourceHash='', [string]$ExpectedCurrentHash='') {
@@ -361,7 +369,8 @@ function Restore-AuroraJournal($Journal, [string]$JournalPath) {
                 $guard=Enter-AuroraPathGuard $target
                 try {
                     if ((Get-AuroraHash $target) -ne $current) { throw '删除前文件再次变化，保留。' }
-                    Remove-Item -LiteralPath $target -Force
+                    Assert-AuroraWritableTarget $target
+                    Remove-Item -LiteralPath $target
                 } finally { $guard.Dispose() }
             } else {
                 if (-not $e.BackupPath -or (Get-AuroraHash $e.BackupPath) -ne $e.OriginalHash) { throw '原版备份缺失或校验失败。' }

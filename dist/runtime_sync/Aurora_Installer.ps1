@@ -413,8 +413,13 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
         Save-AuroraInstallReport $index $ReportPath
         return $index
     } catch {
-        if ($started) { $index.Status='NeedsAttention'; Write-AuroraJson (Get-AuroraIndexPath $Root) $index; Save-AuroraInstallReport $index $ReportPath }
-        throw
+        $originalFailure=$_
+        if ($started) {
+            $index.Status='NeedsAttention'
+            try { Write-AuroraJson (Get-AuroraIndexPath $Root) $index; Save-AuroraInstallReport $index $ReportPath }
+            catch { Write-Warning '状态/报告写入也失败；保留原有 Pending 日志，不能视为安装成功。' }
+        }
+        throw $originalFailure
     } finally {
         if ($lock) { $lock.Dispose() }
         foreach ($p in $prepared) { foreach ($f in $p.Payload) {
