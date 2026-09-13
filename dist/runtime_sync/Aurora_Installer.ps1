@@ -269,21 +269,30 @@ function Open-AuroraIndex([string]$Root) {
     $path=Get-AuroraIndexPath $Root; Assert-AuroraPlainPath $path
     if (-not (Test-Path -LiteralPath $path)) { return $null }
     $index=Read-AuroraJson $path
+    Assert-AuroraFields $index @('SchemaVersion','GameRoot','Status','Targets','RuntimeOwners','RuntimeGroups')
+    if ($index.SchemaVersion -isnot [int] -or $index.Targets -isnot [array] -or $index.Targets.Count -lt 1 -or $index.Targets.Count -gt 256 -or $index.RuntimeOwners -isnot [array] -or $index.RuntimeGroups -isnot [array]) { throw 'RC3 总清单字段类型或目标数量无效。' }
+    if ($index.PSObject.Properties['RuntimeJournalExpected'] -and $index.RuntimeJournalExpected -isnot [bool]) { throw 'Runtime 日志登记状态无效。' }
     if ($index.SchemaVersion -ne 3 -or (Get-AuroraMetadataPath $index.GameRoot) -ine $Root -or $index.Status -notin @('Pending','Applied','Removed','NeedsAttention')) { throw 'RC3 总清单版本、目录或状态不匹配。' }
     $index.GameRoot=$Root
     $seen=@{}
     foreach ($target in @($index.Targets)) {
+        Assert-AuroraFields $target @('Directory','Proxy','JournalPath','Executables')
+        if ($target.Executables -isnot [array] -or -not $target.Executables.Count) { throw '入口列表必须是非空数组。' }
         $dir=Get-AuroraMetadataPath $target.Directory; $target.Directory=$dir
         if (-not (Test-AuroraWithin $dir $Root) -or (Test-AuroraWithin $dir (Join-Path $Root 'OptiScaler')) -or $seen.ContainsKey($dir)) { throw 'RC3 清单入口重复或越界。' }
         $seen[$dir]=$true; Assert-AuroraPlainPath $dir
         if ($target.Proxy -notin @('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi')) { throw 'RC3 清单 Proxy 无效。' }
         $target.JournalPath=Get-AuroraMetadataPath $target.JournalPath
         if ($target.JournalPath -ine (Join-Path $dir 'OptiScaler\AuroraSetup\manifest.json')) { throw 'RC3 文件日志路径不匹配。' }
-        if ($index.Status -eq 'Applied' -and -not (Test-Path -LiteralPath $target.JournalPath -PathType Leaf)) { throw '部署文件日志缺失，停止操作，不能猜测文件归属。' }
+        if ($target.PSObject.Properties['JournalExpected'] -and $target.JournalExpected -isnot [bool]) { throw '核心日志登记状态无效。' }
+        if (($index.Status -eq 'Applied' -or ($target.PSObject.Properties['JournalExpected'] -and $target.JournalExpected)) -and -not (Test-Path -LiteralPath $target.JournalPath -PathType Leaf)) { throw '部署文件日志缺失，停止操作，不能猜测文件归属。' }
         foreach ($exe in @($target.Executables)) { if ([IO.Path]::GetDirectoryName((Get-AuroraMetadataPath $exe)) -ine $dir) { throw 'RC3 入口路径与目录不匹配。' } }
     }
+    $owners=@{}
     foreach ($dir in @($index.RuntimeOwners)) {
         if (-not $seen.ContainsKey((Get-AuroraMetadataPath $dir))) { throw 'RC3 Runtime 日志未关联部署入口。' }
+        $owner=Get-AuroraMetadataPath $dir
+        if ($owners.ContainsKey($owner)) { throw 'Runtime 日志所有者重复。' }; $owners[$owner]=$true
     }
     return $index
 }
@@ -346,7 +355,7 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
         foreach ($candidate in $candidates) { Assert-AuroraGameClosed $Root $candidate.Path }
         $lock=Enter-AuroraLock $Root
         $index=Open-AuroraIndex $Root
-        if (-not $index) { $index=[pscustomobject]@{SchemaVersion=3;GameRoot=$Root;Status='Pending';Targets=@();RuntimeOwners=@();RuntimeGroups=@()} }
+        if (-not $index) { $index=[pscustomobject]@{SchemaVersion=3;GameRoot=$Root;Status='Pending';Targets=@();RuntimeOwners=@();RuntimeGroups=@();RuntimeJournalExpected=$false} }
         foreach ($group in @($candidates | Group-Object Directory)) {
             $dir=$group.Name
             $chosen=Get-AuroraRecommendedProxy @($group.Group) $Proxy
@@ -369,6 +378,7 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
                 $index.Targets+=@($target)
             }
             $journal=Open-AuroraJournal $target.JournalPath $Root $dir
+            $target | Add-Member NoteProperty JournalExpected (Test-Path -LiteralPath $target.JournalPath -PathType Leaf) -Force
             $payload=@(New-AuroraPayload $PackageDir $dir $chosen)
             $prepared+=@([pscustomobject]@{Target=$target;Journal=$journal;Payload=$payload})
             Assert-AuroraPayloadReady $target $journal $payload
@@ -395,6 +405,7 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
         # Create every payload before activating any new Proxy; each copy is journaled.
         foreach ($p in $prepared) {
             Write-AuroraJson $p.Target.JournalPath $p.Journal
+            $p.Target.JournalExpected=$true; Write-AuroraJson (Get-AuroraIndexPath $Root) $index
             Write-AuroraJson (Join-Path $p.Target.Directory 'OptiScaler\AuroraSetup\installation.json') ([pscustomobject]@{GameRoot=$Root;GameExe=$p.Target.Executables[0];Proxy=$p.Target.Proxy;RC3Manifest=(Get-AuroraIndexPath $Root)})
             foreach ($file in @($p.Payload | Select-Object -Skip 1)) {
                 Assert-AuroraPlannedFile $file
@@ -404,6 +415,11 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
         # One full-tree synchronization prevents different entries fighting over shared DLLs.
         # Recover pre-RC3 journals first only when explicitly requested by Remove/Restore;
         # multiple existing owners are kept read-only until that recovery is done.
+        $runtimeJournalPath=Join-Path $index.RuntimeOwners[0] 'OptiScaler\RuntimeSync\manifest.json'
+        $runtimeJournal=Open-AuroraJournal $runtimeJournalPath $Root $index.RuntimeOwners[0]
+        Write-AuroraJson $runtimeJournalPath $runtimeJournal
+        $index | Add-Member NoteProperty RuntimeJournalExpected $true -Force
+        Write-AuroraJson (Get-AuroraIndexPath $Root) $index
         Invoke-AuroraRuntimeTask Install $Root $index.RuntimeOwners[0] ([IO.Path]::ChangeExtension($ReportPath,'.log.txt')) -CallerHasLock
         foreach ($p in $prepared) {
             $file=$p.Payload[0]; Assert-AuroraPlannedFile $file
@@ -431,6 +447,15 @@ function Assert-AuroraPlannedFile($File) {
     $current=''; if (Test-Path -LiteralPath $File.Target) { $current=Get-AuroraHash $File.Target }
     if ($current -ne $File.BeforeHash) { throw "文件在预检后变化，已停止：$($File.Target)" }
 }
+function Assert-AuroraCoreJournalScope($Journal) {
+    $names=@('OptiScaler.dll','OptiScaler.ini','dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi','nvngx.dll_dlssnr.dll','LICENSE','READ ME - DLSS Neural Rendering.txt','Aurora_Common.ps1','Aurora_Installer.ps1','Aurora_RuntimeCatalog.ps1','Aurora_Diagnostics.ps1','Aurora_Setup.ps1','Aurora_Setup_Legacy.ps1','runtime_sync.ps1','Check_DLSS_Runtime.bat','Aurora_Setup.bat','Remove_Aurora.bat')
+    foreach ($e in @($Journal.Entries)) {
+        if (-not (Test-AuroraWithin $e.TargetPath $Journal.InstallDir)) { throw '核心日志目标不属于该入口目录。' }
+        $rel=$e.TargetPath.Substring($Journal.InstallDir.Length).TrimStart('\')
+        if ($rel -match '(?i)(^|\\)(AuroraSetup|RuntimeSync|_storage[^\\]*|\.git)(\\|$)') { throw '核心日志不得操作其他恢复记录。' }
+        if ($rel -notin $names -and $rel -notmatch '(?i)^OptiScaler\\.+\.(dll|json|ini|txt|md|bin)$|^OptiScaler\\plugins\\OptiPatcher\.asi$|^Licenses\\[^\\]+$') { throw '核心日志指向非 Aurora payload 文件，保留现状。' }
+    }
+}
 function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly) {
     $root=$Index.GameRoot; $lock=$null; $preserved=@()
     try {
@@ -439,8 +464,20 @@ function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly
         $Index=Open-AuroraIndex $root
         if (-not $Index) { throw 'RC3 总清单已变化，停止恢复。' }
         $journals=@()
-        foreach ($dir in @($Index.RuntimeOwners)) { $path=Join-Path $dir 'OptiScaler\RuntimeSync\manifest.json'; $journals+=@([pscustomobject]@{Path=$path;Journal=(Open-AuroraJournal $path $root $dir);Runtime=$true}) }
+        foreach ($dir in @($Index.RuntimeOwners)) {
+            $path=Join-Path $dir 'OptiScaler\RuntimeSync\manifest.json'
+            if (-not (Test-Path -LiteralPath $path) -and (-not $Index.PSObject.Properties['RuntimeJournalExpected'] -or $Index.RuntimeJournalExpected)) { throw 'Runtime 日志缺失，不能证明原版恢复状态，保留文件。' }
+            $journals+=@([pscustomobject]@{Path=$path;Journal=(Open-AuroraJournal $path $root $dir);Runtime=$true})
+        }
         if (-not $RuntimeOnly) { foreach ($t in @($Index.Targets)) { $journals+=@([pscustomobject]@{Path=$t.JournalPath;Journal=(Open-AuroraJournal $t.JournalPath $root $t.Directory);Runtime=$false}) } }
+        $ownership=@{}
+        foreach ($pair in $journals) {
+            if (-not $pair.Runtime) { Assert-AuroraCoreJournalScope $pair.Journal }
+            foreach ($e in @($pair.Journal.Entries | Where-Object { $_.Status -ne 'Restored' })) {
+                if ($ownership.ContainsKey($e.TargetPath)) { throw '不同日志对同一路径声明冲突 ownership，未恢复或删除任何文件。' }
+                $ownership[$e.TargetPath]=$pair.Path
+            }
+        }
         # Validate every backup before removing any tool. Changed targets are individually retained.
         foreach ($pair in $journals) {
             foreach ($e in @($pair.Journal.Entries)) {

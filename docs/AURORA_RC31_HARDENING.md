@@ -15,3 +15,11 @@
 实际问题：Remove 使用 Force 会删除被用户改为只读的受管文件；安装失败后再次写状态/报告失败会掩盖原始错误。现在尊重只读属性，保留原始异常，持久 Pending 状态不会冒充成功。
 
 新增 Aurora_Fault_Matrix_Tests.ps1：12 个注入位置、69 项断言通过。覆盖 preflight、backup、copy、复制后 hash、Move 目标竞态、Pending/Applied journal、初始 index、仅有截断 temp、最终 index 持续失败、Runtime 已改但 Proxy 未写、第一 Proxy 成功第二失败；外部 powershell 进程独占 DLL、只读覆盖/删除及释放后恢复也通过。每个注入点必须确实触发，失败后逐一核对原版 Runtime、已知归属 core 和并发出现的用户文件。不是旧 interrupted-install 测试的重复调用。
+
+## 3. Manifest / Journal corruption fuzz
+
+新增 92 项定向损坏输入断言通过：32 个固定随机种子的截断点，空/null/错误对象，缺字段，重复/转义/大小写冲突 JSON key，重复路径，不正确类型或 hash，矛盾 Created/OriginalHash/BackupPath，外部目标，跨日志 ownership 冲突，缺失 Runtime 日志，总 index 丢失后的旧版回退，以及伪造 core entry 指向用户存档。
+
+实际修复：Created=true 但仍有原始文件/备份的矛盾条目以前可能被当作新文件删除；恢复函数直接接收的内存对象以前没有重新校验；不同日志之间没有 ownership 去重；missing Runtime journal 被当作空日志；missing RC3 index 可能进入 RC2 单入口卸载。现在严格校验类型/字段/路径，读取拒绝重复 key，限制 JSON 为 8 MiB；新增 journal 登记位在写文件前持久化；core 恢复只接受 Aurora payload 范围，跨日志冲突在任何恢复前拒绝。
+
+旧 RC3 记录如缺少 Runtime 日志且无法证明从未替换，保守停止，不能声称已经恢复原版。结构和 hash 校验不是数字签名：有权限同时伪造全部一致 metadata 与文件的同一用户不在认证边界内；任意外部 Root 逃逸仍禁止。

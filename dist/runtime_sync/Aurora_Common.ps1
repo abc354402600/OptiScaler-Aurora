@@ -73,8 +73,31 @@ function Enter-AuroraPathGuard([string]$Path,[switch]$Directory,[switch]$Create)
 }
 function Read-AuroraJson([string]$Path) {
     $guard=Enter-AuroraPathGuard $Path; $stream=$null; $reader=$null
-    try { $stream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path)); $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8); return ($reader.ReadToEnd() | ConvertFrom-Json) }
+    try {
+        $stream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path))
+        if ($stream.Length -gt 8MB) { throw '清单超过安全大小上限。' }
+        $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8); $json=$reader.ReadToEnd()
+        Assert-AuroraUniqueJsonKeys $json
+        return ($json | ConvertFrom-Json)
+    }
     finally { if ($reader) { $reader.Dispose() } elseif ($stream) { $stream.Dispose() }; $guard.Dispose() }
+}
+function Assert-AuroraUniqueJsonKeys([string]$Json) {
+    $stack=New-Object 'Collections.Generic.Stack[object]'
+    foreach ($token in [regex]::Matches($Json,'"(?:\\.|[^"\\])*"|[{}]')) {
+        if ($token.Value -eq '{') { $stack.Push((New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase))); continue }
+        if ($token.Value -eq '}') { if ($stack.Count) { $null=$stack.Pop() }; continue }
+        $pos=$token.Index+$token.Length
+        while ($pos -lt $Json.Length -and [char]::IsWhiteSpace($Json[$pos])) { $pos++ }
+        if ($pos -lt $Json.Length -and $Json[$pos] -eq ':' -and $stack.Count) {
+            $key=('{"value":'+$token.Value+'}' | ConvertFrom-Json).value
+            if (-not $stack.Peek().Add($key)) { throw 'JSON 存在重复或大小写冲突字段，停止处理。' }
+        }
+    }
+}
+function Assert-AuroraFields($Object,[string[]]$Names) {
+    if ($Object -isnot [pscustomobject]) { throw '清单对象类型无效。' }
+    foreach ($name in $Names) { if (-not $Object.PSObject.Properties[$name]) { throw "清单缺少字段：$name" } }
 }
 function Test-AuroraWithin([string]$Path, [string]$Root) {
     $p = Get-AuroraPath $Path; $r = Get-AuroraPath $Root
@@ -263,10 +286,20 @@ function Open-AuroraJournal([string]$Path, [string]$Root, [string]$InstallDir) {
     }
     try { $j = Read-AuroraJson $Path }
     catch { throw "恢复清单损坏，已停止操作；请保留清单和备份：$Path" }
+    return Assert-AuroraJournalData $j $Path $Root $InstallDir
+}
+function Assert-AuroraJournalData($j,[string]$Path,[string]$Root,[string]$InstallDir) {
+    $Path=Get-AuroraMetadataPath $Path; $Root=Get-AuroraMetadataPath $Root; $InstallDir=Get-AuroraMetadataPath $InstallDir
+    if (-not (Test-AuroraWithin $Path $InstallDir) -or -not (Test-AuroraWithin $InstallDir $Root)) { throw '日志根目录不一致。' }
+    Assert-AuroraFields $j @('SchemaVersion','InstallDir','ScanRoot','Entries')
+    if ($j.SchemaVersion -isnot [int] -or $j.Entries -isnot [array] -or $j.Entries.Count -gt 20000) { throw '清单版本/条目类型或大小无效。' }
     if ($j.SchemaVersion -notin @(1,2) -or (Get-AuroraMetadataPath $j.InstallDir) -ine $InstallDir -or
         (Get-AuroraMetadataPath $j.ScanRoot) -ine $Root) { throw '清单版本或游戏目录不匹配，未修改文件。' }
+    $j.InstallDir=$InstallDir; $j.ScanRoot=$Root
     $seen = @{}
     foreach ($e in @($j.Entries)) {
+        Assert-AuroraFields $e @('TargetPath','SourceName','BackupPath','OriginalHash','DeployedHash')
+        if ($e.SourceName -isnot [string] -or -not $e.SourceName -or $e.SourceName -match '[\\/:]' -or $e.BackupPath -isnot [string] -or $e.OriginalHash -isnot [string] -or $e.DeployedHash -isnot [string]) { throw '条目字段类型或源文件名无效。' }
         $t = Get-AuroraMetadataPath $e.TargetPath; $e.TargetPath=$t
         if (-not (Test-AuroraWithin $t $Root) -or $seen.ContainsKey($t) -or
             (Test-AuroraWithin $t ([IO.Path]::GetDirectoryName($Path)))) { throw '清单包含越界、重复或备份区目标。' }
@@ -281,12 +314,16 @@ function Open-AuroraJournal([string]$Path, [string]$Root, [string]$InstallDir) {
         if ($j.SchemaVersion -eq 1) {
             $e | Add-Member NoteProperty Created $false
             $e | Add-Member NoteProperty Status 'Applied'
-        } elseif ($e.Status -notin @('Pending','Applied','Restored','Preserved') -or $e.Created -isnot [bool]) { throw '清单状态无效。' }
+        } else {
+            Assert-AuroraFields $e @('Created','Status','BeforeHash')
+            if ($e.Status -notin @('Pending','Applied','Restored','Preserved') -or $e.Created -isnot [bool]) { throw '清单状态无效。' }
+        }
+        if (($e.Created -and ($e.OriginalHash -or $e.BackupPath)) -or (-not $e.Created -and -not $e.OriginalHash)) { throw '新建/替换 ownership 字段互相矛盾。' }
         if (-not $e.PSObject.Properties['BeforeHash']) { $e | Add-Member NoteProperty BeforeHash $e.OriginalHash }
-        if ($e.BeforeHash -notmatch '^([0-9a-fA-F]{64})?$') { throw '清单操作前哈希无效。' }
+        if ($e.BeforeHash -isnot [string] -or $e.BeforeHash -notmatch '^([0-9a-fA-F]{64})?$') { throw '清单操作前哈希无效。' }
         if ($Path -match '[\\/]RuntimeSync[\\/]manifest\.json$') {
             if ([IO.Path]::GetFileName($t) -notmatch '^(nvngx_dlss(?:d|g)?|sl\.[a-zA-Z0-9_.-]+)\.dll$' -or
-                $e.Created -or (Test-AuroraWithin $t (Join-Path $InstallDir 'OptiScaler'))) { throw '运行库清单包含非运行库目标。' }
+                $e.Created -or $t.Substring($Root.Length) -match '(?i)[\\/]OptiScaler[\\/]' -or $e.SourceName -ine [IO.Path]::GetFileName($t)) { throw '运行库清单包含非运行库目标。' }
         }
         if (-not $e.Created -and -not $e.BackupPath -and $e.OriginalHash -ne $e.DeployedHash) { throw '清单缺少必要备份。' }
     }
@@ -324,6 +361,7 @@ function Assert-AuroraWritableTarget([string]$Path) {
 }
 function Install-AuroraFile($Journal, [string]$JournalPath, [string]$Source, [string]$Target,
     [string]$ExpectedSourceHash='', [string]$ExpectedCurrentHash='') {
+    $Journal=Assert-AuroraJournalData $Journal $JournalPath $Journal.ScanRoot $Journal.InstallDir
     if (-not (Test-AuroraWithin $Target $Journal.ScanRoot) -or
         (Test-AuroraWithin $Target ([IO.Path]::GetDirectoryName($JournalPath)))) { throw '写入目标越界。' }
     $hash = Get-AuroraHash $Source
@@ -356,6 +394,7 @@ function Install-AuroraFile($Journal, [string]$JournalPath, [string]$Source, [st
     Write-Host "[已校验] $Target"
 }
 function Restore-AuroraJournal($Journal, [string]$JournalPath) {
+    $Journal=Assert-AuroraJournalData $Journal $JournalPath $Journal.ScanRoot $Journal.InstallDir
     $failed = 0
     foreach ($e in @($Journal.Entries)) {
         if ($e.Status -in @('Restored','Preserved')) { continue }
