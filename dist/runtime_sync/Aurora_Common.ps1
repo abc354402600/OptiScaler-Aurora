@@ -4,9 +4,77 @@ $ErrorActionPreference = 'Stop'
 
 function Get-AuroraPath([string]$Path) {
     if ([string]::IsNullOrWhiteSpace($Path)) { throw '路径不能为空。' }
+    $raw=$Path.Trim().Trim('"')
+    if ($raw -match '^[\\/]{2}|^[a-zA-Z]:[^\\/]' -or $raw.Substring([Math]::Min(2,$raw.Length)).Contains(':')) { throw '不支持网络、设备、驱动器相对路径或备用数据流。' }
+    foreach ($part in @($raw -split '[\\/]')) { if ($part -notin @('.','..') -and $part -match '[. ]$|^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') { throw '路径含 Windows 保留名或尾随点/空格。' } }
     $p = [IO.Path]::GetFullPath($Path.Trim().Trim('"'))
     if ($p -eq [IO.Path]::GetPathRoot($p)) { return $p }
     return $p.TrimEnd('\')
+}
+function Get-AuroraMetadataPath($Path) {
+    if ($Path -isnot [string] -or $Path -notmatch '^[A-Za-z]:[\\/]' -or $Path -match '(^|[\\/])\.\.?([\\/]|$)' -or $Path -ne $Path.Trim()) { throw '清单必须使用无相对分量的本地绝对路径。' }
+    return Get-AuroraPath $Path
+}
+function Initialize-AuroraNativePaths {
+    if ('AuroraDirectoryGuard' -as [type]) { return }
+    Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public sealed class AuroraDirectoryGuard : IDisposable {
+    readonly List<SafeFileHandle> handles = new List<SafeFileHandle>();
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    static extern SafeFileHandle CreateFileW(string p, uint access, uint share, IntPtr sa, uint mode, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    static extern bool GetFileInformationByHandleEx(SafeFileHandle h, int cls, out Tag info, uint size);
+    [StructLayout(LayoutKind.Sequential)] struct Tag { public uint Attributes, ReparseTag; }
+    static SafeFileHandle Open(string path, bool directory) {
+        // Directory LIST access and no delete sharing pin names; files deny write/delete.
+        var h=CreateFileW(path, directory ? 0x81u : 0x80000000u, directory ? 3u : 1u, IntPtr.Zero, 3,
+                          0x00200000u | (directory ? 0x02000000u : 0u), IntPtr.Zero);
+        if (h.IsInvalid) { int error=Marshal.GetLastWin32Error(); h.Dispose(); throw new Win32Exception(error, path); }
+        Tag tag;
+        if (!GetFileInformationByHandleEx(h,9,out tag,8) || (tag.Attributes & 0x400)!=0 ||
+            ((tag.Attributes & 0x10)!=0)!=directory) { h.Dispose(); throw new IOException("Reparse point or unexpected file type: " + path); }
+        return h;
+    }
+    public static AuroraDirectoryGuard Acquire(string path, bool directory, bool create) {
+        var guard=new AuroraDirectoryGuard();
+        try {
+            string dir=directory ? path : Path.GetDirectoryName(path);
+            var chain=new List<string>();
+            for (var d=new DirectoryInfo(dir); d!=null; d=d.Parent) chain.Add(d.FullName);
+            chain.Reverse();
+            foreach (string part in chain) {
+                if (create && !Directory.Exists(part)) Directory.CreateDirectory(part);
+                guard.handles.Add(Open(part,true));
+            }
+            return guard;
+        } catch { guard.Dispose(); throw; }
+    }
+    public static FileStream Read(string path) { return new FileStream(Open(path,false),FileAccess.Read); }
+    public static FileStream Lock(string path) {
+        var h=CreateFileW(path,0xc0000000u,0,IntPtr.Zero,4,0x00200000u,IntPtr.Zero);
+        if (h.IsInvalid) { int error=Marshal.GetLastWin32Error(); h.Dispose(); throw new Win32Exception(error,path); }
+        Tag tag;
+        if (!GetFileInformationByHandleEx(h,9,out tag,8) || (tag.Attributes & 0x410)!=0) { h.Dispose(); throw new IOException("Unsafe lock file: " + path); }
+        return new FileStream(h,FileAccess.ReadWrite);
+    }
+    public void Dispose() { for (int i=handles.Count-1;i>=0;i--) handles[i].Dispose(); handles.Clear(); }
+}
+'@
+}
+function Enter-AuroraPathGuard([string]$Path,[switch]$Directory,[switch]$Create) {
+    Initialize-AuroraNativePaths
+    return [AuroraDirectoryGuard]::Acquire((Get-AuroraPath $Path),$Directory.IsPresent,$Create.IsPresent)
+}
+function Read-AuroraJson([string]$Path) {
+    $guard=Enter-AuroraPathGuard $Path; $stream=$null; $reader=$null
+    try { $stream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path)); $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8); return ($reader.ReadToEnd() | ConvertFrom-Json) }
+    finally { if ($reader) { $reader.Dispose() } elseif ($stream) { $stream.Dispose() }; $guard.Dispose() }
 }
 function Test-AuroraWithin([string]$Path, [string]$Root) {
     $p = Get-AuroraPath $Path; $r = Get-AuroraPath $Root
@@ -55,12 +123,15 @@ function Resolve-AuroraGameRoot([string]$InputPath) {
     return $p
 }
 function Get-AuroraHash([string]$Path) {
-    Assert-AuroraPlainPath $Path
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
+    $guard=Enter-AuroraPathGuard $Path; $stream=$null; $sha=$null
+    try { $stream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path)); $sha=[Security.Cryptography.SHA256]::Create(); return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') }
+    finally { if ($sha) { $sha.Dispose() }; if ($stream) { $stream.Dispose() }; $guard.Dispose() }
 }
 function Get-AuroraBinary([string]$Path) {
     $arch = 'Unknown'; $version = ''; $major = 0; $original = ''; $errorText = ''
+    $guard=$null; $pin=$null
     try {
+        $guard=Enter-AuroraPathGuard $Path; $pin=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path))
         Assert-AuroraPlainPath $Path
         $stream = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
         try {
@@ -85,9 +156,11 @@ function Get-AuroraBinary([string]$Path) {
             if ($textMajors.Count -eq 1) { $major = $textMajors[0] }
         }
     } catch { $errorText = $_.Exception.Message; $major = 0 }
+    finally { if ($pin) { $pin.Dispose() }; if ($guard) { $guard.Dispose() } }
     [pscustomobject]@{ Path=$Path; Architecture=$arch; Version=$version; Major=$major; OriginalFilename=$original; Error=$errorText }
 }
 function Get-AuroraScan([string]$Root, [int]$MaxDirectories=12000, [int]$MaxDepth=18, [int]$Seconds=30) {
+    $Root=Get-AuroraPath $Root
     Assert-AuroraGameRoot $Root
     $files = New-Object 'Collections.Generic.List[object]'
     $warnings = New-Object 'Collections.Generic.List[string]'
@@ -98,8 +171,10 @@ function Get-AuroraScan([string]$Root, [int]$MaxDirectories=12000, [int]$MaxDept
             $warnings.Add('扫描达到时间或目录数量上限，请选择更具体的游戏目录。'); break
         }
         $node = $queue.Dequeue(); $count++
-        try { $children = @(Get-ChildItem -LiteralPath $node[0] -Force -ErrorAction Stop) }
-        catch { $warnings.Add("无法读取目录：$($node[0])"); continue }
+        $guard=$null
+        try { $guard=Enter-AuroraPathGuard $node[0] -Directory; $children = @(Get-ChildItem -LiteralPath $node[0] -Force -ErrorAction Stop) }
+        catch { $warnings.Add("无法安全读取目录：$($node[0])"); continue }
+        finally { if ($guard) { $guard.Dispose() } }
         foreach ($child in $children) {
             if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) {
                 $warnings.Add("已跳过链接：$($child.FullName)"); continue
@@ -150,6 +225,7 @@ function Read-AuroraChoice([string]$Title, [string[]]$Options) {
 }
 function Write-AuroraJson([string]$Path, $Value) {
     Assert-AuroraPlainPath $Path
+    $guard=Enter-AuroraPathGuard $Path -Create
     $dir = [IO.Path]::GetDirectoryName($Path)
     [IO.Directory]::CreateDirectory($dir) | Out-Null
     $tmp = Join-Path $dir ([Guid]::NewGuid().ToString('N') + '.tmp')
@@ -157,14 +233,15 @@ function Write-AuroraJson([string]$Path, $Value) {
         [IO.File]::WriteAllText($tmp, ($Value | ConvertTo-Json -Depth 12), (New-Object Text.UTF8Encoding($false)))
         if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp, $Path, [NullString]::Value) }
         else { [IO.File]::Move($tmp, $Path) }
-    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force } }
+    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }; $guard.Dispose() }
 }
 function Enter-AuroraLock([string]$InstallDir) {
     $state = Join-Path $InstallDir 'OptiScaler'
     Assert-AuroraPlainPath $state
-    [IO.Directory]::CreateDirectory($state) | Out-Null
-    try { return [IO.File]::Open((Join-Path $state 'Aurora.operation.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
+    $guard=Enter-AuroraPathGuard $state -Directory -Create
+    try { return [AuroraDirectoryGuard]::Lock((Join-Path $state 'Aurora.operation.lock')) }
     catch { throw '另一个安装或恢复操作正在进行，或游戏目录不可写。请关闭游戏后重试。' }
+    finally { $guard.Dispose() }
 }
 function Assert-AuroraGameClosed([string]$Root, [string]$GameExe='') {
     foreach ($p in @(Get-Process -ErrorAction SilentlyContinue)) {
@@ -177,22 +254,25 @@ function Assert-AuroraGameClosed([string]$Root, [string]$GameExe='') {
     }
 }
 function Open-AuroraJournal([string]$Path, [string]$Root, [string]$InstallDir) {
+    $Path=Get-AuroraMetadataPath $Path; $Root=Get-AuroraMetadataPath $Root; $InstallDir=Get-AuroraMetadataPath $InstallDir
+    if (-not (Test-AuroraWithin $InstallDir $Root) -or -not (Test-AuroraWithin $Path $InstallDir)) { throw '日志、安装目录和游戏根目录不一致。' }
     Assert-AuroraPlainPath $Path
     if (-not (Test-Path -LiteralPath $Path)) {
         return [pscustomobject]@{ SchemaVersion=2; InstallDir=$InstallDir; ScanRoot=$Root; Entries=@() }
     }
-    try { $j = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json }
+    try { $j = Read-AuroraJson $Path }
     catch { throw "恢复清单损坏，已停止操作；请保留清单和备份：$Path" }
-    if ($j.SchemaVersion -notin @(1,2) -or (Get-AuroraPath $j.InstallDir) -ine $InstallDir -or
-        (Get-AuroraPath $j.ScanRoot) -ine $Root) { throw '清单版本或游戏目录不匹配，未修改文件。' }
+    if ($j.SchemaVersion -notin @(1,2) -or (Get-AuroraMetadataPath $j.InstallDir) -ine $InstallDir -or
+        (Get-AuroraMetadataPath $j.ScanRoot) -ine $Root) { throw '清单版本或游戏目录不匹配，未修改文件。' }
     $seen = @{}
     foreach ($e in @($j.Entries)) {
-        $t = Get-AuroraPath $e.TargetPath
+        $t = Get-AuroraMetadataPath $e.TargetPath; $e.TargetPath=$t
         if (-not (Test-AuroraWithin $t $Root) -or $seen.ContainsKey($t) -or
             (Test-AuroraWithin $t ([IO.Path]::GetDirectoryName($Path)))) { throw '清单包含越界、重复或备份区目标。' }
         $seen[$t] = $true; Assert-AuroraPlainPath $t
         if ($e.DeployedHash -notmatch '^[0-9a-fA-F]{64}$' -or $e.OriginalHash -notmatch '^([0-9a-fA-F]{64})?$') { throw '清单哈希缺失或无效。' }
         if ($e.BackupPath) {
+            $e.BackupPath=Get-AuroraMetadataPath $e.BackupPath
             if (-not (Test-AuroraWithin $e.BackupPath (Join-Path ([IO.Path]::GetDirectoryName($Path)) 'backup'))) { throw '备份路径越界。' }
             Assert-AuroraPlainPath $e.BackupPath
             if ($e.OriginalHash -notmatch '^[0-9a-fA-F]{64}$') { throw '备份缺少原始哈希，停止恢复。' }
@@ -214,10 +294,17 @@ function Open-AuroraJournal([string]$Path, [string]$Root, [string]$InstallDir) {
 }
 function Copy-AuroraAtomic([string]$Source, [string]$Target, [string]$ExpectedCurrent, [string]$ExpectedSource) {
     Assert-AuroraPlainPath $Source; Assert-AuroraPlainPath $Target
+    $guard=Enter-AuroraPathGuard $Target -Create
     $dir = [IO.Path]::GetDirectoryName($Target); [IO.Directory]::CreateDirectory($dir) | Out-Null
     $tmp = Join-Path $dir ([Guid]::NewGuid().ToString('N') + '.aurora-tmp')
     try {
-        [IO.File]::Copy($Source, $tmp, $false)
+        $sourceGuard=$null; $inputStream=$null; $outputStream=$null
+        try {
+            $sourceGuard=Enter-AuroraPathGuard $Source
+            $inputStream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Source))
+            $outputStream=[IO.File]::Open($tmp,'CreateNew','Write','None')
+            $inputStream.CopyTo($outputStream)
+        } finally { if ($outputStream) { $outputStream.Dispose() }; if ($inputStream) { $inputStream.Dispose() }; if ($sourceGuard) { $sourceGuard.Dispose() } }
         if ((Get-AuroraHash $tmp) -ne $ExpectedSource) { throw '源文件在复制期间变化，已取消。' }
         Assert-AuroraPlainPath $Target
         if ($ExpectedCurrent) {
@@ -225,7 +312,7 @@ function Copy-AuroraAtomic([string]$Source, [string]$Target, [string]$ExpectedCu
             [IO.File]::Replace($tmp, $Target, [NullString]::Value)
         } else { [IO.File]::Move($tmp, $Target) }
         if ((Get-AuroraHash $Target) -ne $ExpectedSource) { throw '写入后的 SHA256 校验失败，请使用恢复操作。' }
-    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force } }
+    } finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }; $guard.Dispose() }
 }
 function Install-AuroraFile($Journal, [string]$JournalPath, [string]$Source, [string]$Target,
     [string]$ExpectedSourceHash='', [string]$ExpectedCurrentHash='') {
@@ -271,7 +358,11 @@ function Restore-AuroraJournal($Journal, [string]$JournalPath) {
             if ($current -ne $e.DeployedHash -and -not ($e.Status -eq 'Pending' -and $current -eq $e.BeforeHash)) { throw '文件已被游戏更新、用户修改或删除，保留现状和备份。' }
             if ($e.Created) {
                 Assert-AuroraPlainPath $target
-                Remove-Item -LiteralPath $target -Force
+                $guard=Enter-AuroraPathGuard $target
+                try {
+                    if ((Get-AuroraHash $target) -ne $current) { throw '删除前文件再次变化，保留。' }
+                    Remove-Item -LiteralPath $target -Force
+                } finally { $guard.Dispose() }
             } else {
                 if (-not $e.BackupPath -or (Get-AuroraHash $e.BackupPath) -ne $e.OriginalHash) { throw '原版备份缺失或校验失败。' }
                 Copy-AuroraAtomic $e.BackupPath $target $current $e.OriginalHash

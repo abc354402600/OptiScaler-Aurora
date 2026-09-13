@@ -1,9 +1,10 @@
 ﻿# RC3 orchestration; file writes and recovery use the RC2 journal primitives.
 function Get-AuroraExecutableEvidence([string]$Path) {
-    $stream=$null; $valid=$false; $imports=@()
+    $stream=$null; $guard=$null; $valid=$false; $imports=@()
     try {
         Assert-AuroraPlainPath $Path
-        $stream=[IO.File]::Open($Path,'Open','Read','ReadWrite'); $reader=New-Object IO.BinaryReader($stream)
+        $guard=Enter-AuroraPathGuard $Path
+        $stream=[AuroraDirectoryGuard]::Read((Get-AuroraPath $Path)); $reader=New-Object IO.BinaryReader($stream)
         if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { throw 'MZ' }
         $stream.Position=60; $offset=$reader.ReadInt32()
         if ($offset -lt 64 -or $offset -gt $stream.Length-264) { throw 'PE offset' }
@@ -41,7 +42,7 @@ function Get-AuroraExecutableEvidence([string]$Path) {
                 if ($name -match '^(?i)(d3d(?:9|10|11|12)|dxgi|vulkan-1|opengl32|UnityPlayer)\.dll$') { $imports+=$name }
             }
         }
-    } catch { } finally { if ($stream) { $stream.Dispose() } }
+    } catch { } finally { if ($stream) { $stream.Dispose() }; if ($guard) { $guard.Dispose() } }
     [pscustomobject]@{Valid=$valid;GraphicsImports=$imports}
 }
 function Test-AuroraUtilityPath([string]$RelativePath, [switch]$Runtime) {
@@ -264,22 +265,25 @@ function New-AuroraPayload([string]$PackageDir,[string]$InstallDir,[string]$Prox
 
 function Get-AuroraIndexPath([string]$Root) { Join-Path $Root 'OptiScaler\AuroraSetup\AuroraInstallManifest.json' }
 function Open-AuroraIndex([string]$Root) {
+    $Root=Get-AuroraMetadataPath $Root
     $path=Get-AuroraIndexPath $Root; Assert-AuroraPlainPath $path
     if (-not (Test-Path -LiteralPath $path)) { return $null }
-    $index=Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($index.SchemaVersion -ne 3 -or (Get-AuroraPath $index.GameRoot) -ine $Root -or $index.Status -notin @('Pending','Applied','Removed','NeedsAttention')) { throw 'RC3 总清单版本、目录或状态不匹配。' }
+    $index=Read-AuroraJson $path
+    if ($index.SchemaVersion -ne 3 -or (Get-AuroraMetadataPath $index.GameRoot) -ine $Root -or $index.Status -notin @('Pending','Applied','Removed','NeedsAttention')) { throw 'RC3 总清单版本、目录或状态不匹配。' }
+    $index.GameRoot=$Root
     $seen=@{}
     foreach ($target in @($index.Targets)) {
-        $dir=Get-AuroraPath $target.Directory
+        $dir=Get-AuroraMetadataPath $target.Directory; $target.Directory=$dir
         if (-not (Test-AuroraWithin $dir $Root) -or (Test-AuroraWithin $dir (Join-Path $Root 'OptiScaler')) -or $seen.ContainsKey($dir)) { throw 'RC3 清单入口重复或越界。' }
         $seen[$dir]=$true; Assert-AuroraPlainPath $dir
         if ($target.Proxy -notin @('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi')) { throw 'RC3 清单 Proxy 无效。' }
+        $target.JournalPath=Get-AuroraMetadataPath $target.JournalPath
         if ($target.JournalPath -ine (Join-Path $dir 'OptiScaler\AuroraSetup\manifest.json')) { throw 'RC3 文件日志路径不匹配。' }
         if ($index.Status -eq 'Applied' -and -not (Test-Path -LiteralPath $target.JournalPath -PathType Leaf)) { throw '部署文件日志缺失，停止操作，不能猜测文件归属。' }
-        foreach ($exe in @($target.Executables)) { if ([IO.Path]::GetDirectoryName((Get-AuroraPath $exe)) -ine $dir) { throw 'RC3 入口路径与目录不匹配。' } }
+        foreach ($exe in @($target.Executables)) { if ([IO.Path]::GetDirectoryName((Get-AuroraMetadataPath $exe)) -ine $dir) { throw 'RC3 入口路径与目录不匹配。' } }
     }
     foreach ($dir in @($index.RuntimeOwners)) {
-        if (-not $seen.ContainsKey((Get-AuroraPath $dir))) { throw 'RC3 Runtime 日志未关联部署入口。' }
+        if (-not $seen.ContainsKey((Get-AuroraMetadataPath $dir))) { throw 'RC3 Runtime 日志未关联部署入口。' }
     }
     return $index
 }
