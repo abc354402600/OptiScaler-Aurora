@@ -9,7 +9,7 @@ if not exist "%~dp0Aurora_Setup.ps1" (
 )
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Aurora_Setup.ps1"
 set "AURORA_EXIT=%ERRORLEVEL%"
-pause
+if not "%AURORA_EXIT%"=="0" pause
 exit /b %AURORA_EXIT%
 :aurora_legacy
 REM Setup OptiScaler for your game

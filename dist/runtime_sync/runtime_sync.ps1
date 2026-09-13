@@ -90,6 +90,7 @@ try {
         $item.Action = '可同步'; $item.Reason = '已识别版本和 x64 架构，执行前备份并校验'
     }
     $candidates=@(Get-AuroraCandidates $scan)
+    if ($RC3Safety) { $candidates=@(Get-AuroraDeploymentCandidates $scan) }
     $observations=@()
     if (-not $GameExe) {
         $direct=@($candidates | Where-Object { $_.Directory -ieq $InstallDir })
@@ -115,7 +116,7 @@ try {
     )
     $report = [pscustomobject]@{ SchemaVersion=2; DiagnosticVersion='2.1'; Timestamp=[DateTime]::UtcNow.ToString('o'); Mode=$Mode; Phase='PreOperation'; GameRoot=$GameRoot; GameExe=$GameExe; InstallDir=$InstallDir; ScanComplete=$scan.Complete; ScanWarnings=$scan.Warnings; Inventory=$inventory; LoadedModules=$loaded; Processes=@($processEvidence.Processes); Findings=$findings; Observations=$observations; Notes=$notes }
     if ($RC3Safety) {
-        $report | Add-Member NoteProperty RuntimeGroups @(Get-AuroraRuntimeGroups $scan @(Get-AuroraDeploymentCandidates $scan))
+        $report | Add-Member NoteProperty RuntimeGroups @(Get-AuroraRuntimeGroups $scan @(Get-AuroraDeploymentCandidates $scan) $processEvidence $GameExe)
     }
     $reportText=Format-AuroraDiagnosticText $report
     Write-Host $reportText

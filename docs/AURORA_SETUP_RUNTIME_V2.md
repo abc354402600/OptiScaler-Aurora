@@ -1,6 +1,8 @@
 # Aurora Setup / Runtime Sync v2
 
-本次修改基于 `aurora` 提交 `e1673a16673070401612db04cc0593ca4dc3a6f6`。这是一组安装工具更新，不包含重新构建的 OptiScaler.dll。
+本页保留 RC2 行为与 Runtime Sync v2 安全机制的历史说明。RC3 默认界面与冗余部署行为见 [RC3 安装器说明](AURORA_INSTALLER_RC3.md)。
+
+RC2 修改基于 `aurora` 提交 `e1673a16673070401612db04cc0593ca4dc3a6f6`。这是一组安装工具更新，不包含重新构建的 OptiScaler.dll。
 
 ## 使用方式
 

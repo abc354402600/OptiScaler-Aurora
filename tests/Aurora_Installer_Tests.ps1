@@ -142,4 +142,107 @@ Assert ([IO.File]::ReadAllText((Join-Path $unDir 'sl.interposer.dll')) -eq 'unkn
 
 $tampered=Open-AuroraIndex $unverified; $tampered.Targets[0].JournalPath=Join-Path $ScratchRoot 'outside.json'; Write-AuroraJson (Get-AuroraIndexPath $unverified) $tampered
 Expect-Failure { Open-AuroraIndex $unverified } 'Tampered central journal path rejected'
+
+# Colocation is unsafe even when the utility itself is filtered out.
+$shared=Join-Path $ScratchRoot 'SharedDirectory'; Fixture (Join-Path $shared 'Win64\Game.exe'); Fixture (Join-Path $shared 'Win64\Launcher.exe')
+Assert (@(Get-AuroraDeploymentCandidates (Get-AuroraScan $shared)).Count -eq 0) 'Do not inject a rendering directory shared with an x64 launcher'
+$dllExe=Join-Path $ScratchRoot 'DllDisguised\Win64\Game.exe'
+[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($dllExe)) | Out-Null
+[IO.File]::Copy((Join-Path $pkg 'OptiScaler.dll'),$dllExe)
+Assert (@(Get-AuroraDeploymentCandidates (Get-AuroraScan (Split-Path -Parent (Split-Path -Parent $dllExe)))).Count -eq 0) 'DLL renamed to EXE cannot be a game entry'
+
+# Synthetic PE import descriptor exercises the actual RVA/section parser.
+$pePath=Join-Path $ScratchRoot 'GraphicsImport\Renderer.exe'; $bytes=New-Object byte[] 1024
+[BitConverter]::GetBytes([uint16]0x5a4d).CopyTo($bytes,0); [BitConverter]::GetBytes([int]128).CopyTo($bytes,60)
+[BitConverter]::GetBytes([uint32]0x4550).CopyTo($bytes,128); [BitConverter]::GetBytes([uint16]0x8664).CopyTo($bytes,132)
+[BitConverter]::GetBytes([uint16]1).CopyTo($bytes,134); [BitConverter]::GetBytes([uint16]240).CopyTo($bytes,148)
+[BitConverter]::GetBytes([uint16]2).CopyTo($bytes,150); [BitConverter]::GetBytes([uint16]0x20b).CopyTo($bytes,152)
+[BitConverter]::GetBytes([uint32]4096).CopyTo($bytes,272); [BitConverter]::GetBytes([uint32]40).CopyTo($bytes,276)
+[BitConverter]::GetBytes([uint32]512).CopyTo($bytes,400); [BitConverter]::GetBytes([uint32]4096).CopyTo($bytes,404)
+[BitConverter]::GetBytes([uint32]512).CopyTo($bytes,408); [BitConverter]::GetBytes([uint32]512).CopyTo($bytes,412)
+[BitConverter]::GetBytes([uint32]4196).CopyTo($bytes,524); [Text.Encoding]::ASCII.GetBytes('d3d12.dll').CopyTo($bytes,612)
+[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($pePath)) | Out-Null; [IO.File]::WriteAllBytes($pePath,$bytes)
+Assert ((Get-AuroraExecutableEvidence $pePath).GraphicsImports -contains 'd3d12.dll') 'PE32+ import RVA maps to D3D12 DLL name'
+Assert (@(Get-AuroraDeploymentCandidates (Get-AuroraScan (Split-Path -Parent $pePath))).Count -eq 1) 'Generic game root EXE qualifies through graphics imports'
+
+$observedExe=Join-Path $dx11 'witcher3.exe'
+$evidence=[pscustomobject]@{Processes=@([pscustomobject]@{Path=$observedExe;ProcessId=99});Modules=@([pscustomobject]@{Path=$native11;ProcessId=99})}
+$groups=@(Get-AuroraRuntimeGroups (Get-AuroraScan $game) $c $evidence $observedExe)
+Assert (@($groups | Where-Object { $_.Directory -eq $dx11 -and $_.ObservedBy.Count -eq 1 }).Count -eq 1) 'Actual module observation associates Runtime group to EXE and process ID'
+$evidence.Processes[0].Path=Join-Path $dx12 'witcher3.exe'
+$groups=@(Get-AuroraRuntimeGroups (Get-AuroraScan $game) $c $evidence $observedExe)
+Assert (@($groups | Where-Object { $_.ObservedBy.Count }).Count -eq 0) 'Different process path cannot prove the selected EXE runtime association'
+
+# Reuse a real RC2 v2 journal and metadata, including its user-selected Proxy.
+$upgrade=Join-Path $ScratchRoot 'RC2Upgrade'; $upDir=Join-Path $upgrade 'Win64'; Fixture (Join-Path $upDir 'Game.exe')
+$upJp=Join-Path $upDir 'OptiScaler\AuroraSetup\manifest.json'; $upJ=Open-AuroraJournal $upJp $upgrade $upDir
+$oldCore=Join-Path $ScratchRoot 'OldRelease\OptiScaler.dll'; Fixture $oldCore '1.0.0.0'
+Install-AuroraFile $upJ $upJp $oldCore (Join-Path $upDir 'winmm.dll')
+$oldTool=Join-Path $ScratchRoot 'OldRelease\Aurora_Setup.ps1'; Put $oldTool '# RC2 script fixture'
+Install-AuroraFile $upJ $upJp $oldTool (Join-Path $upDir 'Aurora_Setup.ps1')
+Write-AuroraJson (Join-Path $upDir 'OptiScaler\AuroraSetup\installation.json') ([pscustomobject]@{GameRoot=$upgrade;GameExe=(Join-Path $upDir 'Game.exe');Proxy='winmm.dll'})
+$upNative=Join-Path $upDir 'nvngx_dlss.dll'; Fixture $upNative '310.6.0.0'; $upOriginal=Get-AuroraHash $upNative
+$upRjp=Join-Path $upDir 'OptiScaler\RuntimeSync\manifest.json'; $upRj=Open-AuroraJournal $upRjp $upgrade $upDir
+Install-AuroraFile $upRj $upRjp (Join-Path $pkg 'OptiScaler\nvngx_dlss.dll') $upNative
+Run-Setup Install $upgrade $pkg
+Assert ((Open-AuroraIndex $upgrade).Targets[0].Proxy -eq 'winmm.dll' -and -not (Test-Path -LiteralPath (Join-Path $upDir 'dxgi.dll'))) 'RC2 upgrade retains prior manual Proxy automatically'
+Assert ((Open-AuroraJournal $upRjp $upgrade $upDir).Entries[0].OriginalHash -eq $upOriginal) 'RC2 original runtime backup remains authoritative after upgrade'
+# Recovery works even if the game EXE and optional diagnostic helper disappear.
+[IO.File]::Delete((Join-Path $upDir 'Game.exe')); [IO.File]::Delete((Join-Path $upDir 'Aurora_Diagnostics.ps1'))
+Run-Setup Remove '' '' $upDir 0 '' (Join-Path $upDir 'Aurora_Setup.ps1')
+Assert ((Get-AuroraHash $upNative) -eq $upOriginal -and -not (Test-Path -LiteralPath (Join-Path $upDir 'winmm.dll'))) 'Installed recovery locates root and restores without EXE or diagnostic module'
+
+# Force failure exactly before Proxy activation. All earlier writes remain recoverable.
+$interrupted=Join-Path $ScratchRoot 'Interrupted'; $intDir=Join-Path $interrupted 'Win64'; Fixture (Join-Path $intDir 'Game.exe')
+$baseCopy=${function:Copy-AuroraAtomic}
+function Copy-AuroraAtomic([string]$Source,[string]$Target,[string]$ExpectedCurrent,[string]$ExpectedSource) {
+    if ([IO.Path]::GetFileName($Target) -eq 'dxgi.dll') { throw 'Injected pre-Proxy interruption' }
+    & $script:baseCopy $Source $Target $ExpectedCurrent $ExpectedSource
+}
+try { Expect-Failure { Install-AuroraDeployment $interrupted $pkg '' (Join-Path $ScratchRoot 'interrupted.json') } 'Failure before Proxy is journaled for recovery' }
+finally { Set-Item -LiteralPath Function:Copy-AuroraAtomic -Value $baseCopy }
+Assert ((Open-AuroraIndex $interrupted).Status -eq 'NeedsAttention' -and -not (Test-Path -LiteralPath (Join-Path $intDir 'dxgi.dll'))) 'Interrupted install does not leave an activated new Proxy'
+Run-Setup Remove $interrupted '' $intDir
+Assert (-not (Test-Path -LiteralPath (Join-Path $intDir 'OptiScaler.dll'))) 'Pending journal restores interrupted deployment'
+
+$missing=Join-Path $ScratchRoot 'MissingJournal'; $misDir=Join-Path $missing 'Win64'; Fixture (Join-Path $misDir 'Game.exe')
+Run-Setup Install $missing $pkg
+[IO.File]::Delete((Join-Path $misDir 'OptiScaler\AuroraSetup\manifest.json'))
+Run-Setup Remove $missing '' $misDir 4
+Assert (Test-Path -LiteralPath (Join-Path $misDir 'dxgi.dll')) 'Missing applied journal fails closed instead of claiming clean uninstall'
+
+$same=Join-Path $ScratchRoot 'SameDirectory'; $sameDir=Join-Path $same 'Win64'
+Fixture (Join-Path $sameDir 'Game.exe'); Fixture (Join-Path $sameDir 'GameDX12.exe')
+Run-Setup Install $same $pkg
+$sameIndex=Open-AuroraIndex $same
+Assert ($sameIndex.Targets.Count -eq 1 -and $sameIndex.Targets[0].Executables.Count -eq 2) 'Two rendering EXEs in one directory share exactly one payload and journal'
+Run-Setup Remove $same '' $sameDir
+
+$edited=Join-Path $ScratchRoot 'EditedRuntime'; $editDir=Join-Path $edited 'Win64'
+Fixture (Join-Path $editDir 'Game.exe'); $editNative=Join-Path $editDir 'nvngx_dlss.dll'; Fixture $editNative '310.1.0.0'
+Run-Setup Install $edited $pkg
+Put $editNative 'game update after Aurora'
+Run-Setup Remove $edited '' $editDir
+Assert ([IO.File]::ReadAllText($editNative) -eq 'game update after Aurora' -and -not (Test-Path -LiteralPath (Join-Path $editDir 'dxgi.dll'))) 'Changed native Runtime retained while unchanged core is uninstalled'
+$editIndex=Open-AuroraIndex $edited; $editJournal=Open-AuroraJournal (Join-Path $editDir 'OptiScaler\RuntimeSync\manifest.json') $edited $editDir
+Assert ($editJournal.Entries[0].Status -eq 'Preserved' -and (Test-Path -LiteralPath $editJournal.Entries[0].BackupPath)) 'Preserved native Runtime keeps its original backup and recovery status'
+
+# Exercise the interactive default through stdin: one Enter authorizes installation.
+$ui=Join-Path $ScratchRoot 'Interactive'; $uiDir=Join-Path $ui 'Win64'; Fixture (Join-Path $uiDir 'Game.exe')
+$psi=New-Object Diagnostics.ProcessStartInfo
+$psi.FileName='powershell.exe'; $psi.UseShellExecute=$false; $psi.CreateNoWindow=$true
+$psi.RedirectStandardInput=$true; $psi.RedirectStandardOutput=$true; $psi.RedirectStandardError=$true
+$uiArgs=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $toolsDir 'Aurora_Setup.ps1'),'-GameRoot',$ui,'-PackageDir',$pkg)
+$psi.Arguments=($uiArgs | ForEach-Object { '"'+$_+'"' }) -join ' '
+$proc=New-Object Diagnostics.Process; $proc.StartInfo=$psi; $null=$proc.Start()
+try {
+    $outTask=$proc.StandardOutput.ReadToEndAsync(); $errTask=$proc.StandardError.ReadToEndAsync()
+    $proc.StandardInput.WriteLine(''); $proc.StandardInput.WriteLine(''); $proc.StandardInput.Close()
+    if (-not $proc.WaitForExit(45000)) { $proc.Kill(); throw 'Interactive installer waited for unexpected extra input.' }
+    $uiText=$outTask.Result+$errTask.Result
+    Assert ($proc.ExitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $uiDir 'dxgi.dll'))) 'Interactive installation completes with one Enter plus exit Enter'
+    Assert (-not ($uiText -match '请选择加载方式|使用什么显卡|请输入游戏目录|SHA256|sl\.interposer\.dll')) 'Default interactive UI has no path, GPU, Proxy list or runtime detail prompts'
+} finally { $proc.Dispose() }
+Run-Setup Remove $ui '' $uiDir
+Assert (-not (Test-Path -LiteralPath (Join-Path $uiDir 'OptiScaler.dll'))) 'Interactive installation has the same precise uninstall behavior'
 Write-Host "ALL PASSED: $passed RC3 assertions. Fixtures: $ScratchRoot"

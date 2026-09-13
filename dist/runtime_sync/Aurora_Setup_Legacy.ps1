@@ -6,14 +6,9 @@
     [switch]$NonInteractive
 )
 . (Join-Path $PSScriptRoot 'Aurora_Common.ps1')
-$opLock=$null; $stage=$null; $installedNow=$false
+$opLock=$null
 try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
-    if ($Action -eq 'Menu') {
-        $n=Read-AuroraChoice 'Aurora 安装与诊断' @('安装 / 更新 Aurora','只读检查运行库和加载情况','备份后修复运行库','恢复游戏原版运行库','卸载本工具记录的 Aurora 文件','退出')
-        if ($n -eq 6) { exit 0 }
-        $Action=@('Install','Check','Repair','Restore','Remove')[$n-1]
-    }
     $metaPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
     Assert-AuroraPlainPath $metaPath
     if ($Action -ne 'Install' -and (Test-Path -LiteralPath $metaPath)) {
@@ -40,13 +35,6 @@ try {
     if ($Action -eq 'Remove') { $opLock=Enter-AuroraLock $GameRoot; $args += '-CallerHasLock' }
     & powershell.exe @args
     if ($LASTEXITCODE -ne 0) { throw '运行库操作未完成，请按上方提示处理，备份已保留。' }
-    if ($installedNow -and -not $NonInteractive) {
-        $choice=Read-AuroraChoice '文件检查完成，是否同步上方列出的可同步运行库？' @('保持游戏原版运行库，结束安装','先备份，再同步已识别的运行库（SL1 / 未知版本仍保留）')
-        if ($choice -eq 2) {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runtime -Mode Install -InstallDir $InstallDir -GameRoot $GameRoot -GameExe $GameExe
-            if ($LASTEXITCODE -ne 0) { throw '运行库同步未完成，安装文件及恢复记录已保留。' }
-        }
-    }
     if ($Action -eq 'Remove') {
         $journalPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\manifest.json'
         if (-not (Test-Path -LiteralPath $journalPath)) { throw '未找到新版安装清单。旧版安装请使用其原卸载器；不会猜测删除文件。' }
@@ -69,5 +57,4 @@ try {
 } catch { Write-Host "[操作停止] $($_.Exception.Message)" -ForegroundColor Red; exit 4 }
 finally {
     if ($null -ne $opLock) { $opLock.Dispose() }
-    if ($stage -and (Test-Path -LiteralPath $stage)) { Remove-Item -LiteralPath $stage -Force }
 }

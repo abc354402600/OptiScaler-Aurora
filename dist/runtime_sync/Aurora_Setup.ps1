@@ -12,6 +12,9 @@ try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
     Write-Host "`n  Aurora 安装器 RC3`n" -ForegroundColor Cyan
     Write-Host '  正在自动检测游戏…'
+    if (-not $GameRoot -and ((Test-Path -LiteralPath (Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json')) -or (Test-Path -LiteralPath (Get-AuroraIndexPath $InstallDir)))) {
+        $GameRoot=Resolve-AuroraDeploymentRoot $InstallDir
+    }
     if (-not $GameRoot) {
         $roots=@(Find-AuroraGames @($InstallDir,$PackageDir))
         if ($roots.Count -eq 1) { $GameRoot=$roots[0] }
@@ -29,13 +32,15 @@ try {
     $index=Open-AuroraIndex $GameRoot
     if ($Action -in @('Menu','Install','Repair')) {
         $scan=Get-AuroraScan $GameRoot
-        if (-not $scan.Complete) { throw '游戏目录未能完整读取，已停止安装。请确认目录权限，并避免目录联接。' }
+        if (-not $scan.Complete -and $Action -ne 'Menu') { throw '游戏目录未能完整读取，已停止安装。请确认目录权限，并避免目录联接。' }
         $candidates=@(Get-AuroraDeploymentCandidates $scan)
-        if (-not $candidates.Count) { throw '未发现有渲染特征的 x64 游戏入口。请确认已选择完整游戏目录。' }
+        if (-not $candidates.Count -and $Action -ne 'Menu') { throw '未发现安全的 x64 游戏入口。请确认完整游戏目录；与 x64 工具共用目录的入口不会自动注入。' }
         if ($GameExe -and -not @($candidates | Where-Object { $_.Path -ieq (Get-AuroraPath $GameExe) }).Count) { throw '指定 EXE 未通过安全筛选。' }
         Write-Host ('  ✓ 已检测到游戏：'+[IO.Path]::GetFileName($GameRoot)) -ForegroundColor Green
         Write-Host ('  ✓ 将覆盖 '+@($candidates | Group-Object Directory).Count+' 个游戏入口目录') -ForegroundColor Green
-        foreach ($c in $candidates) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')) }
+        foreach ($c in @($candidates | Select-Object -First 3)) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')) }
+        if ($candidates.Count -gt 3) { Write-Host '    其余入口见详细报告。' }
+        if (-not $scan.Complete -or -not $candidates.Count) { Write-Host '  ! 当前不能安全安装；仍可选择恢复 / 卸载。' -ForegroundColor Yellow }
         Write-Host '  ✓ 自动匹配 Proxy，保留现有配置，替换前备份' -ForegroundColor Green
         Write-Host '  ! SL1 和未知 Runtime 保留；安装后请进游戏核对效果' -ForegroundColor Yellow
         Write-AuroraJson $report ([pscustomobject]@{GameRoot=$GameRoot;Candidates=$candidates;RuntimeGroups=@(Get-AuroraRuntimeGroups $scan $candidates)})
@@ -86,7 +91,7 @@ try {
         # Existing RC2 installations keep their original recovery path and journals.
         $args=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Aurora_Setup_Legacy.ps1'),'-Action',$Action,'-InstallDir',$InstallDir,'-GameRoot',$GameRoot,'-NonInteractive')
         if ($GameExe) { $args+=@('-GameExe',$GameExe) }
-        & powershell.exe @args *>> ([IO.Path]::ChangeExtension($report,'.txt'))
+        & powershell.exe @args 2>&1 | Out-File -LiteralPath ([IO.Path]::ChangeExtension($report,'.txt')) -Encoding utf8 -Append
         if ($LASTEXITCODE) { throw 'RC2 恢复 / 诊断未完成，请查看详情。' }
         Write-Host '  ✓ 操作完成。' -ForegroundColor Green
     }
@@ -95,7 +100,8 @@ try {
     Write-Host ("`n  ✕ "+$_.Exception.Message) -ForegroundColor Red
     $_ | Out-String | Add-Content -LiteralPath ([IO.Path]::ChangeExtension($report,'.log.txt')) -Encoding UTF8
 }
-Write-Host ("`n  详细报告："+$report)
+$available=@($report,[IO.Path]::ChangeExtension($report,'.txt'),[IO.Path]::ChangeExtension($report,'.log.txt')) | Where-Object { Test-Path -LiteralPath $_ }
+if (@($available).Count) { Write-Host ("`n  详细报告："+@($available)[0]) }
 if (-not $NonInteractive) {
     while ((Read-Host '  [D] 查看详情 / [Enter] 退出') -ieq 'D') {
         foreach ($path in @($report,[IO.Path]::ChangeExtension($report,'.txt'),[IO.Path]::ChangeExtension($report,'.log.txt'))) {

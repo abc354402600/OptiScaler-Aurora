@@ -86,6 +86,9 @@ foreach ($d in @("Licenses", "OptiScaler")) {
     Copy-Item "$src\$d" "$stage\$d" -Recurse -Force
 }
 
+# The entry wrapper must match the tools even when packaging existing RC2 binaries.
+Copy-Item -LiteralPath (Join-Path $root 'setup_windows.bat') -Destination (Join-Path $stage 'setup_windows.bat') -Force
+
 Copy-Item $forwarder "$stage\nvngx.dll_dlssnr.dll" -Force
 
 # Logging on, in the release only.
