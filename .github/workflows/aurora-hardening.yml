@@ -1,9 +1,9 @@
 name: Aurora RC3.1 hardening
 on:
   push:
-    paths: ['dist/runtime_sync/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', 'tests/Aurora_*', '.github/workflows/aurora-hardening.yml']
+    paths: ['dist/runtime_sync/**', 'dist/streamline/**', 'dist/nvngx/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', '.gitattributes', 'tests/Aurora_*', '.github/workflows/**']
   pull_request:
-    paths: ['dist/runtime_sync/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', 'tests/Aurora_*', '.github/workflows/aurora-hardening.yml']
+    paths: ['dist/runtime_sync/**', 'dist/streamline/**', 'dist/nvngx/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', '.gitattributes', 'tests/Aurora_*', '.github/workflows/**']
   workflow_dispatch:
 permissions:
   contents: read

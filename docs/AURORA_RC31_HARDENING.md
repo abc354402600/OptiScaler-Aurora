@@ -75,6 +75,8 @@ clean-room 从含中文/空格/方括号的独立源码目录创建 ZIP：故意
 
 ## 附加增量检查
 
+**后续交接已更新：** 用户补充了两轮云端成果，现已核实截止为 `731f3b79c762bc92971e5fe33dade87c6f83067b`，官方 master 没有更新。下列记录是收到云端材料之前的状态；最终去重、采用内容、实机实验卡和新增生命周期发现见 [云端接收记录](AURORA_RC31_CLOUD_RECONCILIATION.md)。
+
 上游 commit 审计没有擅自重新开始。此前交付报告已注明 `AURORA_RELEASE_AUDIT_updated_20260913.md` 附件不可读；当前仓库和既有交付物仍没有可核实的上次审计截止 SHA。`e1673a16` 只证明 Aurora 曾移植审计过的修复，不能代替上游截止 commit；Git remote 名为 upstream 的地址还是 Susemi fork，不能冒充官方 OptiScaler。因缺乏精确范围，本轮未声称完成新增 commit 审计，也未重复审历史。
 
 2026-09-14 对官方 `optiscaler/OptiScaler` 的 issue/PR 做增量检索，限定 `updated:>=2026-09-13`，分别检索 `flicker`、`Witcher`、`Genshin`、`Zenless`，四组均返回空。这里只能说明这些检索未提供新证据，不能证明没有新问题或修复。没有据此生成推测性 MFG/Streamline patch，没有新增实验分支或修改当前渲染路径。既有兼容性记录保留，真实轻微闪烁和米家兼容性仍待复现证据。
