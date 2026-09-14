@@ -11,6 +11,7 @@
 | 最新实机安装事故根因、修复、组件hash、使用方式 | `AURORA_RC31_INSTALL_INCIDENT.md` |
 | 巫师3卸载后移动解压位置、旧文件冲突、显式备份更新 | `AURORA_RC31_EXTRACTED_UPGRADE.md`、`../tests/Aurora_Extracted_Upgrade_Tests.ps1`；原始现场 `work/witcher-reinstall-20260914/` |
 | 最新巫师3高倍率进图闪退、旧dump同签名对比 | `AURORA_WITCHER_CRASH_20260915.md`；本机 `work/witcher-crash-20260915/`、`work/read_witcher_dump.py` |
+| 动态MFG/6X切换、GPU挂起与Reflex/帧编号失配 | `AURORA_WITCHER_MFG_SWITCH_20260915.md`；本机 `work/witcher-switch-20260915/`含四个独立会话、系统/应用事件、新dump及时间线；不是已修复声明 |
 | 六阶段加固、测试矩阵、clang-format真实失败原因、clean-room | `AURORA_RC31_HARDENING.md`（历史时点，当前Push/CI状态以交接为准） |
 | 云端两轮去重、upstream精确边界、研究线索的证据强度 | `AURORA_RC31_CLOUD_RECONCILIATION.md` |
 | RC3原始安装器设计 | `AURORA_INSTALLER_RC3.md` |
