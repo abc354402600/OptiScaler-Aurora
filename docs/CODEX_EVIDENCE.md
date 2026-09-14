@@ -42,6 +42,8 @@
 
 ## 云端材料的冲突处理
 
+2026-09-14 18:26 补充：`work/installer-incident-20260914/real-validation-1824/` 保存异环热修后的三份真实安装/卸载报告及 `disk-verification.json`。最后一份为18:24 Applied，47核心+9 Runtime磁盘hash匹配，9备份原始hash匹配；用户本轮确认面板能打开。校验中的 Common 字节差异已另行确认仅 LF/CRLF，规范化文本相同。该目录晚于原接续ZIP生成时间，旧ZIP不包含此次新增证据。
+
 用户提供的 `Aurora_RC3_1_automation_delta.patch`、repo replacements、报告、validation和SHA文件是输入证据。先前已核验四个文件hash，但该patch基线与本地不一致，未直接覆盖应用。
 
 云端“source/...排除项失配”和“本地RC3必漏其余helper”不是此本地基线已确认的事实：实际f452380c已有通配复制，排除项也不同。确认的本地问题与修复以真实CI日志、git diff、共享staging校验、Windows clean-room及安装事故报告为准。upstream17个commit只接收已审范围及明确线索，不冒充重新审过。
