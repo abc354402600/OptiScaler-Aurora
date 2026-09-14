@@ -1,0 +1,14 @@
+﻿Aurora RC3.1 累计安装工具包
+
+包含全部 11 个当前安装/诊断/恢复工具，不包含新的 OptiScaler.dll 或 Runtime 二进制。
+先完整解压你已构建好的 RC2/RC3 发布包，再将本 ZIP 的工具覆盖到发布包根目录。
+从发布包运行 setup_windows.bat，核对游戏摘要后按 Enter 安装/更新。
+不要手工覆盖游戏中已由 manifest 管理的工具；否则会被当作用户修改而保留。
+卸载从部署入口运行 Remove_Aurora.bat；若工具已缺失，可从完整发布包运行恢复操作。
+不要删除 AuroraSetup/RuntimeSync 清单和备份；保留的用户文件与恢复记录是有意设计。
+BAT 已使用 CRLF。不要用 git archive 中未经打包规范化的 LF BAT 替代。
+
+299 项本地新增测试通过不等于真实 GPU/游戏兼容性验证。
+仍需实测：巫师3 DX11/DX12、SL1.5.6、现有 6X、DLSS/XeSS input 闪烁对照、燕云/异环。
+本轮核心渲染 C++ 未修改；没有 Push、Merge、Release。
+源提交：07a080bbc8f3cf9d100eb58f158e708e37b66b25

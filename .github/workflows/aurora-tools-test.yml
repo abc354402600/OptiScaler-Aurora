@@ -21,3 +21,7 @@ jobs:
         shell: powershell
         run: |
           & .\tests\Aurora_Diagnostics_Tests.ps1
+      - name: Test RC3 redundant installer and precise recovery
+        shell: powershell
+        run: |
+          & .\tests\Aurora_Installer_Tests.ps1

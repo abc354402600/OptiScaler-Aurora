@@ -30,6 +30,11 @@ try {
     }
     $GameRoot=Get-AuroraPath $GameRoot; Assert-AuroraGameRoot $GameRoot
     $index=Open-AuroraIndex $GameRoot
+    $localMeta=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
+    if (-not $index -and (Test-Path -LiteralPath $localMeta)) {
+        $savedMeta=Read-AuroraJson $localMeta
+        if ($savedMeta.PSObject.Properties['RC3Manifest']) { throw 'RC3 总清单缺失，不能回退为单入口卸载；请保留文件与备份。' }
+    }
     if ($Action -in @('Menu','Install','Repair')) {
         $scan=Get-AuroraScan $GameRoot
         if (-not $scan.Complete -and $Action -ne 'Menu') { throw '游戏目录未能完整读取，已停止安装。请确认目录权限，并避免目录联接。' }

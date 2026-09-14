@@ -1,7 +1,7 @@
 ﻿param(
     [ValidateSet('Install','Check','Restore')][string]$Mode = 'Check',
     [string]$InstallDir = $PSScriptRoot, [string]$GameRoot, [string]$GameExe,
-    [string]$ReportPath, [switch]$Rescan, [switch]$CallerHasLock
+    [string]$ReportPath, [switch]$Rescan, [switch]$CallerHasLock, [switch]$RC3Safety
 )
 # Check never repairs. Rescan remains accepted for v1 callers; v2 always inventories.
 $ErrorActionPreference = 'Stop'
@@ -34,6 +34,10 @@ try {
     }
     # Recovery must remain available even if the optional diagnostic helper is missing.
     . (Join-Path $PSScriptRoot 'Aurora_Diagnostics.ps1')
+    if ($RC3Safety) {
+        . (Join-Path $PSScriptRoot 'Aurora_Installer.ps1')
+        . (Join-Path $PSScriptRoot 'Aurora_RuntimeCatalog.ps1')
+    }
     $scan = Get-AuroraScan $GameRoot
     foreach ($w in $scan.Warnings) { Write-Host "[扫描不完整] $w" -ForegroundColor Yellow }
     $sources = @{}
@@ -65,8 +69,12 @@ try {
     foreach ($name in @($sources.Keys | Where-Object { $_ -like 'sl.*.dll' })) {
         $info = Get-AuroraBinary $sources[$name]
         if ($info.Major -ne 2 -or $info.Architecture -ne 'x64') { $sourceSlBlocked = $true }
+        if ($RC3Safety -and (-not $AuroraVerifiedSL2.ContainsKey($name) -or (Get-AuroraHash $sources[$name]) -ne $AuroraVerifiedSL2[$name])) { $sourceSlBlocked = $true }
     }
     foreach ($item in $inventory) {
+        if ($RC3Safety -and (Test-AuroraUtilityPath $item.Path.Substring($GameRoot.Length).TrimStart('\') -Runtime)) {
+            $item.Reason = '启动器 / 工具 / 反作弊目录的 Runtime 仅记录，不替换'; continue
+        }
         if ($item.Name -eq 'nvngx_dlssnr.dll') { $item.Reason = 'DLSSNR 仅记录，不同步、不覆盖'; continue }
         if (-not $sources.ContainsKey($item.Name)) { continue }
         $source = Get-AuroraBinary $sources[$item.Name]; $item.SourceVersion = $source.Version
@@ -75,13 +83,14 @@ try {
             $item.Reason = '版本、架构或哈希无法确认；保留原文件'; continue
         }
         if ($item.Name -like 'sl.*.dll' -and ($slBlocked -or $sourceSlBlocked)) {
-            $item.Reason = '游戏或源包存在 SL1 / 未知代际；保护整组 Streamline'; continue
+            $item.Reason = '游戏或源包存在 SL1 / 未知代际，或 RC3 源哈希未经确认；保护整组 Streamline'; continue
         }
         $item.SourceHash = Get-AuroraHash $sources[$item.Name]
         if ($item.SourceHash -eq $item.SHA256) { $item.Reason = '与包内版本相同'; continue }
         $item.Action = '可同步'; $item.Reason = '已识别版本和 x64 架构，执行前备份并校验'
     }
     $candidates=@(Get-AuroraCandidates $scan)
+    if ($RC3Safety) { $candidates=@(Get-AuroraDeploymentCandidates $scan) }
     $observations=@()
     if (-not $GameExe) {
         $direct=@($candidates | Where-Object { $_.Directory -ieq $InstallDir })
@@ -106,6 +115,9 @@ try {
         '巫师3：保留 SL1.5.6；游戏原生帧生成关闭，使用 OptiFG (Upscaler) → DLSSG → None (Real DLSSG)，DualFeature=false。'
     )
     $report = [pscustomobject]@{ SchemaVersion=2; DiagnosticVersion='2.1'; Timestamp=[DateTime]::UtcNow.ToString('o'); Mode=$Mode; Phase='PreOperation'; GameRoot=$GameRoot; GameExe=$GameExe; InstallDir=$InstallDir; ScanComplete=$scan.Complete; ScanWarnings=$scan.Warnings; Inventory=$inventory; LoadedModules=$loaded; Processes=@($processEvidence.Processes); Findings=$findings; Observations=$observations; Notes=$notes }
+    if ($RC3Safety) {
+        $report | Add-Member NoteProperty RuntimeGroups @(Get-AuroraRuntimeGroups $scan @(Get-AuroraDeploymentCandidates $scan) $processEvidence $GameExe)
+    }
     $reportText=Format-AuroraDiagnosticText $report
     Write-Host $reportText
     if ($ReportPath) {
