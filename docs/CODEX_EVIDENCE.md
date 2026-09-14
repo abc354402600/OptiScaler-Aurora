@@ -10,6 +10,7 @@
 | 最新状态、下一步及不重复事项 | `CODEX_HANDOFF.md` |
 | 最新实机安装事故根因、修复、组件hash、使用方式 | `AURORA_RC31_INSTALL_INCIDENT.md` |
 | 巫师3卸载后移动解压位置、旧文件冲突、显式备份更新 | `AURORA_RC31_EXTRACTED_UPGRADE.md`、`../tests/Aurora_Extracted_Upgrade_Tests.ps1`；原始现场 `work/witcher-reinstall-20260914/` |
+| 最新巫师3高倍率进图闪退、旧dump同签名对比 | `AURORA_WITCHER_CRASH_20260915.md`；本机 `work/witcher-crash-20260915/`、`work/read_witcher_dump.py` |
 | 六阶段加固、测试矩阵、clang-format真实失败原因、clean-room | `AURORA_RC31_HARDENING.md`（历史时点，当前Push/CI状态以交接为准） |
 | 云端两轮去重、upstream精确边界、研究线索的证据强度 | `AURORA_RC31_CLOUD_RECONCILIATION.md` |
 | RC3原始安装器设计 | `AURORA_INSTALLER_RC3.md` |
@@ -19,6 +20,8 @@
 | 生产实现 | `../dist/runtime_sync/`、`../scripts/stage_aurora_package.ps1`、`../package_release.ps1` |
 
 ## 本机独立材料
+
+2026-09-15补充：`work/witcher-reinstall-20260914/verified-20260915/` 保存重装修复后的Applied报告、53核心+2Runtime/7备份校验及5个SL1原版hash核对；`work/upstream-20260915.json` 是截止731f3b79后的零增量API证据。下载目录 `D:\下载\Aurora_RC31_重装修复_20260914` 的remote-status.json与SHA256已更新为8c803a6d推送成功，旧接续ZIP不包含这些新增材料。
 
 本机仓库：`D:\GitHub\OptiScaler-Community-Fixes`。原任务资料目录：`C:\Users\Administrator\Documents\Codex\2026-09-13\referenced-chatgpt-conversation-this-is-an-2`。
 

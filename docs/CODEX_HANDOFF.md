@@ -4,6 +4,16 @@
 
 ## 当前停止点
 
+### 2026-09-15 推送恢复与巫师3重装结果
+
+用户要求再次推送并继续原计划。`8c803a6d5a1488e82ebe675504cce1d63dad6702` 已普通推送并通过远端ref核对；此前网络失败已解决。主分支仍为 `e1673a16673070401612db04cc0593ca4dc3a6f6`。
+
+巫师3新实机报告 `e7c55bd2221242eca9b36b48ba430761`，2026-09-15 00:47 Applied：DX11与DX12两个入口，分别47/46个完整payload文件自检通过。受管条目是其中的子集：本轮再次只读验证53核心+2原生Runtime条目均匹配写入hash，7份备份均匹配原始hash；5个原生Streamline 1.5.6文件均匹配安装前hash。DLSS/DLSSG实际同步2项。助手未修改游戏文件。原始报告与校验见本地 `work/witcher-reinstall-20260914/verified-20260915/`。
+
+用户随后确认面板/原6X正常，但又报告高倍率进图偶发闪退，重试可进入；闪烁尚未仔细观察。**当前最高优先级转为巫师3进图闪退取证**，不能标记稳定性已通过。两份新dump与09-12/13两份旧dump同为游戏偏移0x1f1f4ea、异常指针读；最新日志是重启后的新会话。详见 `AURORA_WITCHER_CRASH_20260915.md`，未改核心或游戏文件，未生成实验补丁。
+
+8c803a6d远端[hardening](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34870944890)、[安装安全](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34870944874)、[clang-format](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34870944929)全部成功。上游仅核对已有截止点之后的compare：2026-09-15仍是identical、ahead_by=0、total_commits=0，没有重复审17个旧commit。证据 `work/upstream-20260915.json`。此次没有本地重跑任何旧测试。原神issue1122无新评论；原始ZIP下载未完成，不声称解析过，研究因巫师3新故障再次暂停。
+
 **最新补充：用户确认异环没有问题；巫师3移至根目录解压新版后重装，被旧DX12未受管理的解压核心拦截。已增加显式备份更新交互，25项新增测试与69项相关故障回归通过。详见 `AURORA_RC31_EXTRACTED_UPGRADE.md`；本次功能提交位于4b3bc458之后，以实际Git log为准。等待用户用新工具重装并实测巫师3，其他研究仍暂停。**
 
 **RC3.1 安装链路热修已完成、推送、打包，用户要求这一部分完成后暂停。随后用户请求做好 Codex 项目接续；这只恢复/整理项目上下文，不自动启动渲染研究。**
