@@ -48,30 +48,61 @@ function Get-AuroraExecutableEvidence([string]$Path) {
 function Test-AuroraUtilityPath([string]$RelativePath, [switch]$Runtime) {
     $parts=$RelativePath -split '[\\/]'
     foreach ($part in $parts) {
-        if ($part -match '(?i)^(?:.*launcher.*|bootstrap.*|updat(?:er|e).*|crash(?:report.*|handler.*)?|.*crashreport.*|editor|install(?:er)?|uninstall.*|unins\d*|EasyAntiCheat.*|EAC|BattlEye|BEservice.*|CEF|.*cefsubprocess.*|_?CommonRedist|Redist|Prerequisites?|Support|Tools?|SDK|ThirdParty|Extras)$') { return $true }
+        if ($part -match '(?i)^(?:.*launcher.*|bootstrap.*|updat(?:er|e).*|crash(?:report.*|handler.*|capture.*|clientreport.*)?|.*crashreport.*|editor|install(?:er)?|uninstall.*|unins\d*|.*Anti[-_ ]?Cheat.*|EAC|ACE(?:[-_].*)?|BattlEye|BEservice.*|CEF|.*cefsubprocess.*|_?CommonRedist|Redist|Prerequisites?|Support|Tools?|SDK|Extras)$') { return $true }
     }
     $base=[IO.Path]::GetFileNameWithoutExtension($RelativePath)
-    if (-not $Runtime -and $base -match '(?i)(launcher|bootstrap|updater|crashreport|crashhandler|uninstall|^unins|^setup$|installer|editor$|easyanticheat|^eac(?:_|$)|battleye|^beservice|cefsubprocess|^HYP$|modmanager|benchmark|diagnostic|crashpad|helper$|reporter$)') { return $true }
+    if (-not $Runtime -and $base -match '(?i)(launcher|bootstrap|updater|crashreport|crashhandler|^CrashCapture$|uninstall|^unins|^setup$|installer|editor$|anti[-_ ]?cheat|^eac(?:_|$)|^ace(?:[-_]|$)|battleye|^beservice|cefsubprocess|^HYP$|modmanager|benchmark|diagnostic|crashpad|helper$|reporter$)') { return $true }
     # Engine plugins contain real native runtimes; Engine executables are tools.
-    if (-not $Runtime -and $parts -icontains 'Engine') { return $true }
+    if (-not $Runtime -and ($parts -icontains 'Engine' -or $parts -icontains 'ThirdParty')) { return $true }
     return $false
+}
+function Test-AuroraNteCrashCompanion([string]$Path) {
+    # A narrow exception to the shared-directory block, for the field-supported
+    # HTGame/winmm profile only. Names alone must never authorize other utilities.
+    # New companion builds fail closed pending compatibility review. This does
+    # not claim to prove absence of dynamically loaded modules in a running game.
+    $known=@{
+        'CrashCapture.exe'='1C909503EC05A58552F244654D62105BDA92B16D90F66C6E87B5F69944CA3FB5'
+        'CrashClientReporter.exe'='FC334948C58161D706035A17C72DAFABC1BBF309A0EB1AE853EFFE11A25FBD26'
+    }
+    $name=[IO.Path]::GetFileName($Path)
+    return ($known.ContainsKey($name) -and (Get-AuroraHash $Path) -eq $known[$name])
+}
+function Test-AuroraCandidateDirectory([string]$Root,[string]$Exe,[string]$Proxy='') {
+    if (-not (Test-AuroraWithin $Exe $Root)) { return $false }
+    $relative=$Exe.Substring($Root.Length).TrimStart('\')
+    if (Test-AuroraUtilityPath $relative) { return $false }
+    $nte=($relative -match '(?i)(^|\\)HT\\Binaries\\Win64\\HTGame\.exe$')
+    if ($nte -and $Proxy -and $Proxy -ine 'winmm.dll') { return $false }
+    $guard=$null
+    try {
+        $guard=Enter-AuroraPathGuard ([IO.Path]::GetDirectoryName($Exe)) -Directory
+        foreach ($other in @(Get-ChildItem -LiteralPath ([IO.Path]::GetDirectoryName($Exe)) -File -Filter '*.exe')) {
+            Assert-AuroraPlainPath $other.FullName
+            if (-not (Test-AuroraUtilityPath $other.FullName.Substring($Root.Length).TrimStart('\'))) { continue }
+            if (-not (Get-AuroraExecutableEvidence $other.FullName).Valid) { continue }
+            if ($nte -and (Test-AuroraNteCrashCompanion $other.FullName)) { continue }
+            return $false
+        }
+        return $true
+    } finally { if ($guard) { $guard.Dispose() } }
 }
 function Get-AuroraDeploymentCandidates($Scan) {
     $exes=@($Scan.Files | Where-Object { $_.Extension -ieq '.exe' })
-    $unsafeDirectories=@{}
-    foreach ($exe in $exes) {
-        if ((Test-AuroraUtilityPath $exe.FullName.Substring($Scan.Root.Length).TrimStart('\')) -and (Get-AuroraExecutableEvidence $exe.FullName).Valid) { $unsafeDirectories[$exe.DirectoryName]=$true }
-    }
+    $directoryPolicy=@{}
     foreach ($f in $exes) {
         $rel=$f.FullName.Substring($Scan.Root.Length).TrimStart('\')
         if (Test-AuroraUtilityPath $rel) { continue }
         # Excluding a filename cannot prevent a colocated x64 utility loading a Proxy.
-        if ($unsafeDirectories.ContainsKey($f.DirectoryName)) { continue }
+        $policyKey=$f.DirectoryName
+        if ($rel -match '(?i)(^|\\)HT\\Binaries\\Win64\\HTGame\.exe$') { $policyKey+='|HTGame' }
+        if (-not $directoryPolicy.ContainsKey($policyKey)) { $directoryPolicy[$policyKey]=Test-AuroraCandidateDirectory $Scan.Root $f.FullName }
+        if (-not $directoryPolicy[$policyKey]) { continue }
         $evidence=Get-AuroraExecutableEvidence $f.FullName
         if (-not $evidence.Valid) { continue }
         $score=0; $reasons=@('PE x64')
-        if ($rel -match '(?i)(^|\\)Binaries\\(Win64r?|WinGDK)\\') { $score+=60; $reasons+='Binaries 游戏目录' }
-        if ($rel -match '(?i)(^|\\)(Win64r?|WinGDK|x64(?:_dx1[12])?|DX1[12])\\') { $score+=30; $reasons+='64 位 / DX 游戏目录' }
+        if ($rel -match '(?i)(^|\\)Binaries\\(Win64r?|WinGDK)\\[^\\]+$') { $score+=60; $reasons+='Binaries 游戏目录' }
+        if ($rel -match '(?i)(^|\\)(Win64r?|WinGDK|x64(?:_dx1[12])?|DX1[12])\\[^\\]+$') { $score+=30; $reasons+='64 位 / DX 游戏目录' }
         if ($f.BaseName -match '(?i)(-Shipping$|^HTGame$|^wwm$|^witcher3$|^ZenlessZoneZero$)') { $score+=30; $reasons+='游戏入口特征' }
         $near=@($Scan.Files | Where-Object { $_.Extension -ieq '.dll' -and $_.DirectoryName -ieq $f.DirectoryName })
         $d3d=@('d3d11.dll','d3d12.dll','D3D12Core.dll','UnityPlayer.dll','GameAssembly.dll') | Where-Object { Test-Path -LiteralPath (Join-Path $f.DirectoryName $_) -PathType Leaf }
@@ -152,6 +183,12 @@ function Find-AuroraGames([string[]]$Contexts, [string[]]$SteamPaths=@()) {
                 $scan=Get-AuroraScan $root
                 $entries=@(Get-AuroraDeploymentCandidates $scan)
                 if ($scan.Complete -and $entries.Count) { $found+=$root }
+                elseif (@($scan.Files | Where-Object { $_.Extension -ieq '.exe' -and -not (Test-AuroraUtilityPath $_.FullName.Substring($root.Length).TrimStart('\')) -and (Get-AuroraExecutableEvidence $_.FullName).Valid }).Count) {
+                    # A blocked game context must not silently select a different
+                    # Steam game. Keep this root so the menu can explain/restore it;
+                    # installation still requires a complete scan and safe entries.
+                    $found+=$root
+                }
             } catch { }
         }
     }
@@ -264,7 +301,41 @@ function New-AuroraPayload([string]$PackageDir,[string]$InstallDir,[string]$Prox
 }
 
 function Get-AuroraIndexPath([string]$Root) { Join-Path $Root 'OptiScaler\AuroraSetup\AuroraInstallManifest.json' }
-function Open-AuroraIndex([string]$Root) {
+function New-AuroraReportSession([string]$LogRoot=(Join-Path $env:LOCALAPPDATA 'Aurora\Logs'),[int]$Keep=20) {
+    $LogRoot=Get-AuroraPath $LogRoot
+    $lease=$null
+    $guard=Enter-AuroraPathGuard $LogRoot -Directory -Create
+    try {
+        $directory=Join-Path $LogRoot ([Guid]::NewGuid().ToString('N'))
+        [IO.Directory]::CreateDirectory($directory) | Out-Null
+        $lease=[AuroraDirectoryGuard]::Lock((Join-Path $directory 'session.lock'))
+        Write-AuroraJson (Join-Path $directory 'session.json') ([pscustomobject]@{Kind='AuroraReports';Version=1})
+        # Only direct files in our marked sessions. Never recurse, touch legacy
+        # TEMP reports, follow reparse points, or delete unknown/active sessions.
+        $sessions=@(Get-ChildItem -LiteralPath $LogRoot -Directory | Where-Object { $_.Name -match '^[a-f0-9]{32}$' } | Sort-Object CreationTimeUtc -Descending)
+        foreach ($old in @($sessions | Select-Object -Skip ([Math]::Max(1,$Keep)))) {
+            if ($old.FullName -eq $directory) { continue }
+            $oldGuard=$null; $oldLease=$null
+            try {
+                Assert-AuroraPlainPath $old.FullName
+                $oldGuard=Enter-AuroraPathGuard $old.FullName -Directory
+                $marker=Read-AuroraJson (Join-Path $old.FullName 'session.json')
+                if ($marker.Kind -ne 'AuroraReports' -or $marker.Version -ne 1) { continue }
+                $files=@(Get-ChildItem -LiteralPath $old.FullName -Force)
+                if (@($files | Where-Object { $_.PSIsContainer -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $_.Name -notmatch '^(session\.(json|lock)|report\.(json|txt|log\.txt|log\.runtime\.(json|txt))|check-[a-f0-9]{32}\.log\.(txt|runtime\.(json|txt)))$' }).Count) { continue }
+                $oldLease=[AuroraDirectoryGuard]::Lock((Join-Path $old.FullName 'session.lock'))
+                foreach ($file in @($files | Where-Object { $_.Name -ne 'session.lock' })) { Remove-Item -LiteralPath $file.FullName -ErrorAction Stop }
+                $oldLease.Dispose(); $oldLease=$null
+                Remove-Item -LiteralPath (Join-Path $old.FullName 'session.lock') -ErrorAction Stop
+                $oldGuard.Dispose(); $oldGuard=$null
+                # Non-recursive: a concurrently added file keeps the directory intact.
+                [IO.Directory]::Delete($old.FullName,$false)
+            } catch { } finally { if ($oldLease) { $oldLease.Dispose() }; if ($oldGuard) { $oldGuard.Dispose() } }
+        }
+        return [pscustomobject]@{ReportPath=(Join-Path $directory 'report.json');Lease=$lease}
+    } catch { if ($lease) { $lease.Dispose() }; throw } finally { $guard.Dispose() }
+}
+function Open-AuroraIndex([string]$Root,[switch]$ForNewInstall) {
     $Root=Get-AuroraMetadataPath $Root
     $path=Get-AuroraIndexPath $Root; Assert-AuroraPlainPath $path
     if (-not (Test-Path -LiteralPath $path)) { return $null }
@@ -285,7 +356,7 @@ function Open-AuroraIndex([string]$Root) {
         $target.JournalPath=Get-AuroraMetadataPath $target.JournalPath
         if ($target.JournalPath -ine (Join-Path $dir 'OptiScaler\AuroraSetup\manifest.json')) { throw 'RC3 文件日志路径不匹配。' }
         if ($target.PSObject.Properties['JournalExpected'] -and $target.JournalExpected -isnot [bool]) { throw '核心日志登记状态无效。' }
-        if (($index.Status -eq 'Applied' -or ($target.PSObject.Properties['JournalExpected'] -and $target.JournalExpected)) -and -not (Test-Path -LiteralPath $target.JournalPath -PathType Leaf)) { throw '部署文件日志缺失，停止操作，不能猜测文件归属。' }
+        if (-not ($ForNewInstall -and $index.Status -eq 'Removed') -and ($index.Status -eq 'Applied' -or ($target.PSObject.Properties['JournalExpected'] -and $target.JournalExpected)) -and -not (Test-Path -LiteralPath $target.JournalPath -PathType Leaf)) { throw '部署文件日志缺失，停止操作，不能猜测文件归属。' }
         foreach ($exe in @($target.Executables)) { if ([IO.Path]::GetDirectoryName((Get-AuroraMetadataPath $exe)) -ine $dir) { throw 'RC3 入口路径与目录不匹配。' } }
     }
     $owners=@{}
@@ -329,6 +400,9 @@ function Save-AuroraInstallReport($Index,[string]$ReportPath) {
         $runtime+=@($j.Entries)
     }
     $report=[pscustomobject]@{SchemaVersion=3;Status=$Index.Status;GameRoot=$Index.GameRoot;Targets=$Index.Targets;RuntimeGroups=$Index.RuntimeGroups;CoreFiles=$core;RuntimeFiles=$runtime;Notes=@('每份文件日志是事务恢复依据；本报告是快照。','SharedOrUnresolved 是待核对关联，不代表已观察到加载。','SL1 / 未知 Streamline 继续触发整个游戏的保守保护；源 SL2 必须匹配 RC2 固定 SHA256。')}
+    foreach ($name in @('Verification','RuntimeSummary')) {
+        if ($Index.PSObject.Properties[$name]) { $report | Add-Member NoteProperty $name $Index.$name }
+    }
     Write-AuroraJson $ReportPath $report
     $txt=$report | ConvertTo-Json -Depth 12
     [IO.File]::WriteAllText([IO.Path]::ChangeExtension($ReportPath,'.txt'),"Aurora RC3 安装 / 恢复详细报告`r`n"+$txt,(New-Object Text.UTF8Encoding($true)))
@@ -350,12 +424,38 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
     $candidates=@(Get-AuroraDeploymentCandidates $scan)
     if (-not $candidates.Count) { throw '未找到有渲染特征的 x64 游戏入口，未写入文件。' }
     $index=$null; $started=$false
-    $prepared=@(); $lock=$null
+    $prepared=@(); $lock=$null; $completedIndex=$null
     try {
         foreach ($candidate in $candidates) { Assert-AuroraGameClosed $Root $candidate.Path }
         $lock=Enter-AuroraLock $Root
-        $index=Open-AuroraIndex $Root
+        $index=Open-AuroraIndex $Root -ForNewInstall
+        if ($index -and $index.Status -ne 'Removed' -and ($index.Status -eq 'Applied' -or ($index.PSObject.Properties['RuntimeJournalExpected'] -and $index.RuntimeJournalExpected))) {
+            if (-not $index.RuntimeOwners.Count) { throw '已安装清单缺少 Runtime 所有者，不能重新建立恢复记录。' }
+            foreach ($owner in @($index.RuntimeOwners)) {
+                if (-not (Test-Path -LiteralPath (Join-Path $owner 'OptiScaler\RuntimeSync\manifest.json') -PathType Leaf)) { throw 'Runtime 日志缺失，停止更新，不能丢弃原版恢复记录。' }
+            }
+        }
+        if ($index -and $index.Status -eq 'Removed') {
+            # A completed uninstall is not ownership evidence for a new installation.
+            # A launcher may have rebuilt the entire target directory. Missing old
+            # journals are tolerated only here; Remove/Restore remain strict.
+            foreach ($old in @($index.Targets)) {
+                foreach ($jp in @($old.JournalPath,(Join-Path $old.Directory 'OptiScaler\RuntimeSync\manifest.json'))) {
+                    if (Test-Path -LiteralPath $jp) {
+                        $retired=Open-AuroraJournal $jp $Root $old.Directory
+                        if (@($retired.Entries | Where-Object { $_.Status -ne 'Restored' }).Count) { throw '已卸载清单仍含未恢复记录，不能开始新安装。请保留备份并查看详情。' }
+                    }
+                }
+            }
+            $completedIndex=$index; $index=$null
+        }
         if (-not $index) { $index=[pscustomobject]@{SchemaVersion=3;GameRoot=$Root;Status='Pending';Targets=@();RuntimeOwners=@();RuntimeGroups=@();RuntimeJournalExpected=$false} }
+        foreach ($old in @($index.Targets)) {
+            if (-not @($candidates | Where-Object { $_.Directory -ieq $old.Directory }).Count) { throw '旧部署入口已不再通过扫描，请先按原清单卸载，保留其日志和备份。' }
+            foreach ($exe in @($old.Executables)) {
+                if (-not (Test-AuroraCandidateDirectory $Root $exe $old.Proxy)) { throw '旧安装清单包含当前安全策略不允许的入口，请先按原清单卸载，勿删除日志或备份。' }
+            }
+        }
         foreach ($group in @($candidates | Group-Object Directory)) {
             $dir=$group.Name
             $chosen=Get-AuroraRecommendedProxy @($group.Group) $Proxy
@@ -376,6 +476,9 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
                 }
                 $target=[pscustomobject]@{Directory=$dir;Executables=@($group.Group | ForEach-Object { $_.Path });Proxy=$chosen;JournalPath=(Join-Path $dir 'OptiScaler\AuroraSetup\manifest.json')}
                 $index.Targets+=@($target)
+            }
+            foreach ($candidate in @($group.Group)) {
+                if (-not (Test-AuroraCandidateDirectory $Root $candidate.Path $chosen)) { throw '当前入口不能安全使用所选 Proxy。异环仅允许推荐的 winmm.dll；未知同目录工具需先核对。' }
             }
             $journal=Open-AuroraJournal $target.JournalPath $Root $dir
             $target | Add-Member NoteProperty JournalExpected (Test-Path -LiteralPath $target.JournalPath -PathType Leaf) -Force
@@ -401,6 +504,9 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
             $target | Add-Member NoteProperty RuntimeGroupIds $ids -Force
         }
         foreach ($candidate in $candidates) { Assert-AuroraGameClosed $Root $candidate.Path }
+        if ($completedIndex) {
+            Write-AuroraJson (Join-Path $Root ('OptiScaler\AuroraSetup\history\removed-'+[Guid]::NewGuid().ToString('N')+'.json')) $completedIndex
+        }
         $index.Status='Pending'; Write-AuroraJson (Get-AuroraIndexPath $Root) $index; $started=$true
         # Create every payload before activating any new Proxy; each copy is journaled.
         foreach ($p in $prepared) {
@@ -425,6 +531,26 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
             $file=$p.Payload[0]; Assert-AuroraPlannedFile $file
             Install-AuroraFile $p.Journal $p.Target.JournalPath $file.Source $file.Target $file.Hash $file.BeforeHash 6>&1 | Out-File -LiteralPath ([IO.Path]::ChangeExtension($ReportPath,'.log.txt')) -Encoding utf8 -Append
         }
+        # Verify the complete final state, not just the last successful copy.
+        # This includes pre-existing identical files which are intentionally not owned.
+        $verification=@()
+        foreach ($p in $prepared) {
+            foreach ($exe in @($p.Target.Executables)) {
+                if (-not (Test-Path -LiteralPath $exe -PathType Leaf) -or -not (Test-AuroraCandidateDirectory $Root $exe $p.Target.Proxy)) { throw "安装后入口安全自检失败：$exe" }
+            }
+            foreach ($file in $p.Payload) {
+                if ((Get-AuroraHash $file.Target) -ne $file.Hash) { throw "安装后文件自检失败：$($file.Target)" }
+            }
+            $verification+=@([pscustomobject]@{Directory=$p.Target.Directory;Executables=$p.Target.Executables;Proxy=$p.Target.Proxy;ProxyHash=(Get-AuroraHash $p.Payload[0].Target);PayloadFiles=$p.Payload.Count;DiskVerified=$true;GameLoaded='未验证'})
+        }
+        $runtimeJournal=Open-AuroraJournal $runtimeJournalPath $Root $index.RuntimeOwners[0]
+        foreach ($entry in @($runtimeJournal.Entries | Where-Object { $_.Status -ne 'Restored' })) {
+            if ($entry.Status -ne 'Applied' -or (Get-AuroraHash $entry.TargetPath) -ne $entry.DeployedHash) { throw "安装后 Runtime 自检失败：$($entry.TargetPath)" }
+        }
+        $runtimeReport=Read-AuroraJson ([IO.Path]::ChangeExtension([IO.Path]::ChangeExtension($ReportPath,'.log.txt'),'.runtime.json'))
+        if ($runtimeReport.Phase -ne 'PostOperation') { throw 'Runtime 缺少完成报告，不能视为安装成功。' }
+        $index | Add-Member NoteProperty Verification $verification -Force
+        $index | Add-Member NoteProperty RuntimeSummary $runtimeReport.Summary -Force
         $index.Status='Applied'; Write-AuroraJson (Get-AuroraIndexPath $Root) $index
         Save-AuroraInstallReport $index $ReportPath
         return $index

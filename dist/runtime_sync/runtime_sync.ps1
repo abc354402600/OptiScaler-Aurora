@@ -149,6 +149,23 @@ try {
     foreach ($item in @($inventory | Where-Object { $_.Action -eq '可同步' })) {
         Install-AuroraFile $journal $manifestPath $sources[$item.Name] $item.Path $item.SourceHash $item.SHA256
     }
+    if ($RC3Safety -and $ReportPath) {
+        $synchronized=@($inventory | Where-Object { $_.Action -eq '可同步' })
+        foreach ($item in $synchronized) {
+            if ((Get-AuroraHash $item.Path) -ne $item.SourceHash) { throw "Runtime 安装后校验失败：$($item.Path)" }
+        }
+        # Keep Inventory as the diagnostic pre-operation evidence, and add an
+        # explicit outcome instead of presenting a planned copy as a completed one.
+        $report.Phase='PostOperation'
+        $report | Add-Member NoteProperty Summary ([pscustomobject]@{
+            Synchronized=$synchronized.Count
+            AlreadyCurrent=@($inventory | Where-Object { $_.Reason -eq '与包内版本相同' }).Count
+            SL1Preserved=@($inventory | Where-Object { $_.Name -like 'sl.*.dll' -and $_.Major -eq 1 }).Count
+            Protected=@($inventory | Where-Object { $_.Action -eq '保留' -and $_.Reason -ne '与包内版本相同' }).Count
+            SynchronizedPaths=@($synchronized | ForEach-Object { $_.Path })
+        })
+        Write-AuroraJson $ReportPath $report
+    }
     Write-Host '同步完成。SL1、未知版本及 DLSSNR 已保留；请进游戏按 Insert 核对加载和倍率。'
     exit 0
 } catch {

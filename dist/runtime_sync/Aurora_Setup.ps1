@@ -7,10 +7,10 @@
 )
 . (Join-Path $PSScriptRoot 'Aurora_Common.ps1')
 . (Join-Path $PSScriptRoot 'Aurora_Installer.ps1')
-$exitCode=0; $report=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-RC3-'+[Guid]::NewGuid().ToString('N')+'.json')
+$exitCode=0; $session=New-AuroraReportSession; $report=$session.ReportPath
 try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
-    Write-Host "`n  Aurora 安装器 RC3`n" -ForegroundColor Cyan
+    Write-Host "`n  Aurora 安装器 RC3.1 · 安装修复版 20260914`n" -ForegroundColor Cyan
     Write-Host '  正在自动检测游戏…'
     if (-not $GameRoot -and ((Test-Path -LiteralPath (Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json')) -or (Test-Path -LiteralPath (Get-AuroraIndexPath $InstallDir)))) {
         $GameRoot=Resolve-AuroraDeploymentRoot $InstallDir
@@ -29,7 +29,7 @@ try {
         }
     }
     $GameRoot=Get-AuroraPath $GameRoot; Assert-AuroraGameRoot $GameRoot
-    $index=Open-AuroraIndex $GameRoot
+    $index=Open-AuroraIndex $GameRoot -ForNewInstall:($Action -in @('Menu','Install','Repair'))
     $localMeta=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
     if (-not $index -and (Test-Path -LiteralPath $localMeta)) {
         $savedMeta=Read-AuroraJson $localMeta
@@ -43,7 +43,7 @@ try {
         if ($GameExe -and -not @($candidates | Where-Object { $_.Path -ieq (Get-AuroraPath $GameExe) }).Count) { throw '指定 EXE 未通过安全筛选。' }
         Write-Host ('  ✓ 已检测到游戏：'+[IO.Path]::GetFileName($GameRoot)) -ForegroundColor Green
         Write-Host ('  ✓ 将覆盖 '+@($candidates | Group-Object Directory).Count+' 个游戏入口目录') -ForegroundColor Green
-        foreach ($c in @($candidates | Select-Object -First 3)) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')) }
+        foreach ($c in @($candidates | Select-Object -First 3)) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')+' → '+(Get-AuroraRecommendedProxy @($c) $Proxy)) }
         if ($candidates.Count -gt 3) { Write-Host '    其余入口见详细报告。' }
         if (-not $scan.Complete -or -not $candidates.Count) { Write-Host '  ! 当前不能安全安装；仍可选择恢复 / 卸载。' -ForegroundColor Yellow }
         Write-Host '  ✓ 自动匹配 Proxy，保留现有配置，替换前备份' -ForegroundColor Green
@@ -76,8 +76,11 @@ try {
     if ($Action -in @('Install','Repair')) {
         Write-Host "`n  正在备份并部署 Aurora…"
         $index=Install-AuroraDeployment $GameRoot $PackageDir $Proxy $report
-        Write-Host "`n  ✓ 安装完成，所有候选入口已部署并校验。" -ForegroundColor Green
-        Write-Host '  可以启动游戏，按 Insert 核对 Aurora。'
+        Write-Host ("`n  ✓ 部署完成，"+$index.Verification.Count+' 个入口的 Proxy 与完整文件自检通过。') -ForegroundColor Green
+        $summary=$index.RuntimeSummary
+        Write-Host ('  ✓ Runtime：已同步 '+$summary.Synchronized+' 项，已是包内版本 '+$summary.AlreadyCurrent+' 项。') -ForegroundColor Green
+        if ($summary.Protected) { Write-Host ('  ! 安全保留 '+$summary.Protected+' 项 Runtime（其中 SL1 '+$summary.SL1Preserved+' 项），原因见详细报告。') -ForegroundColor Yellow }
+        Write-Host '  磁盘部署已完成；请启动游戏，按 Insert 核对实际加载。'
     } elseif ($index -and $Action -in @('Restore','Remove')) {
         $preserved=@(Remove-AuroraDeployment $index $report -RuntimeOnly:($Action -eq 'Restore'))
         Write-Host "`n  ✓ 已恢复可恢复的原版文件。" -ForegroundColor Green
@@ -86,7 +89,7 @@ try {
     } elseif ($index -and $Action -eq 'Check') {
         foreach ($target in $index.Targets) {
             foreach ($exe in $target.Executables) {
-                $log=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-Check-'+[Guid]::NewGuid().ToString('N')+'.log.txt')
+                $log=Join-Path ([IO.Path]::GetDirectoryName($report)) ('check-'+[Guid]::NewGuid().ToString('N')+'.log.txt')
                 Invoke-AuroraRuntimeTask Check $GameRoot $target.Directory $log $exe
                 Write-Host ('  ✓ 诊断报告：'+$log) -ForegroundColor Green
             }
@@ -114,4 +117,5 @@ if (-not $NonInteractive) {
         }
     }
 }
+$session.Lease.Dispose()
 exit $exitCode
