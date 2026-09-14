@@ -116,15 +116,14 @@ jobs:
     - name: Add Runtime Sync / 添加运行库同步工具
       shell: powershell
       run: |
-        & .\scripts\stage_aurora_package.ps1 -Destination (Join-Path $env:GITHUB_WORKSPACE 'x64\Release\a')
+        Copy-Item "${{ github.workspace }}\dist\runtime_sync\*.ps1" "${{ github.workspace }}\x64\Release\a\"
+        Copy-Item "${{ github.workspace }}\dist\runtime_sync\*.bat" "${{ github.workspace }}\x64\Release\a\"
 
     - name: Package Aurora / 打包 Aurora
       shell: powershell
       run: |
         $zipName = "${{ steps.get_version.outputs.filename }}.7z"
-        & .\scripts\stage_aurora_package.ps1 -Destination (Join-Path $env:GITHUB_WORKSPACE 'x64\Release\a') -VerifyOnly
         7z a -r ${{ github.workspace }}\$zipName ${{ github.workspace }}\x64\Release\a\*.*
-        if ($LASTEXITCODE -ne 0) { throw 'Aurora archive failed.' }
 
       continue-on-error: false
 

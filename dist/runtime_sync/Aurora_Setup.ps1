@@ -6,112 +6,191 @@
     [switch]$NonInteractive
 )
 . (Join-Path $PSScriptRoot 'Aurora_Common.ps1')
-. (Join-Path $PSScriptRoot 'Aurora_Installer.ps1')
-$exitCode=0; $report=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-RC3-'+[Guid]::NewGuid().ToString('N')+'.json')
+$opLock=$null; $stage=$null; $installedNow=$false
 try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
-    Write-Host "`n  Aurora 安装器 RC3`n" -ForegroundColor Cyan
-    Write-Host '  正在自动检测游戏…'
-    if (-not $GameRoot -and ((Test-Path -LiteralPath (Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json')) -or (Test-Path -LiteralPath (Get-AuroraIndexPath $InstallDir)))) {
-        $GameRoot=Resolve-AuroraDeploymentRoot $InstallDir
+    if ($Action -eq 'Menu') {
+        $n=Read-AuroraChoice 'Aurora 安装与诊断' @('安装 / 更新 Aurora','只读检查运行库和加载情况','备份后修复运行库','恢复游戏原版运行库','卸载本工具记录的 Aurora 文件','退出')
+        if ($n -eq 6) { exit 0 }
+        $Action=@('Install','Check','Repair','Restore','Remove')[$n-1]
     }
-    if (-not $GameRoot) {
-        $roots=@(Find-AuroraGames @($InstallDir,$PackageDir))
-        if ($roots.Count -eq 1) { $GameRoot=$roots[0] }
-        elseif ($roots.Count -gt 1) {
-            if ($NonInteractive) { throw '检测到多个游戏，请通过 GameRoot 指定本次游戏。' }
-            $n=Read-AuroraChoice '检测到多个游戏，请选择要安装的游戏' ($roots+@('取消'))
-            if ($n -gt $roots.Count) { exit 0 }; $GameRoot=$roots[$n-1]
-        } else {
-            if ($NonInteractive) { throw '未能自动定位游戏，请通过 GameRoot 指定游戏目录。' }
-            $inputPath=Read-Host '  未自动找到游戏，请粘贴游戏目录或 EXE 路径（直接回车退出）'
-            if (-not $inputPath) { exit 0 }; $GameRoot=Resolve-AuroraDeploymentRoot $inputPath
+    $metaPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
+    Assert-AuroraPlainPath $metaPath
+    if ($Action -ne 'Install' -and (Test-Path -LiteralPath $metaPath)) {
+        $meta=Get-Content -LiteralPath $metaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $GameRoot) { $GameRoot=[string]$meta.GameRoot }
+        if (-not $GameExe) { $GameExe=[string]$meta.GameExe }
+    }
+    if ($Action -eq 'Install') {
+        . (Join-Path $PSScriptRoot 'Aurora_Diagnostics.ps1')
+        if (-not $GameRoot) {
+            if ($NonInteractive) { throw '非交互安装必须指定 GameRoot 和 GameExe。' }
+            $inputPath=Read-Host '请输入游戏目录或游戏 EXE 的完整路径，然后按 Enter（回车）'
+            $GameRoot=Resolve-AuroraGameRoot $inputPath
         }
-    }
-    $GameRoot=Get-AuroraPath $GameRoot; Assert-AuroraGameRoot $GameRoot
-    $index=Open-AuroraIndex $GameRoot
-    $localMeta=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
-    if (-not $index -and (Test-Path -LiteralPath $localMeta)) {
-        $savedMeta=Read-AuroraJson $localMeta
-        if ($savedMeta.PSObject.Properties['RC3Manifest']) { throw 'RC3 总清单缺失，不能回退为单入口卸载；请保留文件与备份。' }
-    }
-    if ($Action -in @('Menu','Install','Repair')) {
+        $GameRoot=Get-AuroraPath $GameRoot
         $scan=Get-AuroraScan $GameRoot
-        if (-not $scan.Complete -and $Action -ne 'Menu') { throw '游戏目录未能完整读取，已停止安装。请确认目录权限，并避免目录联接。' }
-        $candidates=@(Get-AuroraDeploymentCandidates $scan)
-        if (-not $candidates.Count -and $Action -ne 'Menu') { throw '未发现安全的 x64 游戏入口。请确认完整游戏目录；与 x64 工具共用目录的入口不会自动注入。' }
-        if ($GameExe -and -not @($candidates | Where-Object { $_.Path -ieq (Get-AuroraPath $GameExe) }).Count) { throw '指定 EXE 未通过安全筛选。' }
-        Write-Host ('  ✓ 已检测到游戏：'+[IO.Path]::GetFileName($GameRoot)) -ForegroundColor Green
-        Write-Host ('  ✓ 将覆盖 '+@($candidates | Group-Object Directory).Count+' 个游戏入口目录') -ForegroundColor Green
-        foreach ($c in @($candidates | Select-Object -First 3)) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')) }
-        if ($candidates.Count -gt 3) { Write-Host '    其余入口见详细报告。' }
-        if (-not $scan.Complete -or -not $candidates.Count) { Write-Host '  ! 当前不能安全安装；仍可选择恢复 / 卸载。' -ForegroundColor Yellow }
-        Write-Host '  ✓ 自动匹配 Proxy，保留现有配置，替换前备份' -ForegroundColor Green
-        Write-Host '  ! SL1 和未知 Runtime 保留；安装后请进游戏核对效果' -ForegroundColor Yellow
-        Write-AuroraJson $report ([pscustomobject]@{GameRoot=$GameRoot;Candidates=$candidates;RuntimeGroups=@(Get-AuroraRuntimeGroups $scan $candidates)})
-        if (-not $NonInteractive) {
-            while ($true) {
-                Write-Host "`n  [1 / Enter] 一键安装 / 更新`n  [2] 修复 / 恢复 / 卸载`n  [3] 高级工具与诊断`n  [Q] 退出"
-                $choice=Read-Host '  请选择'
-                if ($choice -in @('','1')) { $Action='Install'; break }
-                if ($choice -ieq 'Q') { exit 0 }
-                if ($choice -eq '2') {
-                    $n=Read-AuroraChoice '修复 / 恢复 / 卸载' @('修复安装并安全同步 Runtime','恢复游戏原版 Runtime','卸载所有已记录的 Aurora 副本','返回')
-                    if ($n -eq 4) { continue }; $Action=@('Repair','Restore','Remove')[$n-1]; break
-                }
-                if ($choice -eq '3') {
-                    $n=Read-AuroraChoice '高级工具与诊断' @('查看完整扫描报告','手动修改 Proxy','只读诊断实际加载情况','返回')
-                    if ($n -eq 1) { Get-Content -LiteralPath $report -Raw -Encoding UTF8 | Write-Host }
-                    if ($n -eq 2) {
-                        $proxies=@('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi')
-                        Write-Host '  异环默认 winmm.dll；已有第三方 Proxy 时不会覆盖。ASI 需要已有 ASI Loader。' -ForegroundColor Yellow
-                        $p=Read-AuroraChoice 'Proxy' ($proxies+@('返回自动策略'))
-                        $Proxy=$null; if ($p -le $proxies.Count) { $Proxy=$proxies[$p-1] }
+        if (-not $scan.Complete) { throw ($scan.Warnings -join "`n") }
+        $candidates=@(Get-AuroraCandidates $scan)
+        if (-not $candidates.Count) { throw '未发现可信 x64 游戏程序。请选择单个游戏根目录，确认游戏已完整安装。' }
+        if (-not $GameExe) {
+            if ($NonInteractive) { throw '非交互安装必须明确指定 GameExe。' }
+            $choices=@($candidates | ForEach-Object { "$($_.Path)`n    $($_.Reasons)" }) + @('取消安装')
+            $n=Read-AuroraChoice '发现以下候选程序（排序仅供参考，请选择实际启动的版本）' $choices
+            if ($n -gt $candidates.Count) { exit 0 }; $GameExe=$candidates[$n-1].Path
+        }
+        $GameExe=Get-AuroraPath $GameExe
+        if (@($candidates | Where-Object { $_.Path -ieq $GameExe }).Count -ne 1) { throw '所选程序不在有效候选列表内，未安装。' }
+        $InstallDir=[IO.Path]::GetDirectoryName($GameExe)
+        foreach ($hint in @(Get-AuroraGameHints $GameExe)) { Write-Host $hint }
+        $proxies=@('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi')
+        if (-not $Proxy) {
+            if ($NonInteractive) { throw '非交互安装必须指定 Proxy。' }
+            $n=Read-AuroraChoice '请选择加载方式（参考具体游戏教程；ASI 需要已有 ASI Loader）' ($proxies + @('取消安装'))
+            if ($n -gt $proxies.Count) { exit 0 }; $Proxy=$proxies[$n-1]
+        }
+        if ([IO.Path]::GetFileName($GameExe) -ieq 'HTGame.exe' -and $Proxy -ieq 'dxgi.dll') {
+            Write-Host '你选择了 dxgi.dll。若出现非法模块提示，请通过原卸载流程移除后再手动选择 winmm.dll；不要同时部署两个 Aurora Proxy。'
+        }
+        $dll=Join-Path $PackageDir 'OptiScaler.dll'
+        $binary=Get-AuroraBinary $dll
+        if ($binary.Architecture -ne 'x64' -or $binary.OriginalFilename -ine 'OptiScaler.dll') { throw '发布包缺少可识别的 x64 OptiScaler.dll。请使用完整构建产物。' }
+        foreach ($name in $proxies) {
+            $p=Join-Path $InstallDir $name
+            if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { continue }
+            $info=Get-AuroraBinary $p
+            if ($name -ieq $Proxy -and $info.OriginalFilename -ine 'OptiScaler.dll') { throw "所选 $name 已被其他程序占用。请选择其他 Proxy，不能覆盖未知 DLL。" }
+            if ($name -ine $Proxy -and $info.OriginalFilename -ieq 'OptiScaler.dll') { throw "已存在 Aurora/OptiScaler 代理 $name，请先用对应卸载器移除它，再切换 Proxy。" }
+        }
+        Write-Host "`n安装位置：$InstallDir`n游戏程序：$GameExe`n加载方式：$Proxy"
+        Write-Host '保留已有配置；替换文件前备份。安装后只读检查，运行库修复需要单独选择。'
+        if (-not $NonInteractive -and (Read-AuroraChoice '确认安装' @('安装','取消')) -eq 2) { exit 0 }
+        Assert-AuroraGameClosed $GameRoot $GameExe
+        $opLock=Enter-AuroraLock $GameRoot
+        $journalPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\manifest.json'
+        $journal=Open-AuroraJournal $journalPath $GameRoot $InstallDir
+        # Construct the payload before any game-file write. Never copy state/backups/plugins
+        # from an existing game installation into a different game.
+        $payload=@([pscustomobject]@{Source=$dll;Target=(Join-Path $InstallDir $Proxy)})
+        foreach ($name in @('Aurora_Common.ps1','Aurora_Diagnostics.ps1','Aurora_Setup.ps1','runtime_sync.ps1','Check_DLSS_Runtime.bat','Aurora_Setup.bat')) {
+            $source=Join-Path $PSScriptRoot $name
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "工具文件缺失：$name" }
+            $payload += [pscustomobject]@{Source=$source;Target=(Join-Path $InstallDir $name)}
+        }
+        $payload += [pscustomobject]@{Source=(Join-Path $PSScriptRoot 'Remove_Aurora.bat');Target=(Join-Path $InstallDir 'Remove_Aurora.bat')}
+        foreach ($name in @('nvngx.dll_dlssnr.dll','LICENSE','READ ME - DLSS Neural Rendering.txt')) {
+            $source=Join-Path $PackageDir $name
+            if (Test-Path -LiteralPath $source -PathType Leaf) { $payload += [pscustomobject]@{Source=$source;Target=(Join-Path $InstallDir $name)} }
+        }
+        $licenses=Join-Path $PackageDir 'Licenses'
+        if (Test-Path -LiteralPath $licenses -PathType Container) {
+            Assert-AuroraPlainPath $licenses
+            foreach ($f in @(Get-ChildItem -LiteralPath $licenses -File)) {
+                $payload += [pscustomobject]@{Source=$f.FullName;Target=(Join-Path $InstallDir ('Licenses\'+$f.Name))}
+            }
+        }
+        $bundle=Join-Path $PackageDir 'OptiScaler'
+        if (-not (Test-Path -LiteralPath $bundle -PathType Container)) { throw '发布包缺少 OptiScaler 运行库目录。' }
+        Assert-AuroraPlainPath $bundle
+        $queue=New-Object 'Collections.Generic.Queue[string]'; $queue.Enqueue($bundle)
+        $payloadDirs=0
+        while ($queue.Count) {
+            $payloadDirs++
+            if ($payloadDirs -gt 1000 -or $payload.Count -gt 10000) { throw '发布包目录异常庞大，停止安装。' }
+            foreach ($file in @(Get-ChildItem -LiteralPath $queue.Dequeue() -Force)) {
+                Assert-AuroraPlainPath $file.FullName
+                if ($file.PSIsContainer) {
+                    if ($file.Name -match '^(RuntimeSync|AuroraSetup|\.git|_storage.*)$') { continue }
+                    if ($file.Name -ieq 'plugins') {
+                        # Do not transfer arbitrary per-game plugins; retain the bundled OptiPatcher.
+                        $patcher=Join-Path $file.FullName 'OptiPatcher.asi'
+                        if (Test-Path -LiteralPath $patcher) { $payload += [pscustomobject]@{Source=$patcher;Target=(Join-Path $InstallDir 'OptiScaler\plugins\OptiPatcher.asi')} }
+                        continue
                     }
-                    if ($n -eq 3) { $Action='Check'; break }
+                    $queue.Enqueue($file.FullName)
+                } elseif ($file.Extension -in @('.dll','.json','.ini','.txt','.md','.bin')) {
+                    $rel=$file.FullName.Substring($bundle.Length).TrimStart('\')
+                    $payload += [pscustomobject]@{Source=$file.FullName;Target=(Join-Path $InstallDir ('OptiScaler\'+$rel))}
                 }
             }
-        } elseif ($Action -eq 'Menu') { $Action='Install' }
+        }
+        $config=Join-Path $InstallDir 'OptiScaler.ini'
+        if (-not (Test-Path -LiteralPath $config)) {
+            $sourceIni=Join-Path $PackageDir 'OptiScaler.ini'
+            if (-not (Test-Path -LiteralPath $sourceIni)) { throw '缺少 OptiScaler.ini。' }
+            $stage=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-'+[Guid]::NewGuid().ToString('N')+'.ini')
+            $ini=Get-Content -LiteralPath $sourceIni -Raw -Encoding UTF8
+            if ($ini -notmatch '(?m)^DualFeature=false\s*$') { throw '发布包默认配置不满足 DualFeature=false，停止安装。' }
+            if (-not $NonInteractive) {
+                $gpu=Read-AuroraChoice '使用什么显卡？' @('NVIDIA','AMD / Intel')
+                if ($gpu -eq 2) {
+                    $spoof=Read-AuroraChoice '是否需要 DLSS 输入或游戏教程要求的显卡伪装？' @('保留自动设置','关闭伪装（Dxgi=false）','启用伪装（Dxgi=true）')
+                    if ($spoof -eq 2) { $ini=$ini -replace '(?m)^Dxgi=auto\s*$', 'Dxgi=false' }
+                    if ($spoof -eq 3) { $ini=$ini -replace '(?m)^Dxgi=auto\s*$', 'Dxgi=true' }
+                }
+            }
+            [IO.File]::WriteAllText($stage,$ini,(New-Object Text.UTF8Encoding($true)))
+            $payload += [pscustomobject]@{Source=$stage;Target=$config}
+        }
+        foreach ($p in $payload) {
+            Assert-AuroraPlainPath $p.Source; Assert-AuroraPlainPath $p.Target
+            $p | Add-Member NoteProperty Hash (Get-AuroraHash $p.Source)
+        }
+        # Keep the chosen root available even if deployment is interrupted midway.
+        $metaPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json'
+        Write-AuroraJson $metaPath ([pscustomobject]@{GameRoot=$GameRoot;GameExe=$GameExe;Proxy=$Proxy})
+        # Deploy Proxy last: incomplete payload deployment must not create a new loader.
+        foreach ($p in @($payload | Select-Object -Skip 1) + @($payload[0])) { Install-AuroraFile $journal $journalPath $p.Source $p.Target $p.Hash }
+        Write-Host 'Aurora 文件已部署并通过 SHA256 校验。已有配置未改动。'
+        $opLock.Dispose(); $opLock=$null; $Action='Check'; $installedNow=$true
     }
-    if ($Action -in @('Install','Repair')) {
-        Write-Host "`n  正在备份并部署 Aurora…"
-        $index=Install-AuroraDeployment $GameRoot $PackageDir $Proxy $report
-        Write-Host "`n  ✓ 安装完成，所有候选入口已部署并校验。" -ForegroundColor Green
-        Write-Host '  可以启动游戏，按 Insert 核对 Aurora。'
-    } elseif ($index -and $Action -in @('Restore','Remove')) {
-        $preserved=@(Remove-AuroraDeployment $index $report -RuntimeOnly:($Action -eq 'Restore'))
-        Write-Host "`n  ✓ 已恢复可恢复的原版文件。" -ForegroundColor Green
-        if ($Action -eq 'Remove') { Write-Host '  ✓ 已清理清单记录且未被修改的 Aurora 副本。' -ForegroundColor Green }
-        if ($preserved.Count) { Write-Host ('  ! 保留了 '+$preserved.Count+' 个用户修改文件，备份与详情已保留。') -ForegroundColor Yellow }
-    } elseif ($index -and $Action -eq 'Check') {
-        foreach ($target in $index.Targets) {
-            foreach ($exe in $target.Executables) {
-                $log=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-Check-'+[Guid]::NewGuid().ToString('N')+'.log.txt')
-                Invoke-AuroraRuntimeTask Check $GameRoot $target.Directory $log $exe
-                Write-Host ('  ✓ 诊断报告：'+$log) -ForegroundColor Green
+    if (-not $GameRoot) { $GameRoot=Resolve-AuroraGameRoot $InstallDir }
+    $GameRoot=Get-AuroraPath $GameRoot; Assert-AuroraGameRoot $GameRoot
+    if (-not (Test-AuroraWithin $InstallDir $GameRoot)) { throw '安装目录超出游戏范围。' }
+    $runtime=Join-Path $PSScriptRoot 'runtime_sync.ps1'
+    $mode=@{Check='Check';Repair='Install';Restore='Restore';Remove='Restore'}[$Action]
+    if (-not $mode) { throw '操作无效。' }
+    if ($Action -in @('Repair','Restore','Remove') -and -not $NonInteractive) {
+        Write-Host "操作范围：$GameRoot"
+        if ((Read-AuroraChoice '请先关闭游戏和启动器的更新任务' @('继续操作','取消')) -eq 2) { exit 0 }
+    }
+    $args=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$runtime,'-Mode',$mode,'-InstallDir',$InstallDir,'-GameRoot',$GameRoot)
+    if ($GameExe) { $args += @('-GameExe',$GameExe) }
+    if ($Action -eq 'Check') {
+        $report=Join-Path ([IO.Path]::GetTempPath()) ('Aurora-Report-'+[Guid]::NewGuid().ToString('N')+'.json')
+        $args += @('-ReportPath',$report)
+    }
+    if ($Action -eq 'Remove') { $opLock=Enter-AuroraLock $GameRoot; $args += '-CallerHasLock' }
+    & powershell.exe @args
+    if ($LASTEXITCODE -ne 0) { throw '运行库操作未完成，请按上方提示处理，备份已保留。' }
+    if ($installedNow -and -not $NonInteractive) {
+        $choice=Read-AuroraChoice '文件检查完成，是否同步上方列出的可同步运行库？' @('保持游戏原版运行库，结束安装','先备份，再同步已识别的运行库（SL1 / 未知版本仍保留）')
+        if ($choice -eq 2) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runtime -Mode Install -InstallDir $InstallDir -GameRoot $GameRoot -GameExe $GameExe
+            if ($LASTEXITCODE -ne 0) { throw '运行库同步未完成，安装文件及恢复记录已保留。' }
+        }
+    }
+    if ($Action -eq 'Remove') {
+        $journalPath=Join-Path $InstallDir 'OptiScaler\AuroraSetup\manifest.json'
+        if (-not (Test-Path -LiteralPath $journalPath)) { throw '未找到新版安装清单。旧版安装请使用其原卸载器；不会猜测删除文件。' }
+        $journal=Open-AuroraJournal $journalPath $GameRoot $InstallDir
+        foreach ($e in @($journal.Entries)) {
+            if ($e.TargetPath -ieq (Join-Path $InstallDir 'OptiScaler.ini') -and (Test-Path -LiteralPath $e.TargetPath)) {
+                $current=Get-AuroraHash $e.TargetPath
+                if ($current -ne $e.DeployedHash -and $current -ne $e.OriginalHash) {
+                    $e.Status='Preserved'; Write-Host '保留你修改过的 OptiScaler.ini。'
+                }
             }
         }
-        Save-AuroraInstallReport $index $report
-    } else {
-        # Existing RC2 installations keep their original recovery path and journals.
-        $args=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Aurora_Setup_Legacy.ps1'),'-Action',$Action,'-InstallDir',$InstallDir,'-GameRoot',$GameRoot,'-NonInteractive')
-        if ($GameExe) { $args+=@('-GameExe',$GameExe) }
-        & powershell.exe @args 2>&1 | Out-File -LiteralPath ([IO.Path]::ChangeExtension($report,'.txt')) -Encoding utf8 -Append
-        if ($LASTEXITCODE) { throw 'RC2 恢复 / 诊断未完成，请查看详情。' }
-        Write-Host '  ✓ 操作完成。' -ForegroundColor Green
+        Assert-AuroraRestoreReady $journal
+        Write-AuroraJson $journalPath $journal
+        $fails=Restore-AuroraJournal $journal $journalPath
+        if ($fails) { throw '部分文件已变化，保留这些文件和备份，请查看上方路径。' }
+        Write-Host '已卸载本工具记录且未被修改的文件；原有文件、用户改动和备份保留。'
     }
-} catch {
-    $exitCode=4
-    Write-Host ("`n  ✕ "+$_.Exception.Message) -ForegroundColor Red
-    $_ | Out-String | Add-Content -LiteralPath ([IO.Path]::ChangeExtension($report,'.log.txt')) -Encoding UTF8
+    exit 0
+} catch { Write-Host "[操作停止] $($_.Exception.Message)" -ForegroundColor Red; exit 4 }
+finally {
+    if ($null -ne $opLock) { $opLock.Dispose() }
+    if ($stage -and (Test-Path -LiteralPath $stage)) { Remove-Item -LiteralPath $stage -Force }
 }
-$available=@($report,[IO.Path]::ChangeExtension($report,'.txt'),[IO.Path]::ChangeExtension($report,'.log.txt')) | Where-Object { Test-Path -LiteralPath $_ }
-if (@($available).Count) { Write-Host ("`n  详细报告："+@($available)[0]) }
-if (-not $NonInteractive) {
-    while ((Read-Host '  [D] 查看详情 / [Enter] 退出') -ieq 'D') {
-        foreach ($path in @($report,[IO.Path]::ChangeExtension($report,'.txt'),[IO.Path]::ChangeExtension($report,'.log.txt'))) {
-            if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path -Raw -Encoding UTF8 | Write-Host }
-        }
-    }
-}
-exit $exitCode
