@@ -457,7 +457,7 @@ function Assert-AuroraCoreJournalScope($Journal) {
     }
 }
 function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly) {
-    $root=$Index.GameRoot; $lock=$null; $preserved=@()
+    $root=$Index.GameRoot; $lock=$null; $preserved=@(); $started=$false
     try {
         foreach ($t in @($Index.Targets)) { foreach ($exe in @($t.Executables)) { Assert-AuroraGameClosed $root $exe } }
         $lock=Enter-AuroraLock $root
@@ -489,6 +489,8 @@ function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly
                 if ($current -ne $e.OriginalHash -and -not $e.Created -and (-not $e.BackupPath -or (Get-AuroraHash $e.BackupPath) -ne $e.OriginalHash)) { throw "备份校验失败，尚未删除文件：$($e.TargetPath)" }
             }
         }
+        $previousStatus=$Index.Status
+        $Index.Status='Pending'; Write-AuroraJson (Get-AuroraIndexPath $root) $Index; $started=$true
         foreach ($pair in $journals) {
             Write-AuroraJson $pair.Path $pair.Journal
             $events=@(Restore-AuroraJournal $pair.Journal $pair.Path 6>&1)
@@ -496,12 +498,19 @@ function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly
             $events | Where-Object { $_ -isnot [int] } | Out-File -LiteralPath ([IO.Path]::ChangeExtension($ReportPath,'.log.txt')) -Encoding utf8 -Append
             if ($failures) { throw '恢复过程中发现文件变化；保留剩余文件和恢复工具，请查看详细报告。' }
         }
-        if (-not $RuntimeOnly) { $Index.Status='Removed' }
+        if (-not $RuntimeOnly) { $Index.Status='Removed' } else { $Index.Status=$previousStatus }
         if ($preserved.Count) { $Index.Status='NeedsAttention' }
         # After explicit restoration, use a single owner on the next install.
         if ($RuntimeOnly -and -not $preserved.Count) { $Index.RuntimeOwners=@($Index.Targets[0].Directory) }
         Write-AuroraJson (Get-AuroraIndexPath $root) $Index
         Save-AuroraInstallReport $Index $ReportPath
         return @($preserved)
+    } catch {
+        $failure=$_
+        if ($started) {
+            $Index.Status='NeedsAttention'
+            try { Write-AuroraJson (Get-AuroraIndexPath $root) $Index } catch { Write-Warning '恢复未完成，无法更新状态；请保留 Pending 清单与备份。' }
+        }
+        throw $failure
     } finally { if ($lock) { $lock.Dispose() } }
 }

@@ -45,3 +45,30 @@
 改用固定 clang-format 20.1.8，PR 比 merge-base，push 比 before，首次推送分支比默认分支 merge-base。只检查适用 C/C++ 的新增/修改行，继承 external/include 排除范围；重命名按新文件检查，删除行没有新增代码。完整解析文件生成 replacement XML，按字节偏移对应修改行，只读报告、不改源码。基线缺失/解析失败不能静默通过。无 C++ 变更明确显示检查 0 个文件。
 
 新增 Python 测试 6 项通过，包含真实 clang-format 与临时 Git 仓库：继承格式问题不阻塞干净改动、新违规必须失败、非 C++/删除提交通过、新文件检查全文件、无效基线拒绝、中文空格路径、UTF-8 byte offset、PR/push/new-branch 基线选择。没有对上游 C++ 批量格式化。远端 CI 尚未执行，因为本轮不 Push。
+
+## 6. 打包链 clean-room
+
+发现并修复的实际问题：
+
+- `package_release.ps1` 缺少核心 DLL 时只警告仍可生成 ZIP；现在核心、配置和依赖缺失即停止，旧的成功 ZIP 保持原样。
+- Version 直接拼入递归删除路径；现在限制版本名，每次使用新 staging 目录，不再递归删除旧目录。发布目录及源 Runtime 的 junction、外部 Destination 均拒绝。
+- 构建失败只按英文 `error ` 字符串判断；现在同时检查 MSBuild 退出码。
+- 本地包依赖旧 build output 的 Runtime，Actions 只复制 helper；新增共享 staging/verification 脚本，刷新全部当前 RC3 工具、wrapper、DLSS 和固定 catalog 校验过的 SL2。四条完整归档 workflow 在压缩前调用它，归档命令非零退出不得上传成功；fast workflow 仍明确只提供两 DLL 的迭代补丁，不能作为完整安装包。
+- 构建目录中的 RuntimeSync/AuroraSetup 备份、第三方 plugin 和调试文件可能混入本地包；复制时排除恢复状态与任意第三方 plugin，保留包内 OptiPatcher。
+- 实际 CMD 启动发现 LF-only BAT 会被错误拆分命令；Git 属性固定 BAT CRLF，打包同时规范化 `git archive` 导出的 LF BAT。普通 `.ps1` 测试无法发现该问题。
+- 已部署 Remove BAT 被卸载删除后，CMD 继续读取它会报 `The batch file cannot be found`。改为先退出 BAT 解释上下文再运行 PowerShell，正常/失败退出码均保留；交互结束提示由 PowerShell 负责。仅预解析括号块不足以修复，此方案已用真实 CMD 验证。
+- Remove 部分完成后最终 index 写入失败，旧总清单仍可能显示 Applied。现在恢复前持久化 Pending；后续失败尽量登记 NeedsAttention，持续写入故障则保留 Pending，可从解压包重试。
+
+新增验证：75 项 clean-room 断言、6 项 packaging boundary、12 项实际 BAT 入口断言全部通过；最后针对受影响的 journal 登记及 Remove 重新运行本轮新建的 69 项故障矩阵，也全部通过，未运行旧 81/41/50 套件。9 个 workflow YAML 均可解析，PowerShell 脚本语法检查通过。
+
+clean-room 从含中文/空格/方括号的独立源码目录创建 ZIP：故意使用 LF BAT、陈旧 helper、用户备份、第三方 plugin、缺文件/错误 SL2 catalog 输入。实际运行包内 setup_windows.bat，通过输入 Enter 自动定位双 Witcher 入口、同步两个 Runtime Group、用重新打包的 fixture DLL 更新两个 Proxy、保留用户配置；注入最终卸载 index 持续失败后，从包内恢复入口重试；单独 SL1.5.6 游戏从部署目录运行 Remove_Aurora.bat 成功退出。
+
+测试中的 core/DLSS/forwarder 是 synthetic fixture，SL2 使用仓库内固定 catalog 字节。没有编译新的渲染 DLL，也没有执行远端 Actions、签名、NR 下载或 GPU 游戏启动。forwarder 旧有导出名字符串检查不是完整 PE 导出表证明，本轮未把它当作 GPU 能力验证。
+
+## 汇总与边界
+
+299 项新增测试通过，symbolic link 环境限制跳过 1 项。重复执行的本轮受影响测试只计算一次。每阶段独立本地 checkpoint；不 Push、Merge 或 Release。
+
+仍需真实环境核对：Witcher DX11/DX12 双入口、SL1.5.6、6X MFG 与轻微闪烁；燕云 Win64r、异环 winmm/检测行为；真实独占 DLL、杀毒软件/目录权限、管理员与普通用户、断电/系统重启中断恢复；支持创建符号链接的机器；实际构建/签名/下载链与 GPU 驱动。故障注入覆盖异常路径，不等价于物理断电持久化保证。
+
+路径保护需要 Windows 桌面 .NET / Win32 能力；受限语言模式阻止 Add-Type 时会停止，未绕过系统策略。ownership 清单校验不等价于签名认证，无法防御同一权限主体完整伪造一致的文件和全部元数据；损坏或不能证明 ownership 时保留，恢复记录和备份也有意保留。

@@ -128,10 +128,15 @@ jobs:
         cd .\signed
         copy .\OptiScaler.dll '${{ github.workspace }}\x64\Release\a\OptiScaler.dll' -Force
 
+    - name: Stage and verify current Aurora installer and runtimes
+      shell: powershell
+      run: '& .\scripts\stage_aurora_package.ps1 -Destination (Join-Path $env:GITHUB_WORKSPACE ''x64\Release\a'')'
+
     - name: Compress the artifact 
       run: |
         $zipName = "${{ steps.get_version.outputs.filename }}.7z"
         7z a -r ${{ github.workspace }}\$zipName ${{ github.workspace }}\x64\Release\a\*.*
+        if ($LASTEXITCODE -ne 0) { throw 'Aurora archive failed.' }
 
       continue-on-error: false
         

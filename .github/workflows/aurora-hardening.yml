@@ -1,0 +1,22 @@
+name: Aurora RC3.1 hardening
+on:
+  push:
+    paths: ['dist/runtime_sync/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', 'tests/Aurora_*', '.github/workflows/aurora-hardening.yml']
+  pull_request:
+    paths: ['dist/runtime_sync/**', 'scripts/stage_aurora_package.ps1', 'package_release.ps1', 'setup_windows.bat', 'tests/Aurora_*', '.github/workflows/aurora-hardening.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-hardening:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: New RC3.1 safety and clean-room suites (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          foreach ($name in @('Path_Safety','Fault_Matrix','Metadata_Fuzz','Scan_Performance','Batch_Entry','Package_Boundary','Package_Cleanroom')) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Aurora_${name}_Tests.ps1"
+            if ($LASTEXITCODE -ne 0) { throw "Hardening suite failed: $name" }
+          }
