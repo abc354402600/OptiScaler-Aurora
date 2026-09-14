@@ -9,6 +9,7 @@
 | 当前项目规则 | `../AGENTS.md` |
 | 最新状态、下一步及不重复事项 | `CODEX_HANDOFF.md` |
 | 最新实机安装事故根因、修复、组件hash、使用方式 | `AURORA_RC31_INSTALL_INCIDENT.md` |
+| 巫师3卸载后移动解压位置、旧文件冲突、显式备份更新 | `AURORA_RC31_EXTRACTED_UPGRADE.md`、`../tests/Aurora_Extracted_Upgrade_Tests.ps1`；原始现场 `work/witcher-reinstall-20260914/` |
 | 六阶段加固、测试矩阵、clang-format真实失败原因、clean-room | `AURORA_RC31_HARDENING.md`（历史时点，当前Push/CI状态以交接为准） |
 | 云端两轮去重、upstream精确边界、研究线索的证据强度 | `AURORA_RC31_CLOUD_RECONCILIATION.md` |
 | RC3原始安装器设计 | `AURORA_INSTALLER_RC3.md` |

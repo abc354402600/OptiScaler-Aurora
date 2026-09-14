@@ -367,7 +367,7 @@ function Open-AuroraIndex([string]$Root,[switch]$ForNewInstall) {
     }
     return $index
 }
-function Assert-AuroraPayloadReady($Target, $Journal, [object[]]$Payload) {
+function Assert-AuroraPayloadReady($Target, $Journal, [object[]]$Payload, $Conflicts=$null) {
     $proxies=@('dxgi.dll','winmm.dll','version.dll','dbghelp.dll','d3d12.dll','wininet.dll','winhttp.dll','OptiScaler.asi')
     foreach ($name in $proxies) {
         $path=Join-Path $Target.Directory $name
@@ -383,7 +383,13 @@ function Assert-AuroraPayloadReady($Target, $Journal, [object[]]$Payload) {
         $current=Get-AuroraHash $p.Target; $p.BeforeHash=$current
         if ($current -eq $p.Hash) { continue }
         $owned=@($Journal.Entries | Where-Object { $_.TargetPath -ieq $p.Target -and $_.Status -ne 'Restored' })
-        if (-not $owned.Count) { throw "存在未受清单管理的同名文件，已保留：$($p.Target)" }
+        if (-not $owned.Count) {
+            # Unowned extracted payloads can be upgraded only after explicit review.
+            # Never extend that consent to Proxy collisions or managed modifications.
+            if ($null -eq $Conflicts -or [IO.Path]::GetFileName($p.Target) -in $proxies) { throw "存在未受清单管理的同名文件，已保留：$($p.Target)" }
+            $Conflicts.Add([pscustomobject]@{Path=$p.Target;OriginalHash=$current;ReplacementHash=$p.Hash}) | Out-Null
+            continue
+        }
         $e=$owned[0]
         if ($current -ne $e.DeployedHash -and -not ($e.Status -eq 'Pending' -and $current -eq $e.BeforeHash)) { throw "用户或游戏修改过文件，已保留：$($p.Target)" }
         if ($e.BackupPath -and (Get-AuroraHash $e.BackupPath) -ne $e.OriginalHash) { throw '原始备份校验失败，未开始部署。' }
@@ -415,7 +421,7 @@ function Invoke-AuroraRuntimeTask([string]$Mode,[string]$Root,[string]$Owner,[st
     & powershell.exe @args 2>&1 | Out-File -LiteralPath $LogPath -Encoding utf8 -Append
     if ($LASTEXITCODE) { throw "Runtime 操作未完成，文件与备份保留。详情：$LogPath" }
 }
-function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Proxy,[string]$ReportPath) {
+function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Proxy,[string]$ReportPath,[scriptblock]$ConfirmConflicts=$null) {
     Assert-AuroraGameRoot $Root
     $binary=Get-AuroraBinary (Join-Path $PackageDir 'OptiScaler.dll')
     if ($binary.Architecture -ne 'x64' -or $binary.OriginalFilename -ine 'OptiScaler.dll') { throw '发布包缺少可识别的 x64 OptiScaler.dll，请使用完整构建产物。' }
@@ -425,6 +431,7 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
     if (-not $candidates.Count) { throw '未找到有渲染特征的 x64 游戏入口，未写入文件。' }
     $index=$null; $started=$false
     $prepared=@(); $lock=$null; $completedIndex=$null
+    $conflicts=New-Object 'Collections.Generic.List[object]'
     try {
         foreach ($candidate in $candidates) { Assert-AuroraGameClosed $Root $candidate.Path }
         $lock=Enter-AuroraLock $Root
@@ -484,7 +491,7 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
             $target | Add-Member NoteProperty JournalExpected (Test-Path -LiteralPath $target.JournalPath -PathType Leaf) -Force
             $payload=@(New-AuroraPayload $PackageDir $dir $chosen)
             $prepared+=@([pscustomobject]@{Target=$target;Journal=$journal;Payload=$payload})
-            Assert-AuroraPayloadReady $target $journal $payload
+            Assert-AuroraPayloadReady $target $journal $payload $conflicts
         }
         # Retain all historical owners, including RC2 records, so nothing loses its backup.
         $activeOwners=@()
@@ -502,6 +509,14 @@ function Install-AuroraDeployment([string]$Root,[string]$PackageDir,[string]$Pro
         foreach ($target in @($index.Targets)) {
             $ids=@($index.RuntimeGroups | Where-Object { $g=$_; @($target.Executables | Where-Object { $g.CandidatePaths -icontains $_ }).Count } | ForEach-Object { $_.Id })
             $target | Add-Member NoteProperty RuntimeGroupIds $ids -Force
+        }
+        if ($conflicts.Count) {
+            Write-AuroraJson $ReportPath ([pscustomobject]@{GameRoot=$Root;Status='AwaitingConflictConsent';Conflicts=@($conflicts.ToArray());Notes=@('未开始新部署；同名文件未被清单管理，不能根据名称猜测来源。','仅允许显式确认后备份这些具体文件；Remove 校验后恢复原文件。')})
+            $approved=$false
+            if ($ConfirmConflicts) { $answer=& $ConfirmConflicts $conflicts.ToArray(); $approved=($answer -is [bool] -and $answer) }
+            if (-not $approved) { throw '发现未受清单管理的旧文件，已全部保留，未开始部署。请交互运行安装器，查看冲突后选择备份更新。' }
+            # Recheck the exact reviewed paths/hashes, including absent destinations.
+            foreach ($p in $prepared) { foreach ($file in $p.Payload) { Assert-AuroraPlannedFile $file } }
         }
         foreach ($candidate in $candidates) { Assert-AuroraGameClosed $Root $candidate.Path }
         if ($completedIndex) {

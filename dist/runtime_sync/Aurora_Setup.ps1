@@ -10,7 +10,7 @@
 $exitCode=0; $session=New-AuroraReportSession; $report=$session.ReportPath
 try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
-    Write-Host "`n  Aurora 安装器 RC3.1 · 安装修复版 20260914`n" -ForegroundColor Cyan
+    Write-Host "`n  Aurora 安装器 RC3.1 · 重装修复版 20260914`n" -ForegroundColor Cyan
     Write-Host '  正在自动检测游戏…'
     if (-not $GameRoot -and ((Test-Path -LiteralPath (Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json')) -or (Test-Path -LiteralPath (Get-AuroraIndexPath $InstallDir)))) {
         $GameRoot=Resolve-AuroraDeploymentRoot $InstallDir
@@ -75,7 +75,22 @@ try {
     }
     if ($Action -in @('Install','Repair')) {
         Write-Host "`n  正在备份并部署 Aurora…"
-        $index=Install-AuroraDeployment $GameRoot $PackageDir $Proxy $report
+        $confirm=$null
+        if (-not $NonInteractive) {
+            $confirm={ param($conflicts)
+                Write-Host ('  ! 发现 '+$conflicts.Count+' 个未受清单管理的同名文件，可能来自以前解压的包。') -ForegroundColor Yellow
+                foreach ($file in @($conflicts | Select-Object -First 3)) { Write-Host ('    '+$file.Path.Substring($GameRoot.Length).TrimStart('\')) }
+                if ($conflicts.Count -gt 3) { Write-Host '    其余文件按 D 查看。' }
+                Write-Host '  选择备份更新将先保存原文件；以后卸载会恢复它们。现有配置保留。' -ForegroundColor Yellow
+                while ($true) {
+                    $answer=Read-Host '  [B] 备份上述文件并更新 / [D] 查看全部冲突 / [Enter] 取消'
+                    if ($answer -ieq 'B') { return $true }
+                    if ($answer -ieq 'D') { foreach ($file in $conflicts) { Write-Host $file.Path }; continue }
+                    return $false
+                }
+            }
+        }
+        $index=Install-AuroraDeployment $GameRoot $PackageDir $Proxy $report -ConfirmConflicts $confirm
         Write-Host ("`n  ✓ 部署完成，"+$index.Verification.Count+' 个入口的 Proxy 与完整文件自检通过。') -ForegroundColor Green
         $summary=$index.RuntimeSummary
         Write-Host ('  ✓ Runtime：已同步 '+$summary.Synchronized+' 项，已是包内版本 '+$summary.AlreadyCurrent+' 项。') -ForegroundColor Green
