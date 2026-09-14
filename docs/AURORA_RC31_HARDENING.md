@@ -37,3 +37,11 @@
 | 50k | 976.56 | 103.71 | 50070 | 70 | 64 |
 
 对象数量指交给脚本的 FileInfo/DirectoryInfo，不声称 NTFS 内部完全不访问被筛掉的目录项。每个规模仍找到 3 个相同安全入口与全部原生 Runtime；新增共目录 Launcher 会立即撤掉相应候选，junction 不被遍历。结果保存在 scan-performance.json。
+
+## 5. clang-format CI
+
+核实近期 10 次远端运行，9 次失败、1 次取消。RC2 `ab221bf4` 的 [真实失败日志](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34755357249/job/103718694878) 中 checkout、容器和 Ubuntu clang-format 20.1.8 均成功，格式阶段报告 29 个文件、7,699 处 `code should be clang-formatted`，随后 exit 1。例子包括 OptiTypes.cpp、Config.cpp、menu_common.cpp 和生成的 shader headers。`e1673a16..ab221bf4` 没有 C/C++ 修改，只有安装器、文档、构建配置等；旧 workflow 每次检查整个 OptiScaler，历史格式债务导致安装器提交也必红。这是已查日志的确切原因，并非推断全部历史运行均只有同一个原因。
+
+改用固定 clang-format 20.1.8，PR 比 merge-base，push 比 before，首次推送分支比默认分支 merge-base。只检查适用 C/C++ 的新增/修改行，继承 external/include 排除范围；重命名按新文件检查，删除行没有新增代码。完整解析文件生成 replacement XML，按字节偏移对应修改行，只读报告、不改源码。基线缺失/解析失败不能静默通过。无 C++ 变更明确显示检查 0 个文件。
+
+新增 Python 测试 6 项通过，包含真实 clang-format 与临时 Git 仓库：继承格式问题不阻塞干净改动、新违规必须失败、非 C++/删除提交通过、新文件检查全文件、无效基线拒绝、中文空格路径、UTF-8 byte offset、PR/push/new-branch 基线选择。没有对上游 C++ 批量格式化。远端 CI 尚未执行，因为本轮不 Push。
