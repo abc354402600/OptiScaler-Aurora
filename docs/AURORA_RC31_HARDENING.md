@@ -72,3 +72,9 @@ clean-room 从含中文/空格/方括号的独立源码目录创建 ZIP：故意
 仍需真实环境核对：Witcher DX11/DX12 双入口、SL1.5.6、6X MFG 与轻微闪烁；燕云 Win64r、异环 winmm/检测行为；真实独占 DLL、杀毒软件/目录权限、管理员与普通用户、断电/系统重启中断恢复；支持创建符号链接的机器；实际构建/签名/下载链与 GPU 驱动。故障注入覆盖异常路径，不等价于物理断电持久化保证。
 
 路径保护需要 Windows 桌面 .NET / Win32 能力；受限语言模式阻止 Add-Type 时会停止，未绕过系统策略。ownership 清单校验不等价于签名认证，无法防御同一权限主体完整伪造一致的文件和全部元数据；损坏或不能证明 ownership 时保留，恢复记录和备份也有意保留。
+
+## 附加增量检查
+
+上游 commit 审计没有擅自重新开始。此前交付报告已注明 `AURORA_RELEASE_AUDIT_updated_20260913.md` 附件不可读；当前仓库和既有交付物仍没有可核实的上次审计截止 SHA。`e1673a16` 只证明 Aurora 曾移植审计过的修复，不能代替上游截止 commit；Git remote 名为 upstream 的地址还是 Susemi fork，不能冒充官方 OptiScaler。因缺乏精确范围，本轮未声称完成新增 commit 审计，也未重复审历史。
+
+2026-09-14 对官方 `optiscaler/OptiScaler` 的 issue/PR 做增量检索，限定 `updated:>=2026-09-13`，分别检索 `flicker`、`Witcher`、`Genshin`、`Zenless`，四组均返回空。这里只能说明这些检索未提供新证据，不能证明没有新问题或修复。没有据此生成推测性 MFG/Streamline patch，没有新增实验分支或修改当前渲染路径。既有兼容性记录保留，真实轻微闪烁和米家兼容性仍待复现证据。
