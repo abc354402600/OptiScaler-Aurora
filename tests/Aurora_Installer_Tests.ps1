@@ -76,7 +76,7 @@ $sl2=Join-Path $dx11 'sl.interposer.dll'; Fixture $sl2 '2.12.0.0'; $sl2Hash=Get-
 [IO.File]::Copy((Join-Path $repo 'dist\streamline\sl.interposer.dll'),(Join-Path $pkg 'OptiScaler\streamline\sl.interposer.dll'))
 $toolRuntime=Join-Path $game 'Launcher\nvngx_dlss.dll'; Fixture $toolRuntime '310.1.0.0'; $ht=Get-AuroraHash $toolRuntime
 Run-Setup Install $game $pkg
-Assert ($lastOutput.Contains('安装完成') -and -not ($lastOutput -match '[A-F0-9]{64}|\[已校验\]|SL1\.5')) 'Ordinary output is Chinese conclusions without hashes or per-file logs'
+Assert ($lastOutput.Contains('部署完成') -and -not ($lastOutput -match '[A-F0-9]{64}|\[已校验\]|SL1\.5')) 'Ordinary output is Chinese conclusions without hashes or per-file logs'
 $index=Open-AuroraIndex $game
 Assert ($index.Targets.Count -eq 2 -and $index.Status -eq 'Applied') 'One transaction covers both directories'
 foreach ($dir in @($dx11,$dx12)) {

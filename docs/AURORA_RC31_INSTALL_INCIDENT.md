@@ -29,12 +29,15 @@
 - 新增 `Aurora_Install_Incident_Tests.ps1`：49 项，覆盖真实目录形态、ACE 排除、共目录工具例外的严格边界、ThirdParty Runtime、旧 ACE Removed 清单与目录重建、缺 Runtime 日志、双入口、SL1、最终状态异常、日志保留和 junction。
 - 新增 `Aurora_Install_Entry_Tests.ps1`：9 项，通过真实 CMD/Windows PowerShell 5.1，模拟“完整包解压到主 Win64 → 自动定位 → Enter 安装 → 更新 → Remove”，区分源 OptiScaler.dll 与生成 Proxy 的 ownership。
 - 相关回归：Fault Matrix 69 项、Metadata Fuzz 92 项。仅因本次修改触及事务完成判定与清单读取而回归；未重跑旧 RC3 81、RC2 41、旧 50 项套件。
+- 旧 RC3 的普通 UI 断言同步改为“部署完成”，保留禁止散落哈希和逐文件日志的检查；用本轮实际入口输出验证这一受影响断言。Push 自动触发的既有 Actions 仍按原配置运行，未手工要求重跑旧套件。
 - 真实目录只读扫描：异环选出唯一 HTGame.exe/winmm；巫师3两个 EXE/dxgi。异环只读 Runtime 检查得到 9 项可同步（3 个 DLSS 系列、6 个 SL2）；没有替换实机文件。
 - 测试使用合成 PE；涉及崩溃组件的测试仅在临时测试包内替换两个已知指纹为合成组件指纹，不修改生产配置、不附带真实游戏 EXE。上述测试不证明 GPU/游戏兼容性。
 
 ## 更新与实机复测
 
-推荐把完整构建包解压到游戏之外的独立目录，再覆盖本次“安装链路热修工具包”。运行 Aurora_Setup.bat，在摘要中选中要测试的游戏；若无法自动找到异环，在路径兜底输入游戏目录。不要将仓库替换 ZIP 解压到游戏，不要把旧 RC2/RC3 ZIP 再覆盖到本次工具上。
+针对本次异环现场：主 Win64 的文件是完整发布包的解压源文件、没有该目录的安装日志，可以把本次“安装链路热修工具包”覆盖到该 Win64，再运行 Aurora_Setup.bat。确认标题含“安装修复版 20260914”，摘要是 HTGame.exe / winmm.dll。
+
+若要保留游戏内已由清单管理的旧工具不被手工修改，则把完整构建包解压到独立目录，再覆盖热修工具。独立包不一定能自动发现非 Steam 的异环，可从该包目录执行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Aurora_Setup.ps1 -GameRoot "E:\Neverness To Everness\Client\WindowsNoEditor"` 明确选定游戏。不要将仓库替换 ZIP 解压到游戏，也不要把旧 RC2/RC3 ZIP 再覆盖到本次工具上。
 
 如果当前旧记录已经 Removed，直接安装即可，历史总清单会归档。如果仍显示 Applied/NeedsAttention 且旧目标是 ACE，先使用修复包的修复/恢复/卸载菜单按原日志卸载；若日志缺失，保持停止，不删除或伪造 metadata。任何无法证明 ownership 的文件都保留。
 
