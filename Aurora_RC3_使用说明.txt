@@ -1,0 +1,15 @@
+﻿Aurora RC3 累计工具替换包
+
+本包包含 RC2 + RC3 的全部 11 个发布工具文件，不包含 OptiScaler.dll、OptiScaler.ini 或 DLSS/Streamline 二进制文件。
+
+1. 先完整解压你已经构建好的 RC2 发布包。
+2. 将本 ZIP 内的工具文件覆盖到该发布包根目录。
+3. 运行 setup_windows.bat 或 Aurora_Setup.bat，查看自动识别摘要，按 Enter 安装。
+4. 在任一已部署入口运行 Remove_Aurora.bat，会按总清单恢复整个游戏的 Runtime 并清理未修改的冗余副本。
+
+不要直接覆盖游戏中已经受安装清单管理的工具文件；应从发布包运行安装器更新，否则手工覆盖可能被视为用户修改。
+不要删除游戏根目录或入口目录中的 OptiScaler/AuroraSetup、RuntimeSync 清单及 backup。用户修改的文件和备份会保留。
+
+本轮不包含新的渲染 DLL，也没有宣称实机 6X / 游戏兼容性通过。巫师3双入口、SL1.5.6、燕云 Win64r、异环 winmm 仍需实机核对。
+源分支：aurora-rc3-installer-20260913
+源提交：f452380c1645c2be8a7ead930b271a67bef04bdc
