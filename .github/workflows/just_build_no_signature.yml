@@ -8,7 +8,7 @@ name: Build Aurora (No Signing) / 构建 Aurora（未签名）
 on:
   workflow_dispatch:
   push:
-    branches: [ "aurora" ]
+    branches: [ "aurora", "Compatibility-fixes" ]
 #  pull_request:
 #    branches: [ "master" ]
 
@@ -56,6 +56,9 @@ jobs:
         $date = Get-Date -Format "yyyyMMdd"
         $outputFileName = "OptiScaler_Aurora_${version}_${date}"
 
+        if ($env:GITHUB_REF_NAME -eq 'Compatibility-fixes') {
+            $outputFileName += "_compat_" + $env:GITHUB_SHA.Substring(0,8)
+        }
         Write-Output "Generated Filename: $outputFileName"
         "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         "filename=$outputFileName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -118,6 +121,18 @@ jobs:
       run: |
         Copy-Item "${{ github.workspace }}\dist\runtime_sync\runtime_sync.ps1" "${{ github.workspace }}\x64\Release\a\runtime_sync.ps1"
         Copy-Item "${{ github.workspace }}\dist\runtime_sync\Check_DLSS_Runtime.bat" "${{ github.workspace }}\x64\Release\a\Check_DLSS_Runtime.bat"
+
+    - name: Test frame and provider lifetime guards
+      shell: powershell
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+        foreach ($name in @('Aurora_DLSSG_Frame_Guard_Tests','Aurora_Provider_Handle_Tests')) {
+            $command = 'call "' + $vcvars + '" && cl /nologo /EHsc /std:c++20 /I OptiScaler tests\' + $name + '.cpp /Fe:x64\' + $name + '.exe && x64\' + $name + '.exe'
+            & $env:ComSpec /d /c $command
+            if ($LASTEXITCODE) { throw "Compatibility guard test failed: $name" }
+        }
 
     - name: Package Aurora / 打包 Aurora
       shell: powershell
