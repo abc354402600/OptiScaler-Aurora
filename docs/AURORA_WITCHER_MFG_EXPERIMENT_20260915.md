@@ -24,3 +24,15 @@
 未签名workflow仅增加本实验分支触发和专用策略测试，产物名附带EXPERIMENT_MFG及提交前8位；不发布Release。若普通Git连接失败，可在独立 `experiment/witcher-mfg-frame-sync-20260915-ci` 分支用GitHub连接器发布与本地checkpoint相同tree的构建快照。该快照commit可能不同，必须核对tree，不改写本地历史或稳定分支。
 
 实机重点：保存动态设置后读图、动态→固定6X、FG关闭再开启；确认frame guard可恢复且没有持续把FG关闭。比较两类原错误是否仍出现：DEVICE_HUNG/ReflexNotDetected及游戏+0x1f1f4ea。一次进图成功不能算解决。CPU异常指针根因尚未解决，轻微闪烁仍待独立输入对比。
+
+## 2026-09-15 构建交付更新
+
+最终构建提交9a7b03949217c2f317244b2c9d2df4d8338f3042（包含1188c757及后续发布顺序保护）。[未签名构建34918559071](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34918559071)的完整MSVC、22项策略测试、打包及上传全部成功；clang-format34918559012和自动hardening34918559009也成功。此结果补齐上文此前待验的完整编译，不代表GPU实测通过。
+
+Git网络故障已找到原因：WinINET已有127.0.0.1:7897代理，Git没有自动采用。仅本次命令指定http.proxy后普通atomic push成功，稳定安装器b81942a4与实验分支9a7b0394均核对远端ref；aurora保持e1673a1。没有改全局Git配置。GitHub连接器尝试创建blob返回403（集成无写权限），没有创建CI镜像分支或替代提交。
+
+Artifact10377655931已下载到本机，52文件7z测试通过。压缩包SHA256为947926d7fc85659560f9bd5f61c0a359cacf10b9c0d84ec19d7db3cd5b619568，核心25988096字节，SHA256为ef6cd0ddb81c72667d192def8b52eaa657879fb0942413f8a3f4dce89e72ea68。
+
+30项helper/Runtime用`git -c core.autocrlf=true cat-file --filters`读取9a7b0394的实际Windows检出内容，逐字节匹配；配置含DualFeature=false。直接调用stage VerifyOnly最初因审计目录位于资料工作区而被正常拒绝；移至仓库忽略目录后又因本地PS1的LF/混合换行与Actions CRLF不同而拒绝。没有放宽校验或重写包，改用上述Git过滤后的准确参照独立验证通过。源工作区和包的换行差异不能误报为漏打包。
+
+本地交付：`D:\下载\Aurora_巫师3_MFG实验_20260915`。资料工作区`work/mfg-artifact-validation.json`保存逐文件hash，`work/verify_mfg_artifact.py`可重现比对。原始dump保留本地；新增只读DbgHelp尝试虽匹配181个模块PE元数据，但无法取得fault PC的runtime function table，停止于异常帧，**没有获得可靠完整调用栈**。因此CPU异常指针仍未解决，不从猜测调用栈制作补丁。
