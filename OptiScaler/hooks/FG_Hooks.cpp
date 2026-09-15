@@ -1145,7 +1145,8 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         {
             std::optional<double> upscalerTimeOpt {};
 
-            if (state.swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 && state.currentD3D11Device != nullptr)
+            if (state.swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 && state.currentD3D11Device != nullptr &&
+                (currentFeature->Api() == API::DX11 || currentFeature->IsWithDx12()))
             {
                 ID3D11DeviceContext* context = nullptr;
                 state.currentD3D11Device->GetImmediateContext(&context);
@@ -1155,7 +1156,8 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
 
                 context->Release();
             }
-            else if (state.swapchainInteropApi == SwapchainInteropApi::None && state.currentCommandQueue != nullptr)
+            else if (state.swapchainInteropApi == SwapchainInteropApi::None && state.currentCommandQueue != nullptr &&
+                     currentFeature->Api() == API::DX12 && !currentFeature->IsWithDx12())
             {
                 if (upscalerTimeOpt = currentFeature->ReadUpscalerTime(state.currentCommandQueue);
                     upscalerTimeOpt.has_value())

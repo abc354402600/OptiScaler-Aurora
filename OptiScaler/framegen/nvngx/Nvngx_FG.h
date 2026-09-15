@@ -6,20 +6,21 @@
 #include "proxies/Ntdll_Proxy.h"
 #include <shaders/hud_copy/HudCopy_Dx12.h>
 #include "IFGNvngx.h"
+#include <framegen/ProviderHandleRegistry.h>
 
 class Nvngx_FG
 {
   private:
-    // TODO: store an list of all the handles and lookup,
-    // in case the game gives us a new handle each time and only id is correct
+    // The public handle remains the address returned by CreateFeature. Registry
+    // ownership protects Evaluate/Release callers without dereferencing stale IDs.
     struct Nvngx_FG_Handle
     {
         unsigned int id;
         NVSDK_NGX_Handle* nativeHandle = nullptr;
-        std::shared_mutex handleMutex {}; // FFX is not mutex'ed and replies on this
     };
 
     static inline std::atomic_uint32_t lastIdCreated = 0;
+    static inline ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
     static inline std::unique_ptr<IFGNvngx> _provider;
     static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
 

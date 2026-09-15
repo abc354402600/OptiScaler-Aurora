@@ -275,13 +275,14 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdL
     if (!OutHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    auto proxyHandle = new Nvngx_FG_Handle(lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET);
-
-    std::scoped_lock lock(proxyHandle->handleMutex);
+    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
+    auto* proxyHandle = &pending->value;
+    *OutHandle = nullptr;
 
     auto result = provider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &proxyHandle->nativeHandle);
 
-    *OutHandle = (NVSDK_NGX_Handle*) proxyHandle;
+    if (result == NVSDK_NGX_Result_Success)
+        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
 
     // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
 
@@ -298,19 +299,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (!InHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    if (InHandle->Id < NVNGX_PROVIDER_ID_OFFSET)
-        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
-
-    // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InHandle);
-
-    std::scoped_lock lock(((Nvngx_FG_Handle*) InHandle)->handleMutex);
-
-    auto result = provider->D3D12_ReleaseFeature(((Nvngx_FG_Handle*) InHandle)->nativeHandle);
-
-    if (result == NVSDK_NGX_Result_Success)
-        delete InHandle;
-
-    return result;
+    return _handles.Release(
+        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
+        [&](Nvngx_FG_Handle& handle) { return provider->D3D12_ReleaseFeature(handle.nativeHandle); },
+        [](NVSDK_NGX_Result result) { return result == NVSDK_NGX_Result_Success; });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_GetFeatureRequirements(IDXGIAdapter* Adapter,
@@ -338,64 +330,63 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
     if (!InFeatureHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    if (InFeatureHandle->Id < NVNGX_PROVIDER_ID_OFFSET)
-        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
-
-    std::shared_lock lock(((Nvngx_FG_Handle*) InFeatureHandle)->handleMutex);
-
-    bool applyHudCutoff = Config::Instance()->FGHudCutoff.value_or_default() > 0.0f ||
-                          State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup;
-
-    uint32_t frameIndex = 1;
-    InParameters->Get("DLSSG.MultiFrameIndex", &frameIndex);
-
-    if (applyHudCutoff && frameIndex == 1)
-    {
-        ID3D12Resource* presentWithHud = nullptr;
-        InParameters->Get("DLSSG.Backbuffer", &presentWithHud);
-        auto presentWithHudState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-
-        ID3D12Resource* hudlessResource = nullptr;
-        InParameters->Get("DLSSG.HUDLess", &hudlessResource);
-        auto hudlessState = D3D12_RESOURCE_STATE_COPY_DEST;
-
-        auto device = State::Instance().currentD3D12Device;
-
-        if (presentWithHud && hudlessResource && device)
+    return _handles.Read(
+        InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
+        [&](Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
         {
-            if (_hudCopy.get() == nullptr)
-                _hudCopy = std::make_unique<HudCopy_Dx12>("HudCopy", device);
+            bool applyHudCutoff = Config::Instance()->FGHudCutoff.value_or_default() > 0.0f ||
+                                  State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup;
 
-            if (auto hudCopy = _hudCopy.get(); hudCopy && hudCopy->IsInit())
+            uint32_t frameIndex = 1;
+            InParameters->Get("DLSSG.MultiFrameIndex", &frameIndex);
+
+            if (applyHudCutoff && frameIndex == 1)
             {
-                // In Cyberprank - DLSSG has noise issues, FSR FG has noise + vignetting
-                // In Death Stranding 2 - DLSSG has wrong colormapping it seems, FSR FG is fine
-                const bool isCyberpunk = State::Instance().gameQuirks[GameQuirk::CyberpunkHudlessState];
-                float hudDetectionThreshold = 0.03f;
+                ID3D12Resource* presentWithHud = nullptr;
+                InParameters->Get("DLSSG.Backbuffer", &presentWithHud);
+                auto presentWithHudState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-                if (isCyberpunk && State::Instance().activeFgInput != FGInput::FSRFG)
-                    hudDetectionThreshold = 0.01f;
+                ID3D12Resource* hudlessResource = nullptr;
+                InParameters->Get("DLSSG.HUDLess", &hudlessResource);
+                auto hudlessState = D3D12_RESOURCE_STATE_COPY_DEST;
 
-                if (Config::Instance()->FGHudCutoff.value_or_default() > 0.0f)
-                    hudDetectionThreshold = Config::Instance()->FGHudCutoff.value_or_default() / 10.0f;
+                auto device = State::Instance().currentD3D12Device;
 
-                hudCopy->Dispatch(InCmdList, hudlessResource, presentWithHud, hudlessState, presentWithHudState,
-                                  hudDetectionThreshold);
+                if (presentWithHud && hudlessResource && device)
+                {
+                    if (_hudCopy.get() == nullptr)
+                        _hudCopy = std::make_unique<HudCopy_Dx12>("HudCopy", device);
+
+                    if (auto hudCopy = _hudCopy.get(); hudCopy && hudCopy->IsInit())
+                    {
+                        // In Cyberprank - DLSSG has noise issues, FSR FG has noise + vignetting
+                        // In Death Stranding 2 - DLSSG has wrong colormapping it seems, FSR FG is fine
+                        const bool isCyberpunk = State::Instance().gameQuirks[GameQuirk::CyberpunkHudlessState];
+                        float hudDetectionThreshold = 0.03f;
+
+                        if (isCyberpunk && State::Instance().activeFgInput != FGInput::FSRFG)
+                            hudDetectionThreshold = 0.01f;
+
+                        if (Config::Instance()->FGHudCutoff.value_or_default() > 0.0f)
+                            hudDetectionThreshold = Config::Instance()->FGHudCutoff.value_or_default() / 10.0f;
+
+                        hudCopy->Dispatch(InCmdList, hudlessResource, presentWithHud, hudlessState, presentWithHudState,
+                                          hudDetectionThreshold);
+                    }
+                }
+                else
+                {
+                    LOG_WARN("Couldn't run hudless fixup");
+                }
             }
-        }
-        else
-        {
-            LOG_WARN("Couldn't run hudless fixup");
-        }
-    }
 
-    if (Config::Instance()->NvngxFGDisableHudless.value_or_default())
-        InParameters->Set("DLSSG.HUDLess", (void*) nullptr);
+            if (Config::Instance()->NvngxFGDisableHudless.value_or_default())
+                InParameters->Set("DLSSG.HUDLess", (void*) nullptr);
 
-    // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
+            // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
 
-    return provider->D3D12_EvaluateFeature(InCmdList, ((Nvngx_FG_Handle*) InFeatureHandle)->nativeHandle, InParameters,
-                                           InCallback);
+            return provider->D3D12_EvaluateFeature(InCmdList, handle.nativeHandle, InParameters, InCallback);
+        });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
@@ -493,10 +484,13 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature(VkCommandBuffer InCmdBuffer, NVS
     if (!OutHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    auto proxyHandle = new Nvngx_FG_Handle(lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET);
+    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
+    auto* proxyHandle = &pending->value;
+    *OutHandle = nullptr;
     auto result = provider->VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, &proxyHandle->nativeHandle);
 
-    *OutHandle = (NVSDK_NGX_Handle*) proxyHandle;
+    if (result == NVSDK_NGX_Result_Success)
+        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
 
     // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
 
@@ -515,11 +509,14 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuf
     if (!OutHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    auto proxyHandle = new Nvngx_FG_Handle(lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET);
+    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
+    auto* proxyHandle = &pending->value;
+    *OutHandle = nullptr;
     auto result =
         provider->VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, &proxyHandle->nativeHandle);
 
-    *OutHandle = (NVSDK_NGX_Handle*) proxyHandle;
+    if (result == NVSDK_NGX_Result_Success)
+        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
 
     // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
 
@@ -536,20 +533,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (!InHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    if (InHandle->Id < NVNGX_PROVIDER_ID_OFFSET)
-        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
-
-    // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InHandle);
-
-    Nvngx_FG_Handle* ourHandle = (Nvngx_FG_Handle*) InHandle;
-    std::scoped_lock lock(ourHandle->handleMutex);
-
-    auto result = provider->VULKAN_ReleaseFeature(ourHandle->nativeHandle);
-
-    if (result == NVSDK_NGX_Result_Success)
-        delete InHandle;
-
-    return result;
+    return _handles.Release(
+        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
+        [&](Nvngx_FG_Handle& handle) { return provider->VULKAN_ReleaseFeature(handle.nativeHandle); },
+        [](NVSDK_NGX_Result result) { return result == NVSDK_NGX_Result_Success; });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_GetFeatureRequirements(const VkInstance Instance,
@@ -577,15 +564,14 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_EvaluateFeature(VkCommandBuffer InCmdList, con
     if (!InFeatureHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    if (InFeatureHandle->Id < NVNGX_PROVIDER_ID_OFFSET)
-        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+    return _handles.Read(InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
+                         [&](Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
+                         {
+                             // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
 
-    Nvngx_FG_Handle* ourHandle = (Nvngx_FG_Handle*) InFeatureHandle;
-    std::shared_lock lock(ourHandle->handleMutex);
-
-    // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
-
-    return provider->VULKAN_EvaluateFeature(InCmdList, ourHandle->nativeHandle, InParameters, InCallback);
+                             return provider->VULKAN_EvaluateFeature(InCmdList, handle.nativeHandle, InParameters,
+                                                                     InCallback);
+                         });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)

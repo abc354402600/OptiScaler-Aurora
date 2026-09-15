@@ -254,7 +254,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
                 if (upscalerTimeOpt = currentFeature->ReadUpscalerTime(cq); upscalerTimeOpt.has_value())
                     currentFeature->ReadDetailedGpuTimes(cq, State::Instance().detailedGpuTimes);
             }
-            else if (device != nullptr)
+            else if (device != nullptr && (currentFeature->Api() == API::DX11 || currentFeature->IsWithDx12()))
             {
                 ID3D11DeviceContext* context = nullptr;
                 device->GetImmediateContext(&context);
@@ -265,7 +265,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
                 context->Release();
             }
             if (State::Instance().swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 &&
-                State::Instance().currentD3D11Device != nullptr)
+                State::Instance().currentD3D11Device != nullptr &&
+                (currentFeature->Api() == API::DX11 || currentFeature->IsWithDx12()))
             {
                 ID3D11DeviceContext* context = nullptr;
                 State::Instance().currentD3D11Device->GetImmediateContext(&context);
