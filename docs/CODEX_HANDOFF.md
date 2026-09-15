@@ -17,6 +17,8 @@ Official upstream is `https://github.com/optiscaler/OptiScaler.git`; the local r
 
 Current package workflow builds this branch and runs production-header frame/handle guard tests. Keep the original installer layout inherited from `aurora`; do not restore RC3 tools.
 
+The 2026-09-16 continuation adds optional input discovery outside the state lock and registry-first provider identity routing, with 8 input-lock and 17 provider checks. Read [lock/lifetime follow-up](COMPATIBILITY_LOCKS_20260916.md) for exact scope and remaining lifecycle risks. Retired provider token storage now intentionally lasts until DLL unload, superseding the earlier audit's entry-destruction description.
+
 The user subsequently provided ZZZ 11008 component-error screenshots and reports of disappearing files, and NTE menu stutter with an NPI workaround. GPU is tentatively RTX 40; exact build, missing filenames, protection history, and crash logs remain unknown. See [NTE/ZZZ follow-up](NTE_ZZZ_COMPATIBILITY.md). Do not confuse component errors, GPU exceptions, and absent FG input. No driver/game settings were changed by this work.
 
 Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.
