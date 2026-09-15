@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <memory>
 #include <string>
 #include <winerror.h>
 #include <Xinput.h>
@@ -482,13 +483,26 @@ bool InstallHooks();
 bool RemoveHooks();
 bool ReleaseTrackedWindowsHooksLocked();
 
+// Resolved without the input state lock; apply only while holding it.
+struct OptionalInputExports
+{
+    // Keep discovered DLLs alive until publication; destroyed after the state lock.
+    std::array<std::shared_ptr<void>, 5> Modules;
+    bool ScanGameInput = false, ScanXInput = false, ScanDirectInput8 = false, ScanDirectInputLegacy = false;
+    HMODULE GameInput = nullptr, WindowsGamingInput = nullptr, XInput = nullptr;
+    HMODULE DirectInput8 = nullptr, DirectInputLegacy = nullptr;
+    FARPROC GameInputCreate = nullptr, XInputGetState = nullptr, XInputGetStateEx = nullptr;
+    FARPROC XInputGetKeystroke = nullptr, XInputSetState = nullptr, DirectInput8Create = nullptr;
+    FARPROC DirectInputCreateA = nullptr, DirectInputCreateW = nullptr, DirectInputCreateEx = nullptr;
+};
+
 // GameInput / Windows.Gaming.Input
-void UpdateGameInputIntegrationLocked();
+void UpdateGameInputIntegrationLocked(const OptionalInputExports& exports);
 bool RemoveGameInputHooksLocked();
 HRESULT WINAPI hkGameInputCreate(void** gameInput);
 
 // XInput
-void UpdateXInputIntegrationLocked();
+void UpdateXInputIntegrationLocked(const OptionalInputExports& exports);
 bool RemoveXInputHooksLocked();
 void DrainXInputKeystrokesLocked();
 DWORD WINAPI hkXInputGetState(DWORD userIndex, XINPUT_STATE* state);
@@ -497,7 +511,7 @@ DWORD WINAPI hkXInputGetKeystroke(DWORD userIndex, DWORD reserved, PXINPUT_KEYST
 DWORD WINAPI hkXInputSetState(DWORD userIndex, XINPUT_VIBRATION* vibration);
 
 // DirectInput
-void UpdateDirectInputIntegrationLocked();
+void UpdateDirectInputIntegrationLocked(const OptionalInputExports& exports);
 bool RemoveDirectInputHooksLocked();
 void DrainDirectInputBufferedDataLocked();
 HRESULT WINAPI hkDirectInput8Create(HINSTANCE instance, DWORD version, REFIID riid, LPVOID* out, LPUNKNOWN outer);

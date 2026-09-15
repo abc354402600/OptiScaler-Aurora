@@ -9,9 +9,6 @@ namespace OptiInput
 {
 namespace
 {
-constexpr wchar_t DirectInput8ModuleName[] = L"dinput8.dll";
-constexpr wchar_t DirectInputLegacyModuleName[] = L"dinput.dll";
-
 constexpr char DirectInput8CreateExportName[] = "DirectInput8Create";
 constexpr char DirectInputCreateAExportName[] = "DirectInputCreateA";
 constexpr char DirectInputCreateWExportName[] = "DirectInputCreateW";
@@ -224,10 +221,6 @@ void MarkDirectInputDeviceKindSeenLocked(DirectInputDeviceKind kind)
     else
         _state.DirectInputOtherDeviceSeen = true;
 }
-
-HMODULE FindLoadedDirectInput8Module() { return GetModuleHandleW(DirectInput8ModuleName); }
-
-HMODULE FindLoadedDirectInputLegacyModule() { return GetModuleHandleW(DirectInputLegacyModuleName); }
 
 void ClearDirectInputHookPointersLocked()
 {
@@ -542,8 +535,8 @@ void HandleLegacyDirectInputCreatedLocked(void** out, bool wide)
     HookDirectInputInterfaceLocked(*out, wide);
 }
 
-bool InstallDirectInputExportHookLocked(HMODULE module, const char* exportName, void** original, void* hook,
-                                        bool* installed)
+bool InstallDirectInputExportHookLocked(HMODULE module, const char* exportName, FARPROC resolved, void** original,
+                                        void* hook, bool* installed)
 {
     if (module == nullptr || exportName == nullptr || original == nullptr || hook == nullptr || installed == nullptr)
         return false;
@@ -551,7 +544,7 @@ bool InstallDirectInputExportHookLocked(HMODULE module, const char* exportName, 
     if (*installed)
         return true;
 
-    *original = reinterpret_cast<void*>(GetProcAddress(module, exportName));
+    *original = reinterpret_cast<void*>(resolved);
 
     if (*original == nullptr)
         return false;
@@ -585,19 +578,21 @@ HRESULT CallDirectInputCreateDeviceOriginal(DirectInputCreateDevice_t original, 
 }
 } // namespace
 
-void UpdateDirectInputIntegrationLocked()
+void UpdateDirectInputIntegrationLocked(const OptionalInputExports& exports)
 {
-    HMODULE module8 = FindLoadedDirectInput8Module();
-    HMODULE legacyModule = FindLoadedDirectInputLegacyModule();
+    HMODULE module8 = exports.DirectInput8;
+    HMODULE legacyModule = exports.DirectInputLegacy;
 
-    _state.DirectInputModule = module8;
-    _state.DirectInputLegacyModule = legacyModule;
-    _state.DirectInputModuleLoaded = module8 != nullptr || legacyModule != nullptr;
-    _state.DirectInputLegacyModuleLoaded = legacyModule != nullptr;
+    if (exports.ScanDirectInput8)
+        _state.DirectInputModule = module8;
+    if (exports.ScanDirectInputLegacy)
+        _state.DirectInputLegacyModule = legacyModule;
+    _state.DirectInputModuleLoaded = _state.DirectInputModule != nullptr || _state.DirectInputLegacyModule != nullptr;
+    _state.DirectInputLegacyModuleLoaded = _state.DirectInputLegacyModule != nullptr;
 
     if (module8 != nullptr)
     {
-        if (!InstallDirectInputExportHookLocked(module8, DirectInput8CreateExportName,
+        if (!InstallDirectInputExportHookLocked(module8, DirectInput8CreateExportName, exports.DirectInput8Create,
                                                 reinterpret_cast<void**>(&o_DirectInput8Create), hkDirectInput8Create,
                                                 &_state.DirectInput8CreateHookInstalled))
         {
@@ -610,15 +605,15 @@ void UpdateDirectInputIntegrationLocked()
 
     if (legacyModule != nullptr)
     {
-        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateAExportName,
+        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateAExportName, exports.DirectInputCreateA,
                                            reinterpret_cast<void**>(&o_DirectInputCreateA), hkDirectInputCreateA,
                                            &_state.DirectInputCreateAHookInstalled);
 
-        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateWExportName,
+        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateWExportName, exports.DirectInputCreateW,
                                            reinterpret_cast<void**>(&o_DirectInputCreateW), hkDirectInputCreateW,
                                            &_state.DirectInputCreateWHookInstalled);
 
-        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateExExportName,
+        InstallDirectInputExportHookLocked(legacyModule, DirectInputCreateExExportName, exports.DirectInputCreateEx,
                                            reinterpret_cast<void**>(&o_DirectInputCreateEx), hkDirectInputCreateEx,
                                            &_state.DirectInputCreateExHookInstalled);
     }

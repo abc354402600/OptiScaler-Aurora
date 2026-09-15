@@ -7,27 +7,6 @@ namespace OptiInput
 {
 namespace
 {
-constexpr const wchar_t* XInputModuleNames[] = {
-    L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll", L"xinput1_2.dll", L"xinput1_1.dll",
-};
-
-constexpr char XInputGetStateExportName[] = "XInputGetState";
-constexpr char XInputGetKeystrokeExportName[] = "XInputGetKeystroke";
-constexpr char XInputSetStateExportName[] = "XInputSetState";
-
-HMODULE FindLoadedXInputModule()
-{
-    for (const wchar_t* moduleName : XInputModuleNames)
-    {
-        HMODULE module = GetModuleHandleW(moduleName);
-
-        if (module != nullptr)
-            return module;
-    }
-
-    return nullptr;
-}
-
 bool ShouldBlockXInputLocked()
 {
     return _state.Initialized && _state.Focused && ShouldApplyBlockingPolicyLocked() &&
@@ -57,45 +36,44 @@ void ClearXInputHookPointersLocked()
     _state.XInputSetStateHookInstalled = false;
 }
 
-bool ResolveXInputExportsLocked(HMODULE module)
+bool PublishXInputExportsLocked(const OptionalInputExports& exports)
 {
-    if (module == nullptr)
+    if (exports.XInput == nullptr)
         return false;
 
     if (o_XInputGetState == nullptr)
-        o_XInputGetState = reinterpret_cast<XInputGetState_t>(GetProcAddress(module, XInputGetStateExportName));
+        o_XInputGetState = reinterpret_cast<XInputGetState_t>(exports.XInputGetState);
 
     if (o_XInputGetStateEx == nullptr)
-        o_XInputGetStateEx = reinterpret_cast<XInputGetState_t>(GetProcAddress(module, MAKEINTRESOURCEA(100)));
+        o_XInputGetStateEx = reinterpret_cast<XInputGetState_t>(exports.XInputGetStateEx);
 
     if (o_XInputGetKeystroke == nullptr)
-        o_XInputGetKeystroke =
-            reinterpret_cast<XInputGetKeystroke_t>(GetProcAddress(module, XInputGetKeystrokeExportName));
+        o_XInputGetKeystroke = reinterpret_cast<XInputGetKeystroke_t>(exports.XInputGetKeystroke);
 
     if (o_XInputSetState == nullptr)
-        o_XInputSetState = reinterpret_cast<XInputSetState_t>(GetProcAddress(module, XInputSetStateExportName));
+        o_XInputSetState = reinterpret_cast<XInputSetState_t>(exports.XInputSetState);
 
     return o_XInputGetState != nullptr || o_XInputGetStateEx != nullptr || o_XInputGetKeystroke != nullptr ||
            o_XInputSetState != nullptr;
 }
 } // namespace
 
-void UpdateXInputIntegrationLocked()
+void UpdateXInputIntegrationLocked(const OptionalInputExports& exports)
 {
-    if (_state.XInputGetStateHookInstalled || _state.XInputGetStateExHookInstalled ||
+    if (!exports.ScanXInput || _state.XInputGetStateHookInstalled || _state.XInputGetStateExHookInstalled ||
         _state.XInputGetKeystrokeHookInstalled || _state.XInputSetStateHookInstalled)
     {
         return;
     }
 
-    HMODULE module = FindLoadedXInputModule();
+    HMODULE module = exports.XInput;
     _state.XInputModule = module;
     _state.XInputModuleLoaded = module != nullptr;
 
     if (module == nullptr)
         return;
 
-    if (!ResolveXInputExportsLocked(module))
+    if (!PublishXInputExportsLocked(exports))
     {
         LOG_WARN("XInput module loaded but no supported exports found module:{}", static_cast<void*>(module));
         return;

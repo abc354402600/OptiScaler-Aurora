@@ -7,30 +7,7 @@ namespace OptiInput
 {
 namespace
 {
-constexpr wchar_t GameInputModuleName[] = L"GameInput.dll";
-constexpr wchar_t WindowsGamingInputModuleName[] = L"Windows.Gaming.Input.dll";
-constexpr char GameInputCreateExportName[] = "GameInputCreate";
-
-HMODULE GetAlreadyLoadedModule(const wchar_t* moduleName) { return GetModuleHandleW(moduleName); }
-
-void RefreshGameInputModuleStateLocked()
-{
-    _state.GameInputModule = GetAlreadyLoadedModule(GameInputModuleName);
-    _state.WindowsGamingInputModule = GetAlreadyLoadedModule(WindowsGamingInputModuleName);
-
-    _state.GameInputModuleLoaded = _state.GameInputModule != nullptr;
-    _state.WindowsGamingInputModuleLoaded = _state.WindowsGamingInputModule != nullptr;
-
-    if (!_state.GameInputModuleLoaded)
-    {
-        _state.GameInputCreateExportFound = false;
-        return;
-    }
-
-    _state.GameInputCreateExportFound = GetProcAddress(_state.GameInputModule, GameInputCreateExportName) != nullptr;
-}
-
-bool InstallGameInputCreateHookLocked()
+bool InstallGameInputCreateHookLocked(FARPROC proc)
 {
     if (_state.GameInputCreateHookInstalled)
         return true;
@@ -40,8 +17,6 @@ bool InstallGameInputCreateHookLocked()
 
     if (_state.GameInputModule == nullptr)
         return false;
-
-    FARPROC proc = GetProcAddress(_state.GameInputModule, GameInputCreateExportName);
 
     if (proc == nullptr)
     {
@@ -71,12 +46,17 @@ bool InstallGameInputCreateHookLocked()
 }
 } // namespace
 
-void UpdateGameInputIntegrationLocked()
+void UpdateGameInputIntegrationLocked(const OptionalInputExports& exports)
 {
-    RefreshGameInputModuleStateLocked();
-
-    if (_state.GameInputModuleLoaded && _state.GameInputCreateExportFound)
-        InstallGameInputCreateHookLocked();
+    if (!exports.ScanGameInput || _state.GameInputCreateHookInstalled)
+        return;
+    _state.GameInputModule = exports.GameInput;
+    _state.WindowsGamingInputModule = exports.WindowsGamingInput;
+    _state.GameInputModuleLoaded = exports.GameInput != nullptr;
+    _state.WindowsGamingInputModuleLoaded = exports.WindowsGamingInput != nullptr;
+    _state.GameInputCreateExportFound = exports.GameInputCreate != nullptr;
+    if (_state.GameInputCreateExportFound)
+        InstallGameInputCreateHookLocked(exports.GameInputCreate);
 }
 
 bool RemoveGameInputHooksLocked()

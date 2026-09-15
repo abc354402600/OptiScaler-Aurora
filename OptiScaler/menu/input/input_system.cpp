@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "input_system_internal.h"
+#include "PrepareBeforeLock.h"
 
 #include <include/imgui/imgui.h>
 
@@ -744,9 +745,66 @@ void ApplyMenuVisibilityChangeLocked(bool visible)
     }
 }
 
-bool Initialize(const InitializeOptions& options)
+static OptionalInputExports ResolveOptionalInputExports()
 {
-    std::unique_lock lock(_state.Mutex);
+    OptionalInputExports exports;
+    {
+        std::unique_lock lock(_state.Mutex);
+        exports.ScanGameInput = !_state.GameInputCreateHookInstalled;
+        exports.ScanXInput = !(_state.XInputGetStateHookInstalled || _state.XInputGetStateExHookInstalled ||
+                               _state.XInputGetKeystrokeHookInstalled || _state.XInputSetStateHookInstalled);
+        exports.ScanDirectInput8 = !_state.DirectInput8CreateHookInstalled;
+        exports.ScanDirectInputLegacy =
+            !(_state.DirectInputCreateAHookInstalled && _state.DirectInputCreateWHookInstalled &&
+              _state.DirectInputCreateExHookInstalled);
+    }
+    // No state lock here: a module's DllMain may call a detoured input API.
+    std::size_t moduleCount = 0;
+    const auto acquire = [&](const wchar_t* name) -> HMODULE
+    {
+        HMODULE module = nullptr;
+        if (!GetModuleHandleExW(0, name, &module))
+            return nullptr;
+        exports.Modules[moduleCount++] =
+            std::shared_ptr<void>(module, [](void* handle) { FreeLibrary(static_cast<HMODULE>(handle)); });
+        return module;
+    };
+    const auto resolve = [](HMODULE module, const char* name)
+    { return module ? GetProcAddress(module, name) : nullptr; };
+    if (exports.ScanGameInput)
+    {
+        exports.GameInput = acquire(L"GameInput.dll");
+        exports.WindowsGamingInput = acquire(L"Windows.Gaming.Input.dll");
+        exports.GameInputCreate = resolve(exports.GameInput, "GameInputCreate");
+    }
+    if (exports.ScanXInput)
+    {
+        for (const auto* name :
+             { L"xinput1_4.dll", L"xinput1_3.dll", L"xinput9_1_0.dll", L"xinput1_2.dll", L"xinput1_1.dll" })
+            if ((exports.XInput = acquire(name)) != nullptr)
+                break;
+        exports.XInputGetState = resolve(exports.XInput, "XInputGetState");
+        exports.XInputGetStateEx = resolve(exports.XInput, MAKEINTRESOURCEA(100));
+        exports.XInputGetKeystroke = resolve(exports.XInput, "XInputGetKeystroke");
+        exports.XInputSetState = resolve(exports.XInput, "XInputSetState");
+    }
+    if (exports.ScanDirectInput8)
+    {
+        exports.DirectInput8 = acquire(L"dinput8.dll");
+        exports.DirectInput8Create = resolve(exports.DirectInput8, "DirectInput8Create");
+    }
+    if (exports.ScanDirectInputLegacy)
+    {
+        exports.DirectInputLegacy = acquire(L"dinput.dll");
+        exports.DirectInputCreateA = resolve(exports.DirectInputLegacy, "DirectInputCreateA");
+        exports.DirectInputCreateW = resolve(exports.DirectInputLegacy, "DirectInputCreateW");
+        exports.DirectInputCreateEx = resolve(exports.DirectInputLegacy, "DirectInputCreateEx");
+    }
+    return exports;
+}
+
+static bool InitializeLocked(const InitializeOptions& options, const OptionalInputExports& exports)
+{
 
     if (_state.CurrentProcessId == 0)
         _state.CurrentProcessId = GetCurrentProcessId();
@@ -776,9 +834,9 @@ bool Initialize(const InitializeOptions& options)
 
             if (_state.HooksInstalled)
             {
-                UpdateGameInputIntegrationLocked();
-                UpdateXInputIntegrationLocked();
-                UpdateDirectInputIntegrationLocked();
+                UpdateGameInputIntegrationLocked(exports);
+                UpdateXInputIntegrationLocked(exports);
+                UpdateDirectInputIntegrationLocked(exports);
             }
         }
 
@@ -812,12 +870,18 @@ bool Initialize(const InitializeOptions& options)
 
     if (hooksInstalled)
     {
-        UpdateGameInputIntegrationLocked();
-        UpdateXInputIntegrationLocked();
-        UpdateDirectInputIntegrationLocked();
+        UpdateGameInputIntegrationLocked(exports);
+        UpdateXInputIntegrationLocked(exports);
+        UpdateDirectInputIntegrationLocked(exports);
     }
 
     return hooksInstalled;
+}
+
+bool Initialize(const InitializeOptions& options)
+{
+    return PrepareBeforeLock(_state.Mutex, ResolveOptionalInputExports,
+                             [&](const auto& exports) { return InitializeLocked(options, exports); });
 }
 
 bool Initialize(HWND targetHwnd, bool isUwp)
@@ -1101,7 +1165,8 @@ void Shutdown()
     ResetStateAfterShutdown();
 }
 
-static void BeginFrameLocked(HWND targetHwnd, HWND inputHwnd, bool hasInputHwnd, bool isUwp)
+static void BeginFrameLocked(HWND targetHwnd, HWND inputHwnd, bool hasInputHwnd, bool isUwp,
+                             const OptionalInputExports& exports)
 {
     // Expected frame order:
     //   BeginFrame() validates game/input HWNDs, subclass/focus.
@@ -1120,9 +1185,9 @@ static void BeginFrameLocked(HWND targetHwnd, HWND inputHwnd, bool hasInputHwnd,
     ValidateWindowSubclassLocked();
 
     // Optional input APIs may be loaded after OptiInput initialization.
-    UpdateGameInputIntegrationLocked();
-    UpdateXInputIntegrationLocked();
-    UpdateDirectInputIntegrationLocked();
+    UpdateGameInputIntegrationLocked(exports);
+    UpdateXInputIntegrationLocked(exports);
+    UpdateDirectInputIntegrationLocked(exports);
 
     UpdateFocusState(_state.TargetHwnd);
     EnsureExternalRawInputSinkLocked();
@@ -1133,22 +1198,37 @@ static void BeginFrameLocked(HWND targetHwnd, HWND inputHwnd, bool hasInputHwnd,
 
 void BeginFrame(HWND targetHwnd, bool isUwp)
 {
-    std::unique_lock lock(_state.Mutex);
-
-    if (!_state.Initialized)
-        Initialize(targetHwnd, isUwp);
-
-    BeginFrameLocked(targetHwnd, nullptr, false, isUwp);
+    PrepareBeforeLock(_state.Mutex, ResolveOptionalInputExports,
+                      [&](const auto& exports)
+                      {
+                          if (!_state.Initialized)
+                          {
+                              InitializeOptions options {};
+                              options.TargetHwnd = targetHwnd;
+                              options.IsUwp = isUwp;
+                              options.UseWndProcSubclass = true;
+                              InitializeLocked(options, exports);
+                          }
+                          BeginFrameLocked(targetHwnd, nullptr, false, isUwp, exports);
+                      });
 }
 
 void BeginFrame(HWND targetHwnd, HWND inputHwnd, bool isUwp)
 {
-    std::unique_lock lock(_state.Mutex);
-
-    if (!_state.Initialized)
-        Initialize(targetHwnd, inputHwnd, isUwp);
-
-    BeginFrameLocked(targetHwnd, inputHwnd, inputHwnd != nullptr, isUwp);
+    PrepareBeforeLock(_state.Mutex, ResolveOptionalInputExports,
+                      [&](const auto& exports)
+                      {
+                          if (!_state.Initialized)
+                          {
+                              InitializeOptions options {};
+                              options.TargetHwnd = targetHwnd;
+                              options.InputHwnd = inputHwnd;
+                              options.IsUwp = isUwp;
+                              options.UseWndProcSubclass = true;
+                              InitializeLocked(options, exports);
+                          }
+                          BeginFrameLocked(targetHwnd, inputHwnd, inputHwnd != nullptr, isUwp, exports);
+                      });
 }
 
 void FeedImGui(bool menuVisible)
