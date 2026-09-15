@@ -45,8 +45,9 @@ UINT64 IFGFeature::StartNewFrame()
         _lastDispatchedFrame = _frameCount - 1;
     }
 
-    auto fIndex = GetIndex();
-    LOG_DEBUG("_frameCount: {}, fIndex: {}", _frameCount, fIndex);
+    const auto captureFrame = _frameCount;
+    auto fIndex = captureFrame % BUFFER_COUNT;
+    LOG_DEBUG("_frameCount: {}, fIndex: {}", captureFrame, fIndex);
 
     _resourceReady[fIndex].clear();
     _waitingExecute[fIndex] = false;
@@ -56,6 +57,8 @@ UINT64 IFGFeature::StartNewFrame()
     _noHudless[fIndex] = true;
 
     NewFrame();
+
+    _capturedFrames.Capture(fIndex, captureFrame);
 
     return _frameCount;
 }

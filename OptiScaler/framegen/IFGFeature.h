@@ -3,6 +3,7 @@
 #include <OwnedMutex.h>
 #include <dxgi1_6.h>
 #include <flag-set-cpp/flag_set.hpp>
+#include <framegen/FrameCaptureHistory.h>
 
 enum class FG_Flags : uint64_t
 {
@@ -70,6 +71,7 @@ class IFGFeature
     UINT64 _frameCount = 0;
     UINT64 _lastDispatchedFrame = 0;
     UINT64 _lastFGFrame = 0;
+    FrameCaptureHistory<BUFFER_COUNT> _capturedFrames;
     bool _waitingNewFrameData = false;
     int _framesToInterpolate = -1;
     int _maxInterpolationCount = 1;

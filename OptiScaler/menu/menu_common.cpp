@@ -4367,6 +4367,7 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     ImGui::Checkbox(AURORA_CN("动态多帧生成"), &dynamicMFG))
                 {
                     config->FGDLSSGForceDMFG = dynamicMFG;
+                    LOG_INFO("DLSSG Dynamic MFG set to: {}", dynamicMFG);
                 }
 
                 ImGui::BeginDisabled(!config->FGDLSSGForceDMFG.value_or_default());
