@@ -31,5 +31,15 @@ Scope: compatibility branch based on Aurora `e1673a16`. No RC3 installer changes
 - Full MSVC DLL compilation and both C++ tests run in `Build Aurora (No Signing)` for `Compatibility-fixes`. Artifact names include the commit prefix. Build status is reported separately after the actual run.
 - clang-format is pinned to 20.1.8 and checks changed applicable C/C++ lines, with selector unit tests. Historical unrelated formatting debt is not rewritten. No old installer suites are rerun.
 - No real GPU/game compatibility validation in this batch. Required: Witcher saved Dynamic MFG loading, Dynamic/manual 6X/FG toggles, sustained play and flicker comparison; Genshin bridge repro with unchanged runtimes; separate Star Rail/ZZZ logs if still failing.
-- Handle registry does not redesign provider-global shutdown/concurrent provider selection or make arbitrary reuse of an already-freed public pointer valid. Those are separate lifetime boundaries.
+- Handle registry does not redesign provider-global shutdown/concurrent provider selection or make arbitrary reuse of an already-freed public pointer valid. The outer NVNGX input router still reads public handle IDs before reaching the provider registry; stale-pointer rejection tests cover the registry/provider boundary, not every exported entry point. Those are separate lifetime boundaries requiring follow-up.
 - The Witcher CPU crash signature at `+0x1f1f4ea` is not yet explained; builds and CPU guards cannot prove it resolved.
+
+## Completed validation
+
+Code checkpoint: `e2934a1e1675ca7a288bef2ddbf736aef1abf8f2`.
+
+- [Windows MSVC build, 22 frame assertions, 14 handle checks, packaging and artifact upload](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34971712577): **success**.
+- [Incremental clang-format CI and six selector tests](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34971712536): **success**.
+- Local cumulative formatting review from `e1673a16`: 15 changed C/C++ files, zero edited-line violations. The local selector integration test initially lacked clang-format on PATH; adding the existing pinned tool to that process's PATH resolved the environment failure; all six passed.
+- Artifact: `OptiScaler_Aurora_v1.0_20260915_compat_e2934a1e.7z`, 234771252 bytes as reported by the GitHub artifact API. The API reports the artifact archive digest `b6daee3b348a1624a760936d49662c5ae6d8919355ce28dfef9b0e5a2c38728f`; this is not a separately measured inner 7z/DLL hash.
+- Subsequent documentation-only checkpoint records these results without rebuilding unchanged C++ code. No in-game validation result has been inferred from CI.

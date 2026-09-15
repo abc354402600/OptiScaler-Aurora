@@ -20,4 +20,3 @@ Current package workflow builds this branch and runs production-header frame/han
 No new Genshin/Star Rail/ZZZ crash logs from the user were provided in this batch. An optional question about affected games, trigger, bridge, and ReShade remains unanswered. Continue source work without treating that silence as test confirmation.
 
 Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.
-

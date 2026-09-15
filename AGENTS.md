@@ -8,4 +8,3 @@ Read `docs/CODEX_HANDOFF.md` before continuing. Source repository is this direct
 - Ordinary commits and pushes to `Compatibility-fixes` are authorized. Do not merge into `aurora`, force-push, or publish Releases.
 - Do not modify installed games or claim CPU tests/builds establish GPU compatibility. Preserve native Streamline 1.x, Aurora's verified 6X path, and `DualFeature=false` behavior.
 - Run focused checks and the full DLL build for affected C++ changes. Do not rerun unrelated legacy installer suites or produce replacement archives.
-
