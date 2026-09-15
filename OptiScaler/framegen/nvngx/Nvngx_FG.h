@@ -27,6 +27,11 @@ class Nvngx_FG
     static IFGNvngx* getProvider();
 
   public:
+    static std::optional<unsigned int> GetHandleId(const NVSDK_NGX_Handle* handle)
+    {
+        return _handles.GetIdentity(handle, [](const Nvngx_FG_Handle& value) { return value.id; });
+    }
+
     static int getMaxFakeFramesCount();
     static bool isDx12Available();
     static bool isVulkanAvailable();

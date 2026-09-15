@@ -68,7 +68,11 @@ int main()
     resume.set_value();
     check(releaseWaited && retained, "release waits while evaluate uses native handle");
     check(reader.get() == 7 && releaser.get() == 0, "evaluate completes before successful release");
-    check(lifetime.expired() && nativeReleases == 1, "wrapper destroyed after release lock exits");
+    check(!lifetime.expired() && nativeReleases == 1, "retired public token remains owned after native release");
+    check(registry.GetIdentity(handle, [](const auto& h) { return h.id; }) == 42,
+          "router can identify a retired handle without reading its address");
+    check(!registry.GetIdentity(reinterpret_cast<void*>(1), [](const auto& h) { return h.id; }).has_value(),
+          "foreign identity is not dereferenced");
     check(registry.Read(handle, -1, [](auto&) { return 0; }) == -1, "retired handle rejected without dereference");
     check(registry.Release(
               handle, -1, [](auto&) { return 0; }, [](int r) { return r == 0; }) == -1,
@@ -83,6 +87,7 @@ int main()
 
     auto next = registry.Prepare({ 44, std::make_shared<int>(9) });
     auto* nextHandle = registry.Publish(next);
+    check(nextHandle != handle, "new handle cannot reuse a retired public token address");
     next.reset();
     std::vector<std::future<int>> releases;
     nativeReleases = 0;

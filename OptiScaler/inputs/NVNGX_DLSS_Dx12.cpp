@@ -825,7 +825,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     // whenever NR is on; a no-op only when NR is off.
     DlssNr::ExposureScan::ReleaseTrackedResources();
 
-    auto handleId = InHandle->Id;
+    const auto providerHandleId = Nvngx_FG::GetHandleId(InHandle);
+    const uint32_t handleId = providerHandleId.has_value() ? *providerHandleId : InHandle->Id;
 
     // Clean up framegen
     if (State::Instance().currentFG != nullptr && State::Instance().activeFgInput == FGInput::Upscaler)
@@ -864,7 +865,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
         }
     }
     // Clean up OptiScaler feature with framegen
-    else if (State::Instance().activeFgNvngx != FGNvngxReplacement::None && handleId >= NVNGX_PROVIDER_ID_OFFSET)
+    else if (providerHandleId.has_value() ||
+             (State::Instance().activeFgNvngx != FGNvngxReplacement::None && handleId >= NVNGX_PROVIDER_ID_OFFSET))
     {
         LOG_INFO("D3D12_ReleaseFeature modded DLSSG with HandleId: {0}", handleId);
         return Nvngx_FG::D3D12_ReleaseFeature(InHandle);
@@ -1106,7 +1108,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         return NVSDK_NGX_Result_Fail;
     }
 
-    const uint32_t handleId = InFeatureHandle->Id;
+    const auto providerHandleId = Nvngx_FG::GetHandleId(InFeatureHandle);
+    const uint32_t handleId = providerHandleId.has_value() ? *providerHandleId : InFeatureHandle->Id;
     LOG_DEBUG("EvaluateFeature - Handle: {}, CmdList: {:p}", handleId, (void*) InCmdList);
 
     const State& state = State::Instance();
@@ -1227,7 +1230,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     }
 
     // DLSSG replacements passthrough
-    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None && handleId >= NVNGX_PROVIDER_ID_OFFSET)
+    if (providerHandleId.has_value() ||
+        (State::Instance().activeFgNvngx != FGNvngxReplacement::None && handleId >= NVNGX_PROVIDER_ID_OFFSET))
     {
         LOG_DEBUG("Passthrough to DLSSG Replacement's EvaluateFeature for handle {}", handleId);
         return Nvngx_FG::D3D12_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);

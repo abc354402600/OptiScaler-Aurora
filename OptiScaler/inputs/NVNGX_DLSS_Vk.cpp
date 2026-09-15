@@ -939,7 +939,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
     if (!InHandle)
         return NVSDK_NGX_Result_Success;
 
-    auto handleId = InHandle->Id;
+    const auto providerHandleId = Nvngx_FG::GetHandleId(InHandle);
+    const uint32_t handleId = providerHandleId.has_value() ? *providerHandleId : InHandle->Id;
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
@@ -956,7 +957,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
             return NVSDK_NGX_Result_FAIL_FeatureNotFound;
         }
     }
-    else if (handleId >= NVNGX_PROVIDER_ID_OFFSET)
+    else if (providerHandleId.has_value() || (handleId >= NVNGX_PROVIDER_ID_OFFSET))
     {
         LOG_INFO("VULKAN_ReleaseFeature modded DLSSG with HandleId: {0}", handleId);
         return Nvngx_FG::VULKAN_ReleaseFeature(InHandle);
@@ -996,10 +997,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         LOG_DEBUG("InFeatureHandle is null");
         return NVSDK_NGX_Result_FAIL_FeatureNotFound;
     }
-    else
-    {
-        LOG_DEBUG("Handle: {0}", InFeatureHandle->Id);
-    }
 
     if (InCmdList == nullptr)
     {
@@ -1007,7 +1004,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         return NVSDK_NGX_Result_Fail;
     }
 
-    auto handleId = InFeatureHandle->Id;
+    const auto providerHandleId = Nvngx_FG::GetHandleId(InFeatureHandle);
+    const uint32_t handleId = providerHandleId.has_value() ? *providerHandleId : InFeatureHandle->Id;
     if (VkContexts[handleId].feature == nullptr) // prevent source api name flicker when dlssg is active
         state.setInputApiName = state.currentInputApiName;
 
@@ -1040,7 +1038,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
             return NVSDK_NGX_Result_FAIL_FeatureNotFound;
         }
     }
-    else if (handleId >= NVNGX_PROVIDER_ID_OFFSET)
+    else if (providerHandleId.has_value() || (handleId >= NVNGX_PROVIDER_ID_OFFSET))
     {
         return Nvngx_FG::VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
     }

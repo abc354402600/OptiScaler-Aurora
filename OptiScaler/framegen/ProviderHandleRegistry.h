@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <unordered_map>
 #include <utility>
@@ -30,6 +31,19 @@ template <typename Value> class ProviderHandleRegistry
         return key;
     }
 
+    // Identity remains available after retirement. Retained tokens prevent their
+    // addresses being recycled into unrelated handles while the DLL is loaded.
+    template <typename Identity>
+    auto GetIdentity(const void* key, Identity&& identity)
+        -> std::optional<decltype(identity(std::declval<const Value&>()))>
+    {
+        auto entry = Find(key);
+        if (!entry)
+            return std::nullopt;
+        std::shared_lock lock(entry->mutex);
+        return identity(static_cast<const Value&>(entry->value));
+    }
+
     template <typename Result, typename Function> Result Read(const void* key, Result missing, Function&& function)
     {
         auto entry = Find(key);
@@ -52,8 +66,8 @@ template <typename Value> class ProviderHandleRegistry
         if (success(result))
         {
             entry->retired = true;
-            std::scoped_lock registryLock(_mutex);
-            _entries.erase(key);
+            // Keep the small public token until registry destruction. Native
+            // resources were released above; no callback may use this value again.
         }
         // The entry's mutex is unlocked before this local shared_ptr is released.
         return result;
