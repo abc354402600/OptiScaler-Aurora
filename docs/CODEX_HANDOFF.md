@@ -8,6 +8,8 @@
 
 用户要求先处理新安装故障并评估单DLL交付。已保留MFG实验031ccb7f/9a7b0394，切回稳定安装器分支b81942a4继续；不要把实验核心合入安装器。详见 `AURORA_FIELD_INSTALL_20260915.md`。2077共享报告器误排除和异环Runtime恢复原版后Preserved不能重装已修；新增29项、相关49+9+69项通过。异环现场后来连47个受管核心文件/journal也已消失，总清单仍NeedsAttention；这与截图时不同，不能声称热修已自动解决丢失journal。真实游戏尚未部署/验证。本轮其他MFG/上游研究暂停。
 
+功能253ef7b9已推送；热修交付 `D:\下载\Aurora_安装热修_20260915`。另备单次异环旧总清单归档工具，只在固定56项现场状态与总清单hash全部匹配时原样归档，不删除游戏文件；9项synthetic与实地CheckOnly通过，未执行实机归档。普通安装器缺失journal仍fail-closed，不能为简化安装全局放开。等待用户先运行单次恢复工具、再解压完整包并覆盖热修工具后实测。单DLL审计结论：dashdogy v1.3.3内嵌SM86 kernel cache，不是完整DLSS/SL；没有移植其核心hook。
+
 ### 2026-09-15 动态 MFG / 6X 切换稳定复现（最新优先级）
 
 用户提供五份Desktop日志，2与2.1完全重复。日志1/2明确DEVICE_HUNG；日志1有Present帧2323与Dispatch/constants帧210失配，日志2重启FG后立即报ReflexNotDetected；日志3结束紧邻nvlddmkm事件153，不能标通过；日志4对应PID47624游戏+0x1f1f4ea异常指针dump。详见 `AURORA_WITCHER_MFG_SWITCH_20260915.md`。原始证据仅在本任务 `work/witcher-switch-20260915/`。
