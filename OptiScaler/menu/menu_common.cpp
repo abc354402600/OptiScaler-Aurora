@@ -6046,15 +6046,44 @@ void MenuCommon::RenderMagnifierSettings(RenderMenuContext& ctx)
 void MenuCommon::RenderQuirksSettings(RenderMenuContext& ctx)
 {
     auto& state = ctx.state;
+    static const auto exeName = Util::ToLower(Util::ExePath().filename().wstring());
+    const bool isNte = exeName == L"htgame.exe";
+    const bool isZzz = exeName == L"zenlesszonezero.exe";
 
     // QUIRKS -----------------------------
-    if (state.detectedQuirks.size() > 0)
+    if (state.detectedQuirks.size() > 0 || isNte || isZzz)
     {
         ImGui::Spacing();
-        if (auto ch = ScopedCollapsingHeader(AURORA_CN("当前兼容性修正")); ch.IsHeaderOpen())
+        if (auto ch = ScopedCollapsingHeader(AURORA_CN("游戏兼容性与已应用修正")); ch.IsHeaderOpen())
         {
             ScopedIndent indent {};
             ImGui::Spacing();
+
+            if (isNte)
+            {
+                ImGui::TextWrapped(AURORA_CN("角色、抽卡等菜单卡顿：可尝试 NVIDIA Profile Inspector 的异环专用配置。"));
+                ImGui::TextWrapped("DLSS-FG - Full-Screen Menu Detection: Allow (0x1)");
+                ImGui::TextWrapped(
+                    AURORA_CN("先记录原值，仅修改异环配置并重启游戏；无改善则还原。菜单变流畅不代表插帧一定恢复。"));
+                ImGui::TextLinkOpenURL(AURORA_CN("查看异环菜单排查说明"),
+                                       "https://github.com/abc354402600/OptiScaler-Aurora/blob/Compatibility-fixes/"
+                                       "docs/NTE_ZZZ_COMPATIBILITY.md");
+                ImGui::Separator();
+            }
+            if (isZzz)
+            {
+                ImGui::TextWrapped(AURORA_CN("绝区零需核对 DX12 与 FG 输入路径。已有游戏修正不代表所有版本均已验证。"));
+                if (state.activeFgInput == FGInput::FSRFG || state.activeFgInput == FGInput::FSRFG30)
+                    ImGui::TextWrapped(AURORA_CN("当前使用 FSR FG 输入；官方记录该游戏的 FSR 3.1 FG "
+                                                 "输入在打开菜单时异常，建议核对 DLSSG via Streamline 输入。"));
+                ImGui::TextWrapped(AURORA_CN("11008 "
+                                             "客户端组件异常或安装文件消失：请保留日志并核对客户端、文件完整性与安全软"
+                                             "件记录，不能仅凭弹窗判定为 MFG 崩溃。"));
+                ImGui::TextLinkOpenURL(AURORA_CN("查看绝区零兼容性说明"),
+                                       "https://github.com/abc354402600/OptiScaler-Aurora/blob/Compatibility-fixes/"
+                                       "docs/NTE_ZZZ_COMPATIBILITY.md");
+                ImGui::Separator();
+            }
 
             for (const auto& quirk : state.detectedQuirks)
             {
@@ -6083,7 +6112,8 @@ void MenuCommon::RenderAdvancedSettings(RenderMenuContext& ctx)
             if (ImGui::Checkbox(AURORA_CN("启用扩展范围"), &extendedLimits))
                 config->ExtendedLimits = extendedLimits;
 
-            ShowHelpMarker(AURORA_CN("扩展质量档位倍率滑块的可调范围。\n\n启用后会改变分辨率识别逻辑，可能造成异常甚至崩溃。"));
+            ShowHelpMarker(
+                AURORA_CN("扩展质量档位倍率滑块的可调范围。\n\n启用后会改变分辨率识别逻辑，可能造成异常甚至崩溃。"));
         }
 
         bool pcShaders = config->UsePrecompiledShaders.value_or_default();

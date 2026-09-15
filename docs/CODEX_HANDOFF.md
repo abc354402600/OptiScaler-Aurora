@@ -13,10 +13,10 @@ The user abandoned the RC3 one-click installer branch and authorized compatibili
 
 ## Continuation rules
 
-Official upstream is `https://github.com/optiscaler/OptiScaler.git`; the local remote named `upstream` is instead the grim-susemi fork. Official audit cutoff is `4af2417b24d05c9ff2a2531bbffe67ec1af9e4ea`. Nine commits after the previously audited `731f3b79` were reviewed. Do not repeat the older seventeen-commit audit.
+Official upstream is `https://github.com/optiscaler/OptiScaler.git`; the local remote named `upstream` is instead the grim-susemi fork. Official audit cutoff is now `a4890db5b3c7c6918f4b35d0fd3318b42e2ccc66`. It adds only the Sword and Fairy 7 quirk after `4af2417b`; adopted with provenance. Nine commits before that, after `731f3b79`, were already reviewed. Do not repeat those audits.
 
 Current package workflow builds this branch and runs production-header frame/handle guard tests. Keep the original installer layout inherited from `aurora`; do not restore RC3 tools.
 
-No new Genshin/Star Rail/ZZZ crash logs from the user were provided in this batch. An optional question about affected games, trigger, bridge, and ReShade remains unanswered. Continue source work without treating that silence as test confirmation.
+The user subsequently provided ZZZ 11008 component-error screenshots and reports of disappearing files, and NTE menu stutter with an NPI workaround. GPU is tentatively RTX 40; exact build, missing filenames, protection history, and crash logs remain unknown. See [NTE/ZZZ follow-up](NTE_ZZZ_COMPATIBILITY.md). Do not confuse component errors, GPU exceptions, and absent FG input. No driver/game settings were changed by this work.
 
 Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.
