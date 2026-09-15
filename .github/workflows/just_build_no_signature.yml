@@ -8,7 +8,7 @@ name: Build Aurora (No Signing) / 构建 Aurora（未签名）
 on:
   workflow_dispatch:
   push:
-    branches: [ "aurora" ]
+    branches: [ "aurora", "experiment/witcher-mfg-frame-sync-20260915", "experiment/witcher-mfg-frame-sync-20260915-ci" ]
 #  pull_request:
 #    branches: [ "master" ]
 
@@ -55,6 +55,9 @@ jobs:
         $version = "v$auroraVersion"
         $date = Get-Date -Format "yyyyMMdd"
         $outputFileName = "OptiScaler_Aurora_${version}_${date}"
+        if ($env:GITHUB_REF_NAME.StartsWith('experiment/witcher-mfg-frame-sync-20260915')) {
+            $outputFileName += "_EXPERIMENT_MFG_$($env:GITHUB_SHA.Substring(0,8))"
+        }
 
         Write-Output "Generated Filename: $outputFileName"
         "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -73,6 +76,18 @@ jobs:
     - name: Build / 构建
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}} /verbosity:minimal
+
+    - name: Test captured-frame policy / 验证实验帧关联保护
+      if: startsWith(github.ref_name, 'experiment/witcher-mfg-frame-sync-20260915')
+      shell: powershell
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $vs) { throw 'MSVC toolchain not found.' }
+        $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+        $command = '"{0}" && cl /nologo /std:c++20 /EHsc /W4 /WX tests\Aurora_DLSSG_Frame_Guard_Tests.cpp /Fe:frame-guard-tests.exe && frame-guard-tests.exe' -f $vcvars
+        & cmd.exe /d /s /c $command
+        if ($LASTEXITCODE -ne 0) { throw 'Captured-frame policy test failed.' }
 
     - name: Add README / 添加说明文档
       run: Copy-Item ${{ github.workspace }}\README.md ${{ github.workspace }}\x64\Release\a\README.md

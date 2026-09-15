@@ -405,17 +405,26 @@ bool DLSSG_Dx12::Dispatch()
     // interlock. Apply it here too.
     StreamlineHooks::applyMenuDlssgInterlock(options, true);
 
-    auto dlssgSetOptionsResult = StreamlineProxy::DLSSGSetOptions()(viewport, options);
+    const auto publishOptions = [&]()
+    {
+        const auto result = StreamlineProxy::DLSSGSetOptions()(viewport, options);
+        if (result != sl::Result::eOk)
+        {
+            LOG_ERROR("Couldn't set DLSSG options, error: {}", magic_enum::enum_name(result));
+            return false;
+        }
+        if (_interpolationSuspended)
+        {
+            _interpolationSuspended = false;
+            LOG_INFO("Aurora frame guard: resumed on captured frame {}", willDispatchFrame);
+        }
+        return true;
+    };
 
-    if (dlssgSetOptionsResult != sl::Result::eOk)
-    {
-        LOG_ERROR("Couldn't set DLSSG options, error: {}", magic_enum::enum_name(dlssgSetOptionsResult));
-    }
-    else if (_interpolationSuspended)
-    {
-        _interpolationSuspended = false;
-        LOG_INFO("Aurora frame guard: resumed on captured frame {}", willDispatchFrame);
-    }
+    // Keep other FG inputs on their existing path. The Upscaler experiment publishes
+    // enabled options only after Reflex and this captured frame's constants succeed.
+    if (!guardFrames)
+        publishOptions();
 
     sl::ReflexOptions reflexConst = {};
     reflexConst.mode = sl::ReflexMode::eLowLatency;
@@ -426,6 +435,11 @@ bool DLSSG_Dx12::Dispatch()
     if (reflexSetOptionsResult != sl::Result::eOk)
     {
         LOG_ERROR("Couldn't set Reflex options, error: {}", magic_enum::enum_name(reflexSetOptionsResult));
+        if (guardFrames)
+        {
+            SuspendInterpolation("Reflex options failed", willDispatchFrame);
+            return false;
+        }
     }
 
     if (!_haveHudless.has_value())
@@ -537,6 +551,8 @@ bool DLSSG_Dx12::Dispatch()
         if (!mv)
         {
             LOG_ERROR("Motion vectors missing for: {}", fIndex);
+            if (guardFrames)
+                SuspendInterpolation("motion vector resource missing", willDispatchFrame);
 
             return false;
         }
@@ -594,6 +610,12 @@ bool DLSSG_Dx12::Dispatch()
         UpdateTarget();
         Deactivate();
 
+        return false;
+    }
+
+    if (guardFrames && !publishOptions())
+    {
+        SuspendInterpolation("DLSSG options failed", willDispatchFrame);
         return false;
     }
 

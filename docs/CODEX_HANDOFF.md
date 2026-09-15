@@ -4,6 +4,10 @@
 
 ## 当前停止点
 
+### 2026-09-15 用户授权持续推进：独立MFG实验
+
+用户确认轻微快速闪烁，要求尽量连续工作。当前源码工作分支已为 `experiment/witcher-mfg-frame-sync-20260915`，稳定安装器分支仍b81942a4，不应因为分支不同而回退。候选1188c757及其后续修改见 `AURORA_WITCHER_MFG_EXPERIMENT_20260915.md`；22项生产C++帧关联策略用例已编译运行，完整DLL/GPU状态以最新构建记录为准。实验没有部署到游戏，不声称崩溃或闪烁已修复。普通Git推送再次连接重置，可用独立CI快照分支构建并核对tree；不force push、不改主分支。
+
 ### 2026-09-15 动态 MFG / 6X 切换稳定复现（最新优先级）
 
 用户提供五份Desktop日志，2与2.1完全重复。日志1/2明确DEVICE_HUNG；日志1有Present帧2323与Dispatch/constants帧210失配，日志2重启FG后立即报ReflexNotDetected；日志3结束紧邻nvlddmkm事件153，不能标通过；日志4对应PID47624游戏+0x1f1f4ea异常指针dump。详见 `AURORA_WITCHER_MFG_SWITCH_20260915.md`。原始证据仅在本任务 `work/witcher-switch-20260915/`。
