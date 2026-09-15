@@ -10,7 +10,7 @@
 $exitCode=0; $session=New-AuroraReportSession; $report=$session.ReportPath
 try {
     $PackageDir=Get-AuroraPath $PackageDir; $InstallDir=Get-AuroraPath $InstallDir
-    Write-Host "`n  Aurora 安装器 RC3.1 · 重装修复版 20260914`n" -ForegroundColor Cyan
+    Write-Host "`n  Aurora 安装器 RC3.1 · 入口与恢复修复版 20260915`n" -ForegroundColor Cyan
     Write-Host '  正在自动检测游戏…'
     if (-not $GameRoot -and ((Test-Path -LiteralPath (Join-Path $InstallDir 'OptiScaler\AuroraSetup\installation.json')) -or (Test-Path -LiteralPath (Get-AuroraIndexPath $InstallDir)))) {
         $GameRoot=Resolve-AuroraDeploymentRoot $InstallDir
@@ -46,9 +46,10 @@ try {
         foreach ($c in @($candidates | Select-Object -First 3)) { Write-Host ('    '+$c.Path.Substring($GameRoot.Length).TrimStart('\')+' → '+(Get-AuroraRecommendedProxy @($c) $Proxy)) }
         if ($candidates.Count -gt 3) { Write-Host '    其余入口见详细报告。' }
         if (-not $scan.Complete -or -not $candidates.Count) { Write-Host '  ! 当前不能安全安装；仍可选择恢复 / 卸载。' -ForegroundColor Yellow }
+        if ($scan.CandidateRejections.Count) { Write-Host ('  ! 共享目录保护拦截了 '+$scan.CandidateRejections.Count+' 个入口，具体工具见详细报告。') -ForegroundColor Yellow }
         Write-Host '  ✓ 自动匹配 Proxy，保留现有配置，替换前备份' -ForegroundColor Green
         Write-Host '  ! SL1 和未知 Runtime 保留；安装后请进游戏核对效果' -ForegroundColor Yellow
-        Write-AuroraJson $report ([pscustomobject]@{GameRoot=$GameRoot;Candidates=$candidates;RuntimeGroups=@(Get-AuroraRuntimeGroups $scan $candidates)})
+        Write-AuroraJson $report ([pscustomobject]@{GameRoot=$GameRoot;Candidates=$candidates;RejectedCandidates=@($scan.CandidateRejections.ToArray());RuntimeGroups=@(Get-AuroraRuntimeGroups $scan $candidates)})
         if (-not $NonInteractive) {
             while ($true) {
                 Write-Host "`n  [1 / Enter] 一键安装 / 更新`n  [2] 修复 / 恢复 / 卸载`n  [3] 高级工具与诊断`n  [Q] 退出"

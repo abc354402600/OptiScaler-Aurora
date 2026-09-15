@@ -68,11 +68,18 @@ function Test-AuroraNteCrashCompanion([string]$Path) {
     $name=[IO.Path]::GetFileName($Path)
     return ($known.ContainsKey($name) -and (Get-AuroraHash $Path) -eq $known[$name])
 }
-function Test-AuroraCandidateDirectory([string]$Root,[string]$Exe,[string]$Proxy='') {
+function Test-AuroraCyberpunkCrashCompanion([string]$Path) {
+    # Audited field build: imports dbghelp/version, not dxgi; no delay imports.
+    # This authorizes only the Cyberpunk2077/dxgi pair below, never arbitrary tools.
+    return ([IO.Path]::GetFileName($Path) -ieq 'REDEngineErrorReporter.exe' -and
+        (Get-AuroraHash $Path) -eq 'F3CBA8150CA66FBDF1FB8C8621BA6DB1257D2B644C65A58A2ADE01C687BB686A')
+}
+function Test-AuroraCandidateDirectory([string]$Root,[string]$Exe,[string]$Proxy='', $Rejections=$null) {
     if (-not (Test-AuroraWithin $Exe $Root)) { return $false }
     $relative=$Exe.Substring($Root.Length).TrimStart('\')
     if (Test-AuroraUtilityPath $relative) { return $false }
     $nte=($relative -match '(?i)(^|\\)HT\\Binaries\\Win64\\HTGame\.exe$')
+    $cyberpunk=($relative -match '(?i)^bin\\x64\\Cyberpunk2077\.exe$')
     if ($nte -and $Proxy -and $Proxy -ine 'winmm.dll') { return $false }
     $guard=$null
     try {
@@ -82,12 +89,16 @@ function Test-AuroraCandidateDirectory([string]$Root,[string]$Exe,[string]$Proxy
             if (-not (Test-AuroraUtilityPath $other.FullName.Substring($Root.Length).TrimStart('\'))) { continue }
             if (-not (Get-AuroraExecutableEvidence $other.FullName).Valid) { continue }
             if ($nte -and (Test-AuroraNteCrashCompanion $other.FullName)) { continue }
+            if ($cyberpunk -and (-not $Proxy -or $Proxy -ieq 'dxgi.dll') -and (Test-AuroraCyberpunkCrashCompanion $other.FullName)) { continue }
+            if ($null -ne $Rejections) { $Rejections.Add([pscustomobject]@{Path=$Exe;Reason='与未验证的 x64 工具共用 Proxy 目录';Companion=$other.FullName}) | Out-Null }
             return $false
         }
         return $true
     } finally { if ($guard) { $guard.Dispose() } }
 }
 function Get-AuroraDeploymentCandidates($Scan) {
+    $rejections=New-Object 'Collections.Generic.List[object]'
+    $Scan | Add-Member NoteProperty CandidateRejections $rejections -Force
     $exes=@($Scan.Files | Where-Object { $_.Extension -ieq '.exe' })
     $directoryPolicy=@{}
     foreach ($f in $exes) {
@@ -96,7 +107,8 @@ function Get-AuroraDeploymentCandidates($Scan) {
         # Excluding a filename cannot prevent a colocated x64 utility loading a Proxy.
         $policyKey=$f.DirectoryName
         if ($rel -match '(?i)(^|\\)HT\\Binaries\\Win64\\HTGame\.exe$') { $policyKey+='|HTGame' }
-        if (-not $directoryPolicy.ContainsKey($policyKey)) { $directoryPolicy[$policyKey]=Test-AuroraCandidateDirectory $Scan.Root $f.FullName }
+        if ($rel -match '(?i)^bin\\x64\\Cyberpunk2077\.exe$') { $policyKey+='|Cyberpunk2077' }
+        if (-not $directoryPolicy.ContainsKey($policyKey)) { $directoryPolicy[$policyKey]=Test-AuroraCandidateDirectory $Scan.Root $f.FullName '' $rejections }
         if (-not $directoryPolicy[$policyKey]) { continue }
         $evidence=Get-AuroraExecutableEvidence $f.FullName
         if (-not $evidence.Valid) { continue }
@@ -622,6 +634,10 @@ function Remove-AuroraDeployment($Index,[string]$ReportPath,[switch]$RuntimeOnly
         # Validate every backup before removing any tool. Changed targets are individually retained.
         foreach ($pair in $journals) {
             foreach ($e in @($pair.Journal.Entries)) {
+                # A launcher may have restored a previously changed file. Settle
+                # only the exact original; unknown changes remain preserved.
+                if ($e.Status -eq 'Preserved' -and -not $e.Created -and
+                    (Test-Path -LiteralPath $e.TargetPath -PathType Leaf) -and (Get-AuroraHash $e.TargetPath) -eq $e.OriginalHash) { $e.Status='Restored' }
                 if ($e.Status -in @('Restored','Preserved')) { if ($e.Status -eq 'Preserved') { $preserved+=@($e.TargetPath) }; continue }
                 $current=''; if (Test-Path -LiteralPath $e.TargetPath) { $current=Get-AuroraHash $e.TargetPath }
                 if ($current -ne $e.DeployedHash -and $current -ne $e.OriginalHash -and -not ($e.Status -eq 'Pending' -and $current -eq $e.BeforeHash)) {

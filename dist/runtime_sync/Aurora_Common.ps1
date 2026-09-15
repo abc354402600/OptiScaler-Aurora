@@ -383,10 +383,15 @@ function Install-AuroraFile($Journal, [string]$JournalPath, [string]$Source, [st
     $entry = @($Journal.Entries | Where-Object { $_.TargetPath -ieq $Target } | Select-Object -First 1)
     if ($entry.Count -and $entry[0].Status -ne 'Restored') {
         $e = $entry[0]
-        if ($current -ne $e.DeployedHash -and -not ($e.Status -eq 'Pending' -and $current -eq $e.BeforeHash)) {
+        # Reuse a verified original backup after launcher restoration, never
+        # arbitrary changes. This exception does not apply to core/Proxy files.
+        $originalRuntime=($JournalPath -match '[\\/]RuntimeSync[\\/]manifest\.json$' -and
+            -not $e.Created -and $e.BackupPath -and $current -eq $e.OriginalHash)
+        if ($current -ne $e.DeployedHash -and -not ($e.Status -eq 'Pending' -and $current -eq $e.BeforeHash) -and -not $originalRuntime) {
             throw "游戏或用户已修改受管理文件，保留现状，请先处理恢复记录：$Target"
         }
         if ($e.BackupPath -and (-not (Test-Path -LiteralPath $e.BackupPath) -or (Get-AuroraHash $e.BackupPath) -ne $e.OriginalHash)) { throw '原版备份缺失或损坏，停止更新。' }
+        if ($originalRuntime) { Write-Host "[已核对原版，重新同步] $Target" }
     } else {
         $backup = ''
         if ($current) {

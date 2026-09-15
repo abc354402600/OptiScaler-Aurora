@@ -16,7 +16,7 @@ jobs:
       - name: New RC3.1 safety and clean-room suites (Windows PowerShell 5.1)
         shell: powershell
         run: |
-          foreach ($name in @('Path_Safety','Fault_Matrix','Metadata_Fuzz','Scan_Performance','Batch_Entry','Package_Boundary','Package_Cleanroom','Install_Incident','Install_Entry','Extracted_Upgrade')) {
+          foreach ($name in @('Path_Safety','Fault_Matrix','Metadata_Fuzz','Scan_Performance','Batch_Entry','Package_Boundary','Package_Cleanroom','Install_Incident','Install_Entry','Extracted_Upgrade','Field_Recovery')) {
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Aurora_${name}_Tests.ps1"
             if ($LASTEXITCODE -ne 0) { throw "Hardening suite failed: $name" }
           }
