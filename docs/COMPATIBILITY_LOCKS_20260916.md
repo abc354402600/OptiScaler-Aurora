@@ -22,6 +22,10 @@ Provider tests expand from 14 to 17, covering retired identity lookup without de
 
 ## Remaining work
 
+The Streamline follow-up has now been narrowed to specific call sites. `Streamline_Proxy.h::InitWithD3D12` resolves bundled plugin exports before `_slSetD3DDevice`. `D3D12_Hooks.cpp` later sets a second device for `CreateSLOnThe2ndDevice` and immediately calls Reflex. A future active-interposer binding change must cover both paths, distinguish initialization requested from device/functions ready, and publish complete DLSSG/Reflex/PCL groups before callers use them. Missing required functions must not leave a partially usable group or call an uninitialized bundled fallback. Audit the D3D11 accessor sharing and initialization retry behavior too. [PR 1157](https://github.com/optiscaler/OptiScaler/pull/1157), reviewed at `7543d143`, supplies evidence and an implementation candidate; Aurora's private runtime and disabled OTA flags mean its reported driver/plugin mismatch is not yet demonstrated here.
+
+For provider-global ordering, `Nvngx_FG::getProvider` currently constructs/publishes a shared singleton independently of per-handle locks, while Shutdown calls the provider directly. In the D3D12 outer Release route, exposure tracking and current FG context cleanup also precede the per-handle release guard. Retained identities solve neither concurrent singleton initialization nor native shutdown versus in-flight evaluation. A follow-up must coordinate those operations and their callbacks, not simply add a mutex around every API call and risk a new reentrant deadlock.
+
 - Active Streamline plugin-function binding: audit deferred-device initialization and function publication order before adopting the broader PR.
 - Provider-global/context lifecycle: native resource shutdown and settings changes need a coherent ordering beyond pointer identity.
 - Genshin regression bisect: controlled known-good/bad bridge/runtime comparison still needs real repro feedback. Do not blindly revert the upstream mutex commit or import an untested FG lifecycle fork.
@@ -30,3 +34,13 @@ Provider tests expand from 14 to 17, covering retired identity lookup without de
 - NTE: the per-game NPI menu setting remains a reversible community workaround awaiting local comparison; no driver settings were changed.
 
 No native SL1 replacement, 6X unlock change, installer work, main-branch merge, or Release publication is included.
+
+## Completed validation
+
+Code/workflow checkpoint: `94e3c2c721aae8edde0aec021551897c9a865a37` (input fix `120a421e`, provider routing fix `1be0123b`).
+
+- Local Windows C++ checks: 8 input-lock checks and 17 provider-handle checks passed. Incremental clang-format 20.1.8 review from `86fd6c82`: 10 changed C/C++ files, zero edited-line violations.
+- [Full Windows MSVC DLL build, focused guard tests, packaging and upload](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34995403209): **success**. Job `104470259892` explicitly reports 17 provider checks and 8 input-lock checks passed; the existing frame-guard test also completed successfully in the same required step.
+- [Incremental clang-format CI](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34995403062): **success**.
+- Uploaded artifact: `OptiScaler_Aurora_v1.0_20260915_compat_94e3c2c7.7z`, 234777713 bytes. GitHub artifact API digest: `sha256:81d8161515674d5068326ed9f192df9d881abdde459b52aa354180705dfb68f0`; not a separately measured inner DLL hash.
+- Subsequent documentation-only commit records validation and next-stage source audit; unchanged C++ is not rebuilt for that record. No real-game/GPU validation is implied.

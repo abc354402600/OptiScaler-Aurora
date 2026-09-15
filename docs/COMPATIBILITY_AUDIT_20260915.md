@@ -2,6 +2,8 @@
 
 Scope: compatibility branch based on Aurora `e1673a16`. No RC3 installer changes, no bundled runtime replacement, no game installation changes.
 
+Historical checkpoint: the OptiInput and outer provider identity gaps listed below were subsequently addressed in the [2026-09-16 lock/lifetime follow-up](COMPATIBILITY_LOCKS_20260916.md). That document supersedes the earlier registry-entry destruction policy and records the remaining global lifecycle boundaries.
+
 ## Adopted
 
 | Change | Evidence and scope |
