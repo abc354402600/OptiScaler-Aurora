@@ -57,6 +57,8 @@ UINT64 IFGFeature::StartNewFrame()
 
     NewFrame();
 
+    _capturedFrames.Capture(fIndex, _frameCount);
+
     return _frameCount;
 }
 

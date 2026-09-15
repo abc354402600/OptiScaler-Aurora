@@ -18,6 +18,8 @@ class DLSSG_Dx12 : public virtual IFGFeature_Dx12
     UINT64 lastOptionFrame = 0;
 
     bool Dispatch();
+    bool SuspendInterpolation(const char* reason, UINT64 dispatchFrame);
+    bool _interpolationSuspended = false;
 
   protected:
     void ReleaseObjects() override final;

@@ -277,6 +277,9 @@ void DLSSG_Dx12::Deactivate()
 {
     LOG_DEBUG("");
 
+    _capturedFrames.Clear();
+    _interpolationSuspended = false;
+
     if (_isActive)
     {
         sl::DLSSGOptions options {};
@@ -311,17 +314,51 @@ bool DLSSG_Dx12::Shutdown()
     return true;
 }
 
+bool DLSSG_Dx12::SuspendInterpolation(const char* reason, UINT64 dispatchFrame)
+{
+    // Keep capturing and forwarding Reflex markers. A false Dispatch return alone
+    // does not disable SL interpolation when the caller presents the original frame.
+    if (_interpolationSuspended)
+        return true;
+
+    sl::DLSSGOptions options {};
+    options.mode = sl::DLSSGMode::eOff;
+    options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
+    options.queueParallelismMode = sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
+    const auto result = StreamlineProxy::DLSSGSetOptions()(viewport, options);
+    if (result != sl::Result::eOk)
+    {
+        LOG_ERROR("Aurora frame guard: could not suspend interpolation: {}", magic_enum::enum_name(result));
+        return false;
+    }
+
+    _interpolationSuspended = true;
+    LOG_WARN("Aurora frame guard: suspended ({}), dispatch: {}, present: {}", reason, dispatchFrame, _frameCount);
+    return true;
+}
+
 bool DLSSG_Dx12::Dispatch()
 {
     LOG_FUNC();
 
     UINT64 willDispatchFrame = 0;
     auto fIndex = GetDispatchIndex(willDispatchFrame);
+    const bool guardFrames = State::Instance().activeFgInput == FGInput::Upscaler;
     if (fIndex < 0)
+    {
+        if (guardFrames)
+            SuspendInterpolation("no new captured frame", willDispatchFrame);
         return false;
+    }
 
     if (!IsActive() || IsPaused())
         return false;
+
+    if (guardFrames && !_capturedFrames.CanPresent(fIndex, willDispatchFrame, _frameCount))
+    {
+        SuspendInterpolation("capture / dispatch / present mismatch", willDispatchFrame);
+        return false;
+    }
 
     LOG_DEBUG("_frameCount: {}, willDispatchFrame: {}, fIndex: {}", _frameCount, willDispatchFrame, fIndex);
 
@@ -331,6 +368,8 @@ bool DLSSG_Dx12::Dispatch()
         !_resourceReady[fIndex].at(FG_ResourceType::Velocity))
     {
         LOG_WARN("Depth or Velocity is not ready, skipping");
+        if (guardFrames)
+            SuspendInterpolation("depth or velocity not ready", willDispatchFrame);
         return false;
     }
 
@@ -371,6 +410,11 @@ bool DLSSG_Dx12::Dispatch()
     if (dlssgSetOptionsResult != sl::Result::eOk)
     {
         LOG_ERROR("Couldn't set DLSSG options, error: {}", magic_enum::enum_name(dlssgSetOptionsResult));
+    }
+    else if (_interpolationSuspended)
+    {
+        _interpolationSuspended = false;
+        LOG_INFO("Aurora frame guard: resumed on captured frame {}", willDispatchFrame);
     }
 
     sl::ReflexOptions reflexConst = {};
