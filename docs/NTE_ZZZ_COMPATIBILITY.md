@@ -41,3 +41,9 @@
 - 上游从 `4af2417b` 到 `a4890db5` 只新增一条提交：[仙剑奇侠传七初始化崩溃修正](https://github.com/optiscaler/OptiScaler/commit/a4890db5b3c7c6918f4b35d0fd3318b42e2ccc66)。已移植，仅为 `pal7` 的 Win64/WinGDK Shipping 入口启用现有的两项 UE 资源状态屏障特例，不改变其他游戏默认值。
 - 优先闭环：异环菜单单变量对比 → 绝区零带版本/日志的复现 → 巫师3高倍率切换与加载 → 原神桥接回归二分。
 - 新功能/优化仍有候选，但未宣称已全部移植：活动 Streamline 插件绑定、FG 资源生命周期重构、OptiInput 锁顺序，以及不同 FG 输出路径的耗时。需要独立证据和验证；不以“全量吸收最新代码”代替兼容性工作。
+
+性能候选复核：[上游 issue 1087](https://github.com/optiscaler/OptiScaler/issues/1087) 的 RX 9070 XT 报告比较了 FSR FG 与修改版 Nukem 路径。维护者认为交换链或 AL2 可能相关，但尚未定位；作者在后续评论中明确说，改写后的路径能运行 FF16，却会在绝区零进入 FG 场景时卡死崩溃。因此没有将它作为 RTX 40 的通用性能补丁导入，也没有用该报告的帧率数字承诺 Aurora 提升幅度。
+
+## 验证记录
+
+代码提交 `b5838339ec3b52d2416c6e8aafedbd23c561492e` 的 [Windows 完整构建、帧/句柄检查、打包上传](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34992007754) 全部成功；[增量格式 CI](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/34992007927) 成功。新增说明没有自动设置驱动或修改游戏文件，游戏内布局与实际菜单流畅度仍需用户验证。本机原先提及的异环日志路径及本次尝试的绝区零 Steam 日志路径均没有可读日志，不能据此补出崩溃原因。后续只补交本文验证记录，沿用已通过构建的代码。
