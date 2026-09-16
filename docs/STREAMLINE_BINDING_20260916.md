@@ -19,3 +19,16 @@ Swapchain setup, activation, dispatch and state evaluation respect readiness; pl
 - Device initialization still follows the SDK's serialized `slSetD3DDevice` contract. Atomic readiness publication does not serialize arbitrary concurrent device changes, plugin shutdown, or in-flight native callbacks. Provider-global shutdown remains a separate audit.
 - No game files, native SL1 libraries, MFG patch bytes, `DualFeature=false`, or driver settings were modified.
 - Real-game checks: Witcher first/second-device startup, saved Dynamic MFG loading, 6X and FG toggles; a normal single-device DLSSG title; ZZZ reproduction with exact build/logs if still failing. Check logs for `Active Streamline DLSSG/Reflex/PCL functions ready` or a specific binding error. CPU tests do not establish that existing crashes are resolved.
+
+## Incremental upstream check
+
+During the build wait, the official GitHub compare API for `a4890db5b3c7c6918f4b35d0fd3318b42e2ccc66...master` returned `identical`, `ahead_by: 0`. No additional commits were available to audit at this checkpoint, and earlier history was not re-audited.
+
+## Completed build verification
+
+Code checkpoint: `dfb76f704fa16ea3984e5645cf0ed17ca119c0d2`.
+
+- [Windows MSVC full DLL build, compatibility tests, packaging and artifact upload](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35044648966): **success**. Job `104631756095` reports 23 Streamline lifecycle checks, 17 provider checks and 8 input-lock checks passed; the existing frame guard executable also succeeded in the same required step.
+- [Incremental clang-format CI](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35044648956): **success**. Local pinned 20.1.8 review reports six changed applicable C/C++ files with zero edited-line violations.
+- Artifact: `OptiScaler_Aurora_v1.0_20260916_compat_dfb76f70.7z`, 234776001 bytes. GitHub artifact API digest: `sha256:6ba59541f19a760a4dacb38ff94b10c329132b1da416155f93e6e144b2c57791`, not a separately measured inner DLL hash.
+- Documentation-only follow-up records these results without rebuilding unchanged code. No in-game result is inferred from this build.
