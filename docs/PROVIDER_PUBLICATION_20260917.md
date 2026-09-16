@@ -47,3 +47,35 @@ Combo deleted its wrapper even when a child Release failed, while the outer regi
 **44 executable ownership checks** use the actual Combo handle fields, Release body and Evaluate admission prefix with the production registry. They cover all four child success/failure combinations, retry without duplicate child release, wrapper retention/deletion, rejection of Evaluate after release starts, retained public identity, duplicate public Release rejection, null inputs, and a C++ exception after one child successfully released. Child providers are stand-ins; failure is assumed to leave that child's handle available for retry, matching the outer registry's existing policy. Foreign native implementations that invalidate a handle despite reporting failure are not made safe by this fix.
 
 Combo Create rollback after a child creation/cleanup failure, native device initialization ownership, and concurrent global shutdown still require separate review. These changes do not claim to complete those boundaries.
+## Next lifecycle boundary: source findings, not implemented here
+
+The vendored NGX headers (`external/nvngx_dlss_sdk/nvsdk_ngx.h` and `nvsdk_ngx_vk.h`, Shutdown documentation) distinguish device-only Shutdown1(device) from all-device Shutdown1(nullptr)/Shutdown(). A global construction gate is therefore not a substitute for device ownership.
+
+Concrete next audit targets:
+
+1. The registry's private value currently records only ID/nativeHandle, without API/device/generation. Before native shutdown can invalidate just one device's handles, that ownership must be represented. D3D12 Create can obtain a device from the command list; Vulkan CreateFeature1 supplies a device explicitly, while legacy CreateFeature requires a reliable association rather than assuming a mutable global device belongs to every command buffer.
+2. Native Init results other than NotInitialized are still ignored by the outer adapters. A published DLL/export is not proof of successful initialization for that API/device. Success/failure/retry state must be tracked before admitting Create/Evaluate after shutdown or failed initialization.
+3. Outer shutdown performs global Aurora cleanup and clears initialization flags without preserving native failure results. The D3D12 route also calls `DLSSFeatureDx12::Shutdown`, which can independently call native NVNGX Shutdown, followed by the outer native shutdown route. This is separate from the already repaired duplicate **replacement-provider** shutdown and needs executable nested-route coverage. `D3D12Device` is currently nulled before that helper receives it, so a Shutdown1 fallback can receive nullptr (global shutdown by the SDK contract).
+4. Operation admission must close the target API/device generation before native teardown, with a short metadata lock only. Waiting while a loader or native callback re-enters can deadlock; a busy/error outcome must be propagated through the outer cleanup rather than ignored. Do not silently defer native GPU teardown after the caller destroys its device. Do not retire native handles on a failed shutdown without a clear ownership contract.
+5. FFX's native provider shutdown is currently a no-op, while DLL-backed providers call external code. Shared depth/HUD copy state and static FFX initialization need their own ownership review; the publication gate alone does not serialize later evaluations.
+
+Required future tests include two devices with one closing, D3D12 plus Vulkan coexistence, Create/Evaluate/Release overlapping shutdown admission, callback reentry, native Init/Shutdown failures, shutdown before Init, repeated shutdown/reinitialize, and stale handles from a prior generation. Those tests do not exist yet and are not counted in this batch's 171 new checks.
+
+## Local mutation evidence
+
+Two additional local checks modified only generated test translation units (not repository production code). Removing the depth-pointer initializer was rejected at the first DLL boundary assertion. Deleting the Combo wrapper on a failed child release was rejected at ownership assertion 12. Both exited with the test failure code 2; no native DLL/GPU call or installed-game change was involved.
+## Completed checkpoint validation
+
+Code checkpoints pushed to `Compatibility-fixes`:
+
+- `771d2aca`: validated provider publication, explicit Pending routes and no lazy load on shutdown.
+- `6b92beb9`: initialized DLL depth resources and missing-export guards.
+- `e737b087644e9f3120d72172c0108a1bb91f3227`: cumulative Combo partial-release fix.
+
+The [cumulative Windows MSVC DLL build, tests, package and upload](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35129887577) completed **successfully**. Job `104907980795` explicitly reports all **171 new checks** passed: 22 publication, 36 routing, 69 DLL boundary and 44 Combo ownership. Existing compatibility guard checks also passed. These are CPU and build checks, not actual game/GPU validation.
+
+[Incremental clang-format CI](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35129887470) succeeded. Local cumulative formatting check from `a59bd442` covered 10 applicable production C/C++ files with zero edited-line violations. The earlier publication-only [build](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35129237723) and [format check](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35129237663) also succeeded.
+
+Cumulative Actions artifact: `OptiScaler_Aurora_v1.0_20260916_compat_e737b087.7z`, 234768572 bytes; GitHub artifact API digest `sha256:a538597fb35a8a3f79496ee9f16ee62bb1732d4a133af2f13cbc17bd164f949d`. This is the artifact digest, not a separately measured inner DLL hash. Its date follows the UTC runner date; the local work date is September 17.
+
+The result is a compatibility-branch checkpoint only. Main `aurora` and Releases were not updated. The remaining native API/device shutdown work above and Witcher/ZZZ game validation are still open.

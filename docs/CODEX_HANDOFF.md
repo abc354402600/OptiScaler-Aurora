@@ -34,3 +34,5 @@ Git network requests on this host have worked with per-command `http.proxy=http:
 The 2026-09-17 continuation fixes private provider construction/publication and explicit Pending routing, plus no-lazy-load shutdown. Read [provider publication audit](PROVIDER_PUBLICATION_20260917.md). Native API/device initialization and concurrent Shutdown/Evaluate after publication remain open; do not call the complete lifecycle audit finished.
 
 The same continuation also initializes DLL-provider depth pointers, guards missing per-operation exports (69 extracted checks), and fixes Combo partial-release ownership/retry (44 checks). See the same publication audit for limitations; this does not establish native API/device shutdown safety or game compatibility.
+
+Latest validated code checkpoint: e737b087 (Windows build 35129887577 and format 35129887470 succeeded; 171 new publication/export/Combo checks passed). The publication audit records remaining native shutdown/device ownership findings, including the separate DLSSFeatureDx12 nested native-shutdown route; continue there rather than repeating these completed fixes.
