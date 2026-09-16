@@ -25,6 +25,8 @@ The next continuation implements active private Streamline binding after device 
 
 The creation-failure follow-up adds 16 CPU checks and repairs null/stale handle access after failed FG creation in D3D12/Vulkan. See [FG creation audit](FG_CREATION_20260916.md), which also explains why provider construction needs an explicit busy/routing design and why device-specific shutdown cannot simply become a global lock/stop.
 
+The same audit's shutdown follow-up removes duplicate provider Shutdown calls after Shutdown1, guards missing native shutdown exports, and adds 14 executable routing checks compiled from the actual source bodies. It retains existing local cleanup; full multi-device cleanup, native result propagation and global concurrent lifetime ordering remain open.
+
 The user subsequently provided ZZZ 11008 component-error screenshots and reports of disappearing files, and NTE menu stutter with an NPI workaround. GPU is tentatively RTX 40; exact build, missing filenames, protection history, and crash logs remain unknown. See [NTE/ZZZ follow-up](NTE_ZZZ_COMPATIBILITY.md). Do not confuse component errors, GPU exceptions, and absent FG input. No driver/game settings were changed by this work.
 
 Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.

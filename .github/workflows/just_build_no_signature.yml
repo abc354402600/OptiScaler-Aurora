@@ -133,6 +133,9 @@ jobs:
             & $env:ComSpec /d /c $command
             if ($LASTEXITCODE) { throw "Compatibility guard test failed: $name" }
         }
+        $command = 'call "' + $vcvars + '" && python tests\test_shutdown_routing.py --compiler cl'
+        & $env:ComSpec /d /c $command
+        if ($LASTEXITCODE) { throw 'Shutdown routing test failed' }
 
     - name: Package Aurora / 打包 Aurora
       shell: powershell

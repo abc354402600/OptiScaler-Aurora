@@ -1123,7 +1123,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
+static NVSDK_NGX_Result ShutdownVulkan(bool shutdownProvider)
 {
     shutdown = true;
 
@@ -1151,13 +1151,16 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
     // Disabled for now to check if it cause any issues
     // MenuOverlayVk::UnHookVk();
 
-    Nvngx_FG::VULKAN_Shutdown();
+    if (shutdownProvider)
+        Nvngx_FG::VULKAN_Shutdown();
 
     shutdown = false;
     State::Instance().nvngxVkInited = false;
 
     return NVSDK_NGX_Result_Success;
 }
+
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(true); }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
 {
@@ -1174,5 +1177,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
 
     shutdown = false;
 
-    return NVSDK_NGX_VULKAN_Shutdown();
+    // Do not follow the provider's device shutdown with a second global shutdown.
+    return ShutdownVulkan(false);
 }

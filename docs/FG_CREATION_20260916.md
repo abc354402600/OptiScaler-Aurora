@@ -10,6 +10,14 @@ Continuation from `2bf68763` on `Compatibility-fixes`. The user currently cannot
 
 Failed native creation remains the provider's responsibility: Aurora does not guess how to release a pointer written alongside a failure result. C++ exceptions leave output empty and the unpublished wrapper destroyed; this helper does not claim to catch structured exceptions or make foreign binaries safe.
 
+## Device shutdown follow-up
+
+The subsequent call-chain review confirmed that both outer `Shutdown1(device)` implementations called the provider's device shutdown and then delegated to the global exported shutdown, which called the provider again. Local Aurora cleanup is now separate from provider dispatch: the device route performs that cleanup without a second global provider shutdown. Global shutdown still calls the provider once. Four DLL-provider shutdown entry points now check the relevant export before calling it; the previous availability test only checked the Init export, which did not prove Shutdown/Shutdown1 existed.
+
+14 additional checks compile the actual shutdown bodies extracted from the source files against counted NGX/provider stand-ins. They verify one device or global provider dispatch, the device argument, retained local cleanup, and missing/unavailable export rejection. This is executable routing verification, not a duplicated model of the production bodies, and does not validate native GPU teardown. The extraction is limited to these simple function bodies; the full DLL build separately checks their real SDK integration.
+
+Existing global Aurora cleanup and ignored native shutdown result handling are not a complete multi-device lifetime design. This patch removes a confirmed duplicate provider call; it does not claim to coordinate concurrent evaluations or preserve every other live Aurora device context.
+
 ## Focused validation
 
 16 Windows C++ checks exercise the production creation helper and registry: null output without native invocation, clearing stale output before callback, failure/unavailable-provider behavior, no publication on failure, successful return with no native handle, failure that writes a pointer, exception cleanup, successful publication/read and release exactly once. These are CPU failure-path checks, not GPU compatibility evidence.

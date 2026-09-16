@@ -22,14 +22,14 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Init_Ext(unsigned long long InApplication
 
 NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Shutdown()
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_Shutdown)
         return _DLSSG_D3D12_Shutdown();
     return NVSDK_NGX_Result_Fail;
 }
 
 NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_Shutdown1)
         return _DLSSG_D3D12_Shutdown1(InDevice);
     return NVSDK_NGX_Result_Fail;
 }
@@ -235,14 +235,14 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Init_Ext2(unsigned long long InApplicati
 
 NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Shutdown()
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_Shutdown)
         return _DLSSG_VULKAN_Shutdown();
     return NVSDK_NGX_Result_Fail;
 }
 
 NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Shutdown1(VkDevice InDevice)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_Shutdown1)
         return _DLSSG_VULKAN_Shutdown1(InDevice);
     return NVSDK_NGX_Result_Fail;
 }

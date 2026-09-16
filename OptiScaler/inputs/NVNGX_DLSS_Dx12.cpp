@@ -370,7 +370,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
 
 #pragma region DLSS Shutdown Calls
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
+static NVSDK_NGX_Result ShutdownD3D12(bool shutdownProvider)
 {
     shutdown = true;
     State::Instance().nvngxDx12Inited = false;
@@ -409,7 +409,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
 
     shutdown = false;
 
-    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
+    if (shutdownProvider && State::Instance().activeFgNvngx != FGNvngxReplacement::None)
     {
         Nvngx_FG::D3D12_Shutdown();
     }
@@ -418,6 +418,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
 
     return NVSDK_NGX_Result_Success;
 }
+
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(true); }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
 {
@@ -437,7 +439,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
         NVNGXProxy::SetDx12Inited(false);
     }
 
-    return NVSDK_NGX_D3D12_Shutdown();
+    // The provider already received Shutdown1. Run local cleanup without a second,
+    // global provider shutdown which can invalidate other native device state.
+    return ShutdownD3D12(false);
 }
 
 #pragma endregion
