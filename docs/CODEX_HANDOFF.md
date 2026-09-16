@@ -30,3 +30,5 @@ The same audit's shutdown follow-up removes duplicate provider Shutdown calls af
 The user subsequently provided ZZZ 11008 component-error screenshots and reports of disappearing files, and NTE menu stutter with an NPI workaround. GPU is tentatively RTX 40; exact build, missing filenames, protection history, and crash logs remain unknown. See [NTE/ZZZ follow-up](NTE_ZZZ_COMPATIBILITY.md). Do not confuse component errors, GPU exceptions, and absent FG input. No driver/game settings were changed by this work.
 
 Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.
+
+The 2026-09-17 continuation fixes private provider construction/publication and explicit Pending routing, plus no-lazy-load shutdown. Read [provider publication audit](PROVIDER_PUBLICATION_20260917.md). Native API/device initialization and concurrent Shutdown/Evaluate after publication remain open; do not call the complete lifecycle audit finished.

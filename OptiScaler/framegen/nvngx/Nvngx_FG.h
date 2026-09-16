@@ -7,6 +7,7 @@
 #include <shaders/hud_copy/HudCopy_Dx12.h>
 #include "IFGNvngx.h"
 #include <framegen/ProviderHandleRegistry.h>
+#include <framegen/ProviderPublication.h>
 
 class Nvngx_FG
 {
@@ -21,9 +22,11 @@ class Nvngx_FG
 
     static inline std::atomic_uint32_t lastIdCreated = 0;
     static inline ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
-    static inline std::unique_ptr<IFGNvngx> _provider;
+    static inline ProviderPublication<IFGNvngx> _provider;
     static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
 
+    static std::unique_ptr<IFGNvngx> createProvider();
+    static ProviderLookup<IFGNvngx> lookupProvider();
     static IFGNvngx* getProvider();
 
   public:
@@ -33,6 +36,8 @@ class Nvngx_FG
     }
 
     static int getMaxFakeFramesCount();
+    static ProviderStatus D3D12_ProviderStatus();
+    static ProviderStatus VULKAN_ProviderStatus();
     static bool isDx12Available();
     static bool isVulkanAvailable();
     static feature_version version();

@@ -206,7 +206,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
 
     if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
     {
-        Nvngx_FG::D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+        const auto providerInit =
+            Nvngx_FG::D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+        if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
+            return providerInit;
     }
 
     LOG_INFO("AppId: {0}", InApplicationId);
@@ -762,8 +765,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
     const Config& cfg = *Config::Instance();
 
     // DLSSG replacements passthrough
-    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None && Nvngx_FG::isDx12Available() &&
-        InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
+    const auto providerStatus =
+        InFeatureID == NVSDK_NGX_Feature_FrameGeneration && State::Instance().activeFgNvngx != FGNvngxReplacement::None
+            ? Nvngx_FG::D3D12_ProviderStatus()
+            : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    if (providerStatus == ProviderStatus::Available)
     {
         LOG_INFO("Passthrough to DLSSG Replacement's CreateFeature for FrameGeneration");
 

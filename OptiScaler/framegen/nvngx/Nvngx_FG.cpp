@@ -14,29 +14,28 @@
 #include "Nvngx_Combo.h"
 #include <imgui/ImGuiNotify.hpp>
 
-IFGNvngx* Nvngx_FG::getProvider()
+std::unique_ptr<IFGNvngx> Nvngx_FG::createProvider()
 {
-    if (_provider)
-        return _provider.get();
+    std::unique_ptr<IFGNvngx> provider;
 
-    const auto selectedProvider = State::Instance().activeFgNvngx;
+    const auto selectedProvider = State::Instance().activeFgNvngx.load();
 
     switch (selectedProvider)
     {
     case FGNvngxReplacement::FFX:
-        _provider = std::make_unique<Nvngx_FFX>();
+        provider = std::make_unique<Nvngx_FFX>();
         break;
 
     case FGNvngxReplacement::Nukems:
-        _provider = std::make_unique<Nvngx_Nukems>();
+        provider = std::make_unique<Nvngx_Nukems>();
         break;
 
     case FGNvngxReplacement::Arturs:
-        _provider = std::make_unique<Nvngx_Arturs>();
+        provider = std::make_unique<Nvngx_Arturs>();
         break;
 
     case FGNvngxReplacement::Combo:
-        _provider = std::make_unique<Nvngx_Combo>();
+        provider = std::make_unique<Nvngx_Combo>();
         break;
 
     case FGNvngxReplacement::None:
@@ -44,7 +43,7 @@ IFGNvngx* Nvngx_FG::getProvider()
         return nullptr;
     }
 
-    if (!_provider->isDx12Available() && !_provider->isVulkanAvailable())
+    if (!provider->isDx12Available() && !provider->isVulkanAvailable())
     {
         // The selected provider cannot be used, try the remaining providers as fallback, try in order
         // FGNvngxReplacement::Combo doesn't make sense to try as it's Arturs + FFX
@@ -101,7 +100,7 @@ IFGNvngx* Nvngx_FG::getProvider()
             if (!candidate->isDx12Available() && !candidate->isVulkanAvailable())
                 continue;
 
-            _provider = std::move(candidate);
+            provider = std::move(candidate);
 
             Config::Instance()->FGNvngxReplacement.set_volatile_value(fallback);
             State::Instance().activeFgNvngx = fallback;
@@ -114,7 +113,7 @@ IFGNvngx* Nvngx_FG::getProvider()
                                                     formatProvider(selectedProvider), formatProvider(fallback))
                                             .c_str() });
 
-            return _provider.get();
+            return provider;
         }
 
         LOG_ERROR("Nvngx FG provider {} is not available and can't fallback", formatProvider(selectedProvider));
@@ -125,11 +124,28 @@ IFGNvngx* Nvngx_FG::getProvider()
         Config::Instance()->FGNvngxReplacement.set_volatile_value(FGNvngxReplacement::None);
         State::Instance().activeFgNvngx = FGNvngxReplacement::None;
 
-        _provider.reset();
+        provider.reset();
         return nullptr;
     }
 
-    return _provider.get();
+    return provider;
+}
+
+ProviderLookup<IFGNvngx> Nvngx_FG::lookupProvider()
+{
+    return _provider.GetOrCreate([] { return createProvider(); });
+}
+
+IFGNvngx* Nvngx_FG::getProvider() { return lookupProvider().provider; }
+
+ProviderStatus Nvngx_FG::D3D12_ProviderStatus()
+{
+    return lookupProvider().ForApi([](IFGNvngx& provider) { return provider.isDx12Available(); });
+}
+
+ProviderStatus Nvngx_FG::VULKAN_ProviderStatus()
+{
+    return lookupProvider().ForApi([](IFGNvngx& provider) { return provider.isVulkanAvailable(); });
 }
 
 int Nvngx_FG::getMaxFakeFramesCount()
@@ -214,7 +230,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init(unsigned long long InApplicationId, const 
                                       ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                       NVSDK_NGX_Version InSDKVersion)
 {
-    auto* provider = getProvider();
+    const auto lookup = lookupProvider();
+    if (lookup.status == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = lookup.provider;
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -226,7 +245,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
                                           ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                           const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    auto* provider = getProvider();
+    const auto lookup = lookupProvider();
+    if (lookup.status == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = lookup.provider;
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -236,7 +258,7 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown()
 {
-    auto* provider = getProvider();
+    auto* provider = _provider.Peek();
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -246,7 +268,7 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown()
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
-    auto* provider = getProvider();
+    auto* provider = _provider.Peek();
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -395,7 +417,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init(unsigned long long InApplicationId, const
                                        PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
                                        const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, NVSDK_NGX_Version InSDKVersion)
 {
-    auto* provider = getProvider();
+    const auto lookup = lookupProvider();
+    if (lookup.status == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = lookup.provider;
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -409,7 +434,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext(unsigned long long InApplicationId, c
                                            NVSDK_NGX_Version InSDKVersion,
                                            const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    auto* provider = getProvider();
+    const auto lookup = lookupProvider();
+    if (lookup.status == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = lookup.provider;
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -424,7 +452,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
                                             NVSDK_NGX_Version InSDKVersion,
                                             const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    auto* provider = getProvider();
+    const auto lookup = lookupProvider();
+    if (lookup.status == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = lookup.provider;
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -435,7 +466,7 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown()
 {
-    auto* provider = getProvider();
+    auto* provider = _provider.Peek();
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
@@ -445,7 +476,7 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown()
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown1(VkDevice InDevice)
 {
-    auto* provider = getProvider();
+    auto* provider = _provider.Peek();
 
     if (!provider)
         return NVSDK_NGX_Result_Fail;

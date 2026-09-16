@@ -7,6 +7,7 @@
 #include <inputs/FG/Streamline_Inputs_Dx12.h>
 #include <inputs/FG/Streamline_Inputs_Sl1_Dx12.h>
 
+#include <atomic>
 #include <set>
 #include <deque>
 #include <mutex>
@@ -149,7 +150,7 @@ class State
     FGInput activeFgInput = FGInput::NoFG;
     FGOutput activeFgOutput = FGOutput::NoFG;
     // This should be set to a non-None value only if all other requirements are met and nvngx can be used
-    FGNvngxReplacement activeFgNvngx = FGNvngxReplacement::None;
+    std::atomic<FGNvngxReplacement> activeFgNvngx { FGNvngxReplacement::None };
 
     // Streamline FG inputs
     Sl_Inputs_Dx12 slFGInputs = {};

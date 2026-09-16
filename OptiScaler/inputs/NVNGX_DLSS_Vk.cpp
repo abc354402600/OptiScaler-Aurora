@@ -197,8 +197,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
 
     if (State::Instance().activeFgInput == FGInput::NvngxFG)
     {
-        Nvngx_FG::VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
-                                   InSDKVersion, &localFeatureInfo);
+        const auto providerInit = Nvngx_FG::VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                             InDevice, InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+        if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
+            return providerInit;
     }
 
     LOG_INFO("AppId: {0}", InApplicationId);
@@ -290,8 +292,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
         }
     }
 
-    Nvngx_FG::VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InSDKVersion,
-                              &localFeatureInfo);
+    const auto providerInit = Nvngx_FG::VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                        InDevice, InSDKVersion, &localFeatureInfo);
+    if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
+        return providerInit;
 
     ScopedInitVk scopedInit {};
     return NVSDK_NGX_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
@@ -384,8 +388,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
         }
     }
 
-    Nvngx_FG::VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
-                          &localFeatureInfo, InSDKVersion);
+    const auto providerInit = Nvngx_FG::VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
+                                                    InGIPA, InGDPA, &localFeatureInfo, InSDKVersion);
+    if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
+        return providerInit;
 
     ScopedInitVk scopedInit {};
     return NVSDK_NGX_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
@@ -479,7 +485,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureInstanceExtensionRequi
 {
     LOG_DEBUG("FeatureID: {0}", (UINT) FeatureDiscoveryInfo->FeatureID);
 
-    if (State::Instance().activeFgInput == FGInput::NvngxFG && Nvngx_FG::isVulkanAvailable() &&
+    const auto providerStatus = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration &&
+                                        State::Instance().activeFgInput == FGInput::NvngxFG
+                                    ? Nvngx_FG::VULKAN_ProviderStatus()
+                                    : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (State::Instance().activeFgInput == FGInput::NvngxFG && providerStatus == ProviderStatus::Available &&
         FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         return NVSDK_NGX_Result_Success;
@@ -571,7 +584,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureDeviceExtensionRequire
 {
     LOG_DEBUG("FeatureID: {0}", (UINT) FeatureDiscoveryInfo->FeatureID);
 
-    if (State::Instance().activeFgInput == FGInput::NvngxFG && Nvngx_FG::isVulkanAvailable() &&
+    const auto providerStatus = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration &&
+                                        State::Instance().activeFgInput == FGInput::NvngxFG
+                                    ? Nvngx_FG::VULKAN_ProviderStatus()
+                                    : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (State::Instance().activeFgInput == FGInput::NvngxFG && providerStatus == ProviderStatus::Available &&
         FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         return NVSDK_NGX_Result_Success;
@@ -692,8 +712,15 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
 {
     LOG_DEBUG("for FeatureID: {0}", (int) FeatureDiscoveryInfo->FeatureID);
 
+    const auto providerStatus = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration &&
+                                        State::Instance().activeFgInput == FGInput::NvngxFG
+                                    ? Nvngx_FG::VULKAN_ProviderStatus()
+                                    : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling ||
-        (State::Instance().activeFgInput == FGInput::NvngxFG && Nvngx_FG::isVulkanAvailable() &&
+        (State::Instance().activeFgInput == FGInput::NvngxFG && providerStatus == ProviderStatus::Available &&
          FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration))
     {
         if (OutSupported == nullptr)
@@ -802,7 +829,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetScratchBufferSize(NVSDK_NGX_F
                                                                      const NVSDK_NGX_Parameter* InParameters,
                                                                      size_t* OutSizeInBytes)
 {
-    if (Nvngx_FG::isVulkanAvailable() && InFeatureId == NVSDK_NGX_Feature_FrameGeneration)
+    const auto providerStatus = InFeatureId == NVSDK_NGX_Feature_FrameGeneration ? Nvngx_FG::VULKAN_ProviderStatus()
+                                                                                 : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (providerStatus == ProviderStatus::Available && InFeatureId == NVSDK_NGX_Feature_FrameGeneration)
     {
         return Nvngx_FG::VULKAN_GetScratchBufferSize(InFeatureId, InParameters, OutSizeInBytes);
     }
@@ -822,7 +854,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
     *OutHandle = nullptr;
 
-    if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
+    const auto providerStatus = InFeatureID == NVSDK_NGX_Feature_FrameGeneration ? Nvngx_FG::VULKAN_ProviderStatus()
+                                                                                 : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (providerStatus == ProviderStatus::Available && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
         if (result == NVSDK_NGX_Result_Success && *OutHandle)
@@ -924,7 +961,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
 
     LOG_FUNC();
 
-    if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
+    const auto providerStatus = InFeatureID == NVSDK_NGX_Feature_FrameGeneration ? Nvngx_FG::VULKAN_ProviderStatus()
+                                                                                 : ProviderStatus::Unavailable;
+    if (providerStatus == ProviderStatus::Pending)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (providerStatus == ProviderStatus::Available && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
         if (result == NVSDK_NGX_Result_Success && *OutHandle)
