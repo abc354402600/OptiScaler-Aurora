@@ -10,6 +10,7 @@ struct Nvngx_Combo_Handle
 
     NVSDK_NGX_Handle* ffxHandle = nullptr;
     NVSDK_NGX_Handle* artursHandle = nullptr;
+    bool releaseStarted = false;
 };
 
 class Nvngx_Combo : public IFGNvngx

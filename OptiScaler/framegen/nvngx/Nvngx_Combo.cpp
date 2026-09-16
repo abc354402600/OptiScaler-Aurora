@@ -115,16 +115,19 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (!InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    auto resultArturs = artursProvider->D3D12_ReleaseFeature(InOurHandle->artursHandle);
-    auto resultFfx = ffxProvider->D3D12_ReleaseFeature(InOurHandle->ffxHandle);
+    // The outer registry retains failed releases for retry. Keep this wrapper
+    // until both child releases succeed, and never reuse a released child.
+    InOurHandle->releaseStarted = true;
+    if (InOurHandle->artursHandle &&
+        artursProvider->D3D12_ReleaseFeature(InOurHandle->artursHandle) == NVSDK_NGX_Result_Success)
+        InOurHandle->artursHandle = nullptr;
+    if (InOurHandle->ffxHandle && ffxProvider->D3D12_ReleaseFeature(InOurHandle->ffxHandle) == NVSDK_NGX_Result_Success)
+        InOurHandle->ffxHandle = nullptr;
+
+    if (InOurHandle->artursHandle || InOurHandle->ffxHandle)
+        return NVSDK_NGX_Result_Fail;
 
     delete InOurHandle;
-
-    if (resultArturs != NVSDK_NGX_Result_Success || resultFfx != NVSDK_NGX_Result_Success)
-    {
-        return NVSDK_NGX_Result_Fail;
-    }
-
     return NVSDK_NGX_Result_Success;
 }
 
@@ -206,6 +209,8 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* I
 
     if (!InParameters || !InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    if (InOurHandle->releaseStarted || !InOurHandle->artursHandle || !InOurHandle->ffxHandle)
+        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
 
     // Assuming ffx can only do one fake frame
     uint32_t frameIndex = 1;
