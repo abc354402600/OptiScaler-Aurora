@@ -818,10 +818,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
                                                                NVSDK_NGX_Parameter* InParameters,
                                                                NVSDK_NGX_Handle** OutHandle)
 {
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
-        LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        if (result == NVSDK_NGX_Result_Success && *OutHandle)
+            LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        else
+            LOG_ERROR("Modded DLSSG feature creation failed: {0:X}", (UINT) result);
         return result;
     }
     else if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)
@@ -911,12 +918,19 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
                                                               NVSDK_NGX_Parameter* InParameters,
                                                               NVSDK_NGX_Handle** OutHandle)
 {
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
     LOG_FUNC();
 
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
-        LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        if (result == NVSDK_NGX_Result_Success && *OutHandle)
+            LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        else
+            LOG_ERROR("Modded DLSSG feature creation failed: {0:X}", (UINT) result);
         return result;
     }
     else if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)

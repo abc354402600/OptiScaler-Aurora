@@ -743,17 +743,16 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 {
     LOG_FUNC();
 
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
     if (!InCmdList)
     {
         LOG_ERROR("InCmdList is null");
         return NVSDK_NGX_Result_Fail;
     }
 
-    if (!OutHandle)
-    {
-        LOG_ERROR("OutHandle is null");
-        return NVSDK_NGX_Result_Fail;
-    }
 
     const State& state = State::Instance();
     const Config& cfg = *Config::Instance();
@@ -766,7 +765,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
         NVSDK_NGX_Result res = Nvngx_FG::D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, OutHandle);
 
-        if (*OutHandle)
+        if (res == NVSDK_NGX_Result_Success && *OutHandle)
         {
             LOG_INFO("Created modded DLSSG feature with HandleId: {}", (*OutHandle)->Id);
             HandleToFeature[(*OutHandle)->Id] = InFeatureID;
@@ -785,7 +784,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
 
             NVSDK_NGX_Result res = NVNGXProxy::D3D12_CreateFeature()(InCmdList, InFeatureID, InParameters, OutHandle);
 
-            if (*OutHandle)
+            if (res == NVSDK_NGX_Result_Success && *OutHandle)
             {
                 LOG_INFO("Native CreateFeature success, HandleId: {}", (*OutHandle)->Id);
                 HandleToFeature[(*OutHandle)->Id] = InFeatureID;

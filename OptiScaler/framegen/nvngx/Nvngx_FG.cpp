@@ -2,6 +2,7 @@
 
 #include <NVNGX_Parameter.h>
 #include "Nvngx_FG.h"
+#include <framegen/ProviderHandleCreation.h>
 
 #include "proxies/NVNGX_Proxy.h"
 #include "proxies/Ntdll_Proxy.h"
@@ -267,26 +268,16 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatur
 NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                                NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
-    auto* provider = getProvider();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    if (!OutHandle)
-        return NVSDK_NGX_Result_FAIL_InvalidParameter;
-
-    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
-    auto* proxyHandle = &pending->value;
-    *OutHandle = nullptr;
-
-    auto result = provider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &proxyHandle->nativeHandle);
-
-    if (result == NVSDK_NGX_Result_Success)
-        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
-
-    // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
-
-    return result;
+    return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
+                                NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
+                                [&](Nvngx_FG_Handle& handle)
+                                {
+                                    auto* provider = getProvider();
+                                    if (!provider)
+                                        return NVSDK_NGX_Result_Fail;
+                                    return provider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters,
+                                                                         &handle.nativeHandle);
+                                });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
@@ -476,51 +467,32 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature InFeatu
 NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Feature InFeatureID,
                                                 NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
-    auto* provider = getProvider();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    if (!OutHandle)
-        return NVSDK_NGX_Result_FAIL_InvalidParameter;
-
-    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
-    auto* proxyHandle = &pending->value;
-    *OutHandle = nullptr;
-    auto result = provider->VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, &proxyHandle->nativeHandle);
-
-    if (result == NVSDK_NGX_Result_Success)
-        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
-
-    // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
-
-    return result;
+    return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
+                                NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
+                                [&](Nvngx_FG_Handle& handle)
+                                {
+                                    auto* provider = getProvider();
+                                    if (!provider)
+                                        return NVSDK_NGX_Result_Fail;
+                                    return provider->VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters,
+                                                                          &handle.nativeHandle);
+                                });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuffer InCmdList,
                                                  NVSDK_NGX_Feature InFeatureID, NVSDK_NGX_Parameter* InParameters,
                                                  NVSDK_NGX_Handle** OutHandle)
 {
-    auto* provider = getProvider();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    if (!OutHandle)
-        return NVSDK_NGX_Result_FAIL_InvalidParameter;
-
-    auto pending = _handles.Prepare({ lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET });
-    auto* proxyHandle = &pending->value;
-    *OutHandle = nullptr;
-    auto result =
-        provider->VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, &proxyHandle->nativeHandle);
-
-    if (result == NVSDK_NGX_Result_Success)
-        *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(_handles.Publish(pending));
-
-    // LOG_TRACE("Handle given to the game: {:X}", (uint64_t) *OutHandle);
-
-    return result;
+    return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
+                                NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
+                                [&](Nvngx_FG_Handle& handle)
+                                {
+                                    auto* provider = getProvider();
+                                    if (!provider)
+                                        return NVSDK_NGX_Result_Fail;
+                                    return provider->VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID,
+                                                                           InParameters, &handle.nativeHandle);
+                                });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
