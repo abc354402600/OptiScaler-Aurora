@@ -1431,15 +1431,10 @@ static HRESULT hkD3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL Minimum
         {
             static void* lastDevice = nullptr;
 
-            if (lastDevice && lastDevice != *ppDevice && StreamlineProxy::IsD3D12Inited() &&
-                StreamlineProxy::SetD3DDevice()(*ppDevice) == sl::Result::eOk)
+            if (lastDevice && lastDevice != *ppDevice && StreamlineProxy::IsD3D12RuntimeInitialized())
             {
-                auto reflexConst = sl::ReflexOptions {};
-                reflexConst.mode = sl::ReflexMode::eLowLatency;
-                reflexConst.useMarkersToOptimize = false;
-
-                auto result = StreamlineProxy::ReflexSetOptions()(reflexConst);
-                LOG_TRACE("ReflexSetOptions");
+                if (!StreamlineProxy::BindD3D12Device(*ppDevice))
+                    LOG_ERROR("Deferred Streamline device/plugin initialization failed; FG is not ready");
             }
 
             lastDevice = *ppDevice;

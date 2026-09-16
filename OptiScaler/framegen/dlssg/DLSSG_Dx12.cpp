@@ -76,14 +76,8 @@ bool DLSSG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
         return false;
     }
 
-    if (!StreamlineProxy::IsD3D12Inited())
-    {
-        if (State::Instance().currentD3D12Device != nullptr &&
-            !StreamlineProxy::InitWithD3D12(State::Instance().currentD3D12Device))
-        {
-            return false;
-        }
-    }
+    if (!StreamlineProxy::IsD3D12Inited() && !StreamlineProxy::InitWithD3D12(State::Instance().currentD3D12Device))
+        return false;
 
     _width = desc->BufferDesc.Width;
     _height = desc->BufferDesc.Height;
@@ -180,14 +174,8 @@ bool DLSSG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
         return false;
     }
 
-    if (!StreamlineProxy::IsD3D12Inited())
-    {
-        if (State::Instance().currentD3D12Device != nullptr &&
-            !StreamlineProxy::InitWithD3D12(State::Instance().currentD3D12Device))
-        {
-            return false;
-        }
-    }
+    if (!StreamlineProxy::IsD3D12Inited() && !StreamlineProxy::InitWithD3D12(State::Instance().currentD3D12Device))
+        return false;
 
     _width = desc->Width;
     _height = desc->Height;
@@ -265,9 +253,8 @@ void DLSSG_Dx12::Activate()
 {
     LOG_DEBUG("");
 
-    if (!_isActive)
+    if (!_isActive && StreamlineProxy::IsD3D12Inited())
     {
-
         UpdateTarget();
         _isActive = true;
     }
@@ -280,7 +267,7 @@ void DLSSG_Dx12::Deactivate()
     _capturedFrames.Clear();
     _interpolationSuspended = false;
 
-    if (_isActive)
+    if (_isActive && StreamlineProxy::IsD3D12Inited())
     {
         sl::DLSSGOptions options {};
         options.mode = sl::DLSSGMode::eOff;
@@ -291,9 +278,8 @@ void DLSSG_Dx12::Deactivate()
         reflexConst.mode = sl::ReflexMode::eOff;
         reflexConst.useMarkersToOptimize = false;
         StreamlineProxy::ReflexSetOptions()(reflexConst);
-
-        _isActive = false;
     }
+    _isActive = false;
 }
 
 void DLSSG_Dx12::DestroyFGContext()
@@ -343,7 +329,7 @@ bool DLSSG_Dx12::Dispatch()
 {
     LOG_FUNC();
 
-    if (!IsActive() || IsPaused())
+    if (!StreamlineProxy::IsD3D12Inited() || !IsActive() || IsPaused())
         return false;
 
     UINT64 willDispatchFrame = 0;
@@ -642,8 +628,8 @@ void DLSSG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
 
     auto& state = State::Instance();
 
-    // If needed hooks are missing or XeFG proxy is not inited or FG swapchain is not created
-    if (!StreamlineProxy::LoadStreamline() || state.currentFGSwapchain == nullptr)
+    // Device selection and all required private SL functions must be ready.
+    if (!StreamlineProxy::IsD3D12Inited() || state.currentFGSwapchain == nullptr)
         return;
 
     if (state.isShuttingDown)

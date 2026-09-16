@@ -1292,7 +1292,8 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
             StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentEnd, *localToken);
 
         LOG_DEBUG("Calling ReflexSleep");
-        StreamlineProxy::ReflexSleep()(*localToken);
+        if (const auto sleep = StreamlineProxy::ReflexSleep())
+            sleep(*localToken);
     }
 
     if (state.swapchainInteropApi == SwapchainInteropApi::None)

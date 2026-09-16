@@ -47,7 +47,7 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
 #endif
 
     static bool skip = false;
-    if (State::Instance().activeFgOutput == FGOutput::DLSSG &&
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
         Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default() && State::Instance().currentFG &&
         State::Instance().currentFG->IsActive() && !State::Instance().currentFG->IsPaused())
     {
@@ -55,13 +55,19 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
         {
             uint32_t frameCount = (uint32_t) _lastFrameId[SIMULATION_START] + 1;
 
-            sl::FrameToken* frameToken;
-            StreamlineProxy::GetNewFrameToken()(frameToken, &frameCount);
+            sl::FrameToken* frameToken = nullptr;
+            const auto getToken = StreamlineProxy::GetNewFrameToken();
+            const auto sleep = StreamlineProxy::ReflexSleep();
+            if (!getToken || !sleep || getToken(frameToken, &frameCount) != sl::Result::eOk || !frameToken)
+            {
+                _lastSleepDev = pDev;
+                return o_NvAPI_D3D_Sleep(pDev);
+            }
 
             LOG_TRACE("Sleep for frame {}", frameCount);
 
             skip = true;
-            StreamlineProxy::ReflexSleep()(*frameToken);
+            sleep(*frameToken);
             skip = false;
 
             return NVAPI_OK;
@@ -218,14 +224,17 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetLatencyMarker(IUnknown* pDev,
                 State::Instance().reflexFrameId = pSetLatencyMarkerParams->frameID;
             }
 
-            sl::FrameToken* frameToken;
+            sl::FrameToken* frameToken = nullptr;
             uint32_t frameCount = (uint32_t) pSetLatencyMarkerParams->frameID;
-            StreamlineProxy::GetNewFrameToken()(frameToken, &frameCount);
+            const auto getToken = StreamlineProxy::GetNewFrameToken();
+            const auto setMarker = StreamlineProxy::PCLSetMarker();
+            if (!getToken || !setMarker || getToken(frameToken, &frameCount) != sl::Result::eOk || !frameToken)
+                return o_NvAPI_D3D_SetLatencyMarker(pDev, pSetLatencyMarkerParams);
 
             LOG_TRACE("{} for frame {}", magic_enum::enum_name(marker), frameCount);
 
             skip[index] = true;
-            StreamlineProxy::PCLSetMarker()(marker, *frameToken);
+            setMarker(marker, *frameToken);
             skip[index] = false;
 
             return NvAPI_Status::NVAPI_OK;

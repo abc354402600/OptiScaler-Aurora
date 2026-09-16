@@ -4,6 +4,7 @@
 #include "Util.h"
 #include "Config.h"
 #include "Logger.h"
+#include "FeatureBindingLifecycle.h"
 
 #include <proxies/Ntdll_Proxy.h>
 #include <proxies/KernelBase_Proxy.h>
@@ -67,7 +68,7 @@ class StreamlineProxy
     static bool LoadStreamline()
     {
         if (_dll != nullptr)
-            return true;
+            return HookStreamline(_dll);
 
         auto owner = State::GetOwner();
         if (State::Instance().activeFgOutput == FGOutput::DLSSG &&
@@ -281,6 +282,129 @@ class StreamlineProxy
         return pcl;
     }
 
+    // Based on upstream PR 1157 (7543d143). Resolve through this interposer
+    // only AFTER device selection; the bundled plugin may not be the active one.
+    struct ActiveFunctions
+    {
+        PFN_slDLSSGSetOptions DLSSGSetOptions = nullptr;
+        PFN_slDLSSGGetState DLSSGGetState = nullptr;
+        PFN_slReflexGetState ReflexGetState = nullptr;
+        PFN_slReflexSleep ReflexSleep = nullptr;
+        PFN_slReflexSetOptions ReflexSetOptions = nullptr;
+        PFN_slReflexSetCameraData ReflexSetCameraData = nullptr;
+        PFN_slReflexGetPredictedCameraData ReflexGetPredictedCameraData = nullptr;
+        PFN_slPCLGetState PCLGetState = nullptr;
+        PFN_slPCLSetMarker PCLSetMarker = nullptr;
+        PFN_slPCLSetOptions PCLSetOptions = nullptr;
+        HMODULE DLSSG = nullptr;
+        HMODULE Reflex = nullptr;
+        HMODULE PCL = nullptr;
+    };
+
+    template <typename T>
+    static bool ResolveActiveFeature(sl::Feature feature, const char* name, T& target, HMODULE& module,
+                                     bool required = true)
+    {
+        void* function = nullptr;
+        const auto result = _slGetFeatureFunction(feature, name, function);
+        target = result == sl::Result::eOk ? reinterpret_cast<T>(function) : nullptr;
+        if (!target)
+        {
+            if (required)
+                LOG_ERROR("Active Streamline function {} unavailable: {}", name, (int) result);
+            return !required;
+        }
+        HMODULE owner = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                reinterpret_cast<LPCWSTR>(function), &owner))
+        {
+            LOG_WARN("Cannot identify module for active Streamline function {}", name);
+        }
+        // The interposer is the authority for function identity. A hook trampoline
+        // need not live inside an image, and forwarded functions may have different owners.
+        if (!module)
+            module = owner;
+        return true;
+    }
+
+    static bool IsD3D12RuntimeInitialized() { return _d3d12Binding.RuntimeInitialized(); }
+
+    // Also used by the deferred second-device hook. No bundled-export fallback:
+    // a plugin which the active interposer did not initialize is unsafe to call.
+    static bool BindD3D12Device(void* device)
+    {
+        if (!_slSetD3DDevice || !_slGetFeatureFunction)
+        {
+            LOG_ERROR("Streamline device/feature binding exports are missing");
+            return false;
+        }
+        return _d3d12Binding.Bind(
+            device,
+            [](void* selected)
+            {
+                const auto result = _slSetD3DDevice(selected);
+                if (result != sl::Result::eOk)
+                    LOG_ERROR("Streamline device binding failed: {}", (int) result);
+                return result == sl::Result::eOk;
+            },
+            []() -> std::optional<ActiveFunctions>
+            {
+                ActiveFunctions functions;
+                bool ok = true;
+                ok &= ResolveActiveFeature(sl::kFeatureDLSS_G, "slDLSSGSetOptions", functions.DLSSGSetOptions,
+                                           functions.DLSSG, true);
+                ok &= ResolveActiveFeature(sl::kFeatureDLSS_G, "slDLSSGGetState", functions.DLSSGGetState,
+                                           functions.DLSSG, true);
+                ok &= ResolveActiveFeature(sl::kFeatureReflex, "slReflexGetState", functions.ReflexGetState,
+                                           functions.Reflex, true);
+                ok &= ResolveActiveFeature(sl::kFeatureReflex, "slReflexSleep", functions.ReflexSleep, functions.Reflex,
+                                           true);
+                ok &= ResolveActiveFeature(sl::kFeatureReflex, "slReflexSetOptions", functions.ReflexSetOptions,
+                                           functions.Reflex, true);
+                ok &= ResolveActiveFeature(sl::kFeatureReflex, "slReflexSetCameraData", functions.ReflexSetCameraData,
+                                           functions.Reflex, false);
+                ok &= ResolveActiveFeature(sl::kFeatureReflex, "slReflexGetPredictedCameraData",
+                                           functions.ReflexGetPredictedCameraData, functions.Reflex, false);
+                ok &=
+                    ResolveActiveFeature(sl::kFeaturePCL, "slPCLGetState", functions.PCLGetState, functions.PCL, false);
+                ok &= ResolveActiveFeature(sl::kFeaturePCL, "slPCLSetMarker", functions.PCLSetMarker, functions.PCL,
+                                           true);
+                ok &= ResolveActiveFeature(sl::kFeaturePCL, "slPCLSetOptions", functions.PCLSetOptions, functions.PCL,
+                                           true);
+                if (!ok)
+                    return std::nullopt;
+                sl::ReflexOptions options {};
+                options.mode = (State::Instance().gameQuirks & GameQuirk::CreateSLOnThe2ndDevice)
+                                   ? sl::ReflexMode::eLowLatency
+                                   : sl::ReflexMode::eOff;
+                options.useMarkersToOptimize = false;
+                const auto result = functions.ReflexSetOptions(options);
+                if (result != sl::Result::eOk)
+                {
+                    LOG_ERROR("Active Streamline Reflex initialization failed: {}", (int) result);
+                    return std::nullopt;
+                }
+                return functions;
+            },
+            [](const ActiveFunctions& functions)
+            {
+                _slDLSSGSetOptions = functions.DLSSGSetOptions;
+                _slDLSSGGetState = functions.DLSSGGetState;
+                _slReflexGetState = functions.ReflexGetState;
+                _slReflexSleep = functions.ReflexSleep;
+                _slReflexSetOptions = functions.ReflexSetOptions;
+                _slReflexSetCameraData = functions.ReflexSetCameraData;
+                _slReflexGetPredictedCameraData = functions.ReflexGetPredictedCameraData;
+                _slPCLGetState = functions.PCLGetState;
+                _slPCLSetMarker = functions.PCLSetMarker;
+                _slPCLSetOptions = functions.PCLSetOptions;
+                State::Instance().optiSlDLSSG = functions.DLSSG;
+                State::Instance().optiSlReflex = functions.Reflex;
+                State::Instance().optiSlPCL = functions.PCL;
+                LOG_INFO("Active Streamline DLSSG/Reflex/PCL functions ready");
+            });
+    }
+
     static feature_version Version()
     {
         if (_slVersion.major == 0)
@@ -295,8 +419,12 @@ class StreamlineProxy
 
     static bool InitWithD3D12(ID3D12Device* device)
     {
-        if (_isD3D12Inited)
+        if (_d3d12Binding.Ready())
             return true;
+        if (!device)
+            return false;
+        if (_d3d12Binding.RuntimeInitialized())
+            return _d3d12Binding.CanAutoBind(device) && BindD3D12Device(device);
 
         if (!StreamlineProxy::LoadStreamline())
             return false;
@@ -390,33 +518,17 @@ class StreamlineProxy
 
         State::EnableChecks(owner);
 
-        if (initResult == sl::Result::eOk)
+        if (initResult != sl::Result::eOk)
         {
-            State::Instance().optiSlDLSSG = StreamlineProxy::HookStreamlineDLSSG();
-            State::Instance().optiSlReflex = StreamlineProxy::HookStreamlineReflex();
-            State::Instance().optiSlPCL = StreamlineProxy::HookStreamlinePCL();
-
-            if (State::Instance().gameQuirks & GameQuirk::CreateSLOnThe2ndDevice)
-            {
-                // slSetD3DDevice moved to hkD3D12CreateDevice
-                _isD3D12Inited = true;
-            }
-            else
-            {
-                auto result = _slSetD3DDevice(device);
-                if (result == sl::Result::eOk)
-                {
-                    auto reflexConst = sl::ReflexOptions {};
-                    reflexConst.mode = sl::ReflexMode::eOff;
-                    reflexConst.useMarkersToOptimize = false;
-
-                    result = _slReflexSetOptions(reflexConst);
-                    _isD3D12Inited = result == sl::Result::eOk;
-                }
-            }
+            LOG_ERROR("Private Streamline initialization failed: {}", (int) initResult);
+            return false;
         }
 
-        return _isD3D12Inited;
+        const bool deferred = static_cast<bool>(State::Instance().gameQuirks & GameQuirk::CreateSLOnThe2ndDevice);
+        _d3d12Binding.MarkInitialized(deferred);
+        // The first Witcher device initializes SL, but must not publish readiness.
+        // The second-device hook selects the real device and binds its functions.
+        return !deferred && BindD3D12Device(device);
     }
 
     static bool InitWithD3D11(ID3D11Device* device)
@@ -460,7 +572,7 @@ class StreamlineProxy
 
     static bool IsD3D11Inited() { return _isD3D11Inited; }
 
-    static bool IsD3D12Inited() { return _isD3D12Inited; }
+    static bool IsD3D12Inited() { return _d3d12Binding.Ready(); }
 
     static PFN_slInit Init() { return _slInit; }
     static PFN_slShutdown Shutdown() { return _slShutdown; }
@@ -484,25 +596,55 @@ class StreamlineProxy
     static PFN_CreateDxgiFactory1 CreateDxgiFactory1() { return _slCreateDxgiFactory1; }
     static PFN_CreateDxgiFactory2 CreateDxgiFactory2() { return _slCreateDxgiFactory2; }
 
-    static PFN_slDLSSGSetOptions DLSSGSetOptions() { return _slDLSSGSetOptions; }
-    static PFN_slDLSSGGetState DLSSGGetState() { return _slDLSSGGetState; }
+    static PFN_slDLSSGSetOptions DLSSGSetOptions()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slDLSSGSetOptions;
+    }
+    static PFN_slDLSSGGetState DLSSGGetState()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slDLSSGGetState;
+    }
 
-    static PFN_slReflexGetState ReflexGetState() { return _slReflexGetState; }
-    static PFN_slReflexSleep ReflexSleep() { return _slReflexSleep; }
-    static PFN_slReflexSetOptions ReflexSetOptions() { return _slReflexSetOptions; }
-    static PFN_slReflexSetCameraData ReflexSetCameraData() { return _slReflexSetCameraData; }
-    static PFN_slReflexGetPredictedCameraData ReflexGetPredictedCameraData() { return _slReflexGetPredictedCameraData; }
+    static PFN_slReflexGetState ReflexGetState()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slReflexGetState;
+    }
+    static PFN_slReflexSleep ReflexSleep()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slReflexSleep;
+    }
+    static PFN_slReflexSetOptions ReflexSetOptions()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slReflexSetOptions;
+    }
+    static PFN_slReflexSetCameraData ReflexSetCameraData()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slReflexSetCameraData;
+    }
+    static PFN_slReflexGetPredictedCameraData ReflexGetPredictedCameraData()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slReflexGetPredictedCameraData;
+    }
 
-    static PFN_slPCLGetState PCLGetState() { return _slPCLGetState; }
-    static PFN_slPCLSetMarker PCLSetMarker() { return _slPCLSetMarker; }
-    static PFN_slPCLSetOptions PCLSetOptions() { return _slPCLSetOptions; }
+    static PFN_slPCLGetState PCLGetState()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slPCLGetState;
+    }
+    static PFN_slPCLSetMarker PCLSetMarker()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slPCLSetMarker;
+    }
+    static PFN_slPCLSetOptions PCLSetOptions()
+    {
+        return _d3d12Binding.RuntimeInitialized() && !_d3d12Binding.Ready() ? nullptr : _slPCLSetOptions;
+    }
 
   private:
     inline static HMODULE _dll = nullptr;
     inline static feature_version _slVersion {};
     inline static bool _isInited = false;
     inline static bool _isD3D11Inited = false;
-    inline static bool _isD3D12Inited = false;
+    inline static FeatureBindingLifecycle _d3d12Binding;
 
     // Interposer
     inline static PFN_slInit _slInit = nullptr;
