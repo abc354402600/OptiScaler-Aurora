@@ -5,7 +5,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Init(unsigned long long InApplicationId, 
                                             ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                             NVSDK_NGX_Version InSDKVersion)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_Init)
         return _DLSSG_D3D12_Init(InApplicationId, InApplicationDataPath, InDevice, InFeatureInfo, InSDKVersion);
     return NVSDK_NGX_Result_Fail;
 }
@@ -15,7 +15,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Init_Ext(unsigned long long InApplication
                                                 NVSDK_NGX_Version InSDKVersion,
                                                 const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_Init_Ext)
         return _DLSSG_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
     return NVSDK_NGX_Result_Fail;
 }
@@ -38,7 +38,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature In
                                                             const NVSDK_NGX_Parameter* InParameters,
                                                             size_t* OutSizeInBytes)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_GetScratchBufferSize)
         return _DLSSG_D3D12_GetScratchBufferSize(InFeatureId, InParameters, OutSizeInBytes);
     return NVSDK_NGX_Result_Fail;
 }
@@ -47,7 +47,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_CreateFeature(ID3D12GraphicsCommandList* 
                                                      NVSDK_NGX_Feature InFeatureID, NVSDK_NGX_Parameter* InParameters,
                                                      NVSDK_NGX_Handle** OutHandle)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_CreateFeature)
     {
         return _DLSSG_D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, OutHandle);
     }
@@ -56,7 +56,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_CreateFeature(ID3D12GraphicsCommandList* 
 
 NVSDK_NGX_Result Nvngx_DllProxy::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_ReleaseFeature)
     {
         return _DLSSG_D3D12_ReleaseFeature(InHandle);
     }
@@ -68,7 +68,7 @@ Nvngx_DllProxy::D3D12_GetFeatureRequirements(IDXGIAdapter* Adapter,
                                              const NVSDK_NGX_FeatureDiscoveryInfo* FeatureDiscoveryInfo,
                                              NVSDK_NGX_FeatureRequirement* OutSupported)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_GetFeatureRequirements)
         return _DLSSG_D3D12_GetFeatureRequirements(Adapter, FeatureDiscoveryInfo, OutSupported);
     return NVSDK_NGX_Result_Fail;
 }
@@ -142,7 +142,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
                                                        NVSDK_NGX_Parameter* InParameters,
                                                        PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_EvaluateFeature)
     {
         // Make a copy of the depth going to the frame generator
         // Fixes an issue with the depth being corrupted on AMD under Windows
@@ -191,7 +191,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
 
 NVSDK_NGX_Result Nvngx_DllProxy::D3D12_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
 {
-    if (isDx12Available())
+    if (isDx12Available() && _DLSSG_D3D12_PopulateParameters_Impl)
         return _DLSSG_D3D12_PopulateParameters_Impl(InParameters);
     return NVSDK_NGX_Result_Fail;
 }
@@ -202,7 +202,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Init(unsigned long long InApplicationId,
                                              const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                              NVSDK_NGX_Version InSDKVersion)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_Init)
         return _DLSSG_VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
                                   InFeatureInfo, InSDKVersion);
     return NVSDK_NGX_Result_Fail;
@@ -214,7 +214,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Init_Ext(unsigned long long InApplicatio
                                                  NVSDK_NGX_Version InSDKVersion,
                                                  const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_Init_Ext)
         return _DLSSG_VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InSDKVersion,
                                       InFeatureInfo);
     return NVSDK_NGX_Result_Fail;
@@ -227,7 +227,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_Init_Ext2(unsigned long long InApplicati
                                                   NVSDK_NGX_Version InSDKVersion,
                                                   const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_Init_Ext2)
         return _DLSSG_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
                                        InGDPA, InSDKVersion, InFeatureInfo);
     return NVSDK_NGX_Result_Fail;
@@ -251,7 +251,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature I
                                                              const NVSDK_NGX_Parameter* InParameters,
                                                              size_t* OutSizeInBytes)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_GetScratchBufferSize)
         return _DLSSG_VULKAN_GetScratchBufferSize(InFeatureId, InParameters, OutSizeInBytes);
     return NVSDK_NGX_Result_Fail;
 }
@@ -259,7 +259,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature I
 NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_CreateFeature(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Feature InFeatureID,
                                                       NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_CreateFeature)
     {
         return _DLSSG_VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
     }
@@ -270,7 +270,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_CreateFeature1(VkDevice InDevice, VkComm
                                                        NVSDK_NGX_Feature InFeatureID, NVSDK_NGX_Parameter* InParameters,
                                                        NVSDK_NGX_Handle** OutHandle)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_CreateFeature1)
     {
         return _DLSSG_VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
     }
@@ -279,7 +279,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_CreateFeature1(VkDevice InDevice, VkComm
 
 NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_ReleaseFeature)
     {
         return _DLSSG_VULKAN_ReleaseFeature(InHandle);
     }
@@ -291,7 +291,7 @@ Nvngx_DllProxy::VULKAN_GetFeatureRequirements(const VkInstance Instance, const V
                                               const NVSDK_NGX_FeatureDiscoveryInfo* FeatureDiscoveryInfo,
                                               NVSDK_NGX_FeatureRequirement* OutSupported)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_GetFeatureRequirements)
         return _DLSSG_VULKAN_GetFeatureRequirements(Instance, PhysicalDevice, FeatureDiscoveryInfo, OutSupported);
     return NVSDK_NGX_Result_Fail;
 }
@@ -301,7 +301,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_EvaluateFeature(VkCommandBuffer InCmdLis
                                                         NVSDK_NGX_Parameter* InParameters,
                                                         PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_EvaluateFeature)
     {
         return _DLSSG_VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback);
     }
@@ -311,7 +311,7 @@ NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_EvaluateFeature(VkCommandBuffer InCmdLis
 
 NVSDK_NGX_Result Nvngx_DllProxy::VULKAN_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
 {
-    if (isVulkanAvailable())
+    if (isVulkanAvailable() && _DLSSG_VULKAN_PopulateParameters_Impl)
         return _DLSSG_VULKAN_PopulateParameters_Impl(InParameters);
     return NVSDK_NGX_Result_Fail;
 }

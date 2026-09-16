@@ -32,3 +32,12 @@ This fixes **C++ provider object publication**, not successful **native API/devi
 Other existing boundaries remain: shared HUD-copy resources, Config/global State accesses, teardown after DLL/static lifetime, and caller behavior after NotInitialized. A game is not guaranteed to retry a failed call, so real-game testing remains required. There is no automatic hidden native fallback for Pending.
 
 Native SL1, the established 6X patches, DualFeature=false, installed games and driver settings are unchanged. No installer revival, release, main-branch merge or replacement archive.
+## DLL export and destructor follow-up
+
+The same failure-path review found an additional concrete defect in `Nvngx_DllProxy`: `depthCopy[2]` had no initializer. Its real derived providers have user-provided constructors, so construction does not reliably zero this base member. The destructor's SAFE_RELEASE operations could read/release indeterminate pointers, including when the publication factory rejects an unavailable candidate. Both pointers now start null.
+
+18 additional native forwarding paths only checked generic API availability (the Init export), then called another possibly absent export. Every such call now also checks its own target pointer, including Init_Ext, Create, Release, Evaluate, query and parameter routes. Existing four shutdown guards remain. An absent Evaluate export is rejected before depth/parameter mutation. Availability/fallback policy is unchanged; optional missing exports return failure rather than triggering a null call.
+
+**69 further executable checks** compile all 22 actual DLL forwarder bodies with absent, present and unavailable exports. They also use the exact production depth pointer member declaration and destructor in a stand-in base with a user-provided derived constructor, constructed over nonzero storage: no resource cleanup before allocation, and one valid allocated resource released once. SDK and resource operations are test stand-ins; no GPU behavior is established.
+
+A separate remaining source finding is Combo's partial Release: it deletes its wrapper even when a child Release fails, while the outer registry correctly retains failed-release handles for retry. That can leave a retained registry token pointing to freed Combo storage. It requires an explicit retryable child-ownership fix and is not covered by the publication/export changes above.
