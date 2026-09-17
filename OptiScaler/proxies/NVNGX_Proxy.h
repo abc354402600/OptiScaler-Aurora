@@ -847,51 +847,61 @@ class NVNGXProxy
 
     static PFN_D3D12_DestroyParameters D3D12_DestroyParameters()
     {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_DestroyParameters;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.D3D12_DestroyParameters ? +[](NVSDK_NGX_Parameter* InParameters) -> NVSDK_NGX_Result
+        {
+            return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.D3D12_DestroyParameters(InParameters); });
+        } : nullptr;
     }
 
     static PFN_D3D12_CreateFeature D3D12_CreateFeature()
     {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_CreateFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.D3D12_CreateFeature ? +[](ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
+                                                    NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle) -> NVSDK_NGX_Result
+        {
+            if (!OutHandle)
+                return NVSDK_NGX_Result_FAIL_InvalidParameter;
+            *OutHandle = nullptr;
+            return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, OutHandle); });
+        } : nullptr;
     }
 
     static PFN_D3D12_EvaluateFeature D3D12_EvaluateFeature()
     {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_EvaluateFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.D3D12_EvaluateFeature ? +[](ID3D12GraphicsCommandList* InCmdList,
+                                                      const NVSDK_NGX_Handle* InFeatureHandle,
+                                                      const NVSDK_NGX_Parameter* InParameters,
+                                                      PFN_NVSDK_NGX_ProgressCallback InCallback) -> NVSDK_NGX_Result
+        {
+            return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.D3D12_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback); });
+        } : nullptr;
     }
 
     static PFN_D3D12_ReleaseFeature D3D12_ReleaseFeature()
     {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_ReleaseFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.D3D12_ReleaseFeature ? +[](NVSDK_NGX_Handle* InHandle) -> NVSDK_NGX_Result
+        {
+            return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.D3D12_ReleaseFeature(InHandle); });
+        } : nullptr;
     }
 
     static PFN_D3D12_Shutdown D3D12_Shutdown()
     {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_Shutdown;
+        return _module.D3D12_Shutdown ? +[]() { return ShutdownDx12(nullptr); } : nullptr;
     }
 
-    static PFN_D3D12_Shutdown1 D3D12_Shutdown1()
-    {
-        if (!IsDx12Inited())
-            return nullptr;
-
-        return _module.D3D12_Shutdown1;
-    }
+    static PFN_D3D12_Shutdown1 D3D12_Shutdown1() { return _module.D3D12_Shutdown1 ? &ShutdownDx12 : nullptr; }
 
     // Vulkan
     static bool InitVulkan(VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
@@ -994,59 +1004,77 @@ class NVNGXProxy
 
     static PFN_VULKAN_DestroyParameters VULKAN_DestroyParameters()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_DestroyParameters;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.VULKAN_DestroyParameters ? +[](NVSDK_NGX_Parameter* InParameters) -> NVSDK_NGX_Result
+        {
+            return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.VULKAN_DestroyParameters(InParameters); });
+        } : nullptr;
     }
 
     static PFN_VULKAN_CreateFeature VULKAN_CreateFeature()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_CreateFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.VULKAN_CreateFeature ? +[](VkCommandBuffer InCmdBuffer, NVSDK_NGX_Feature InFeatureID,
+                                                     NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle) -> NVSDK_NGX_Result
+        {
+            if (!OutHandle)
+                return NVSDK_NGX_Result_FAIL_InvalidParameter;
+            *OutHandle = nullptr;
+            return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle); });
+        } : nullptr;
     }
 
     static PFN_VULKAN_CreateFeature1 VULKAN_CreateFeature1()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_CreateFeature1;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.VULKAN_CreateFeature1 ? +[](VkDevice InDevice, VkCommandBuffer InCmdList,
+                                                      NVSDK_NGX_Feature InFeatureID, NVSDK_NGX_Parameter* InParameters,
+                                                      NVSDK_NGX_Handle** OutHandle) -> NVSDK_NGX_Result
+        {
+            if (!OutHandle)
+                return NVSDK_NGX_Result_FAIL_InvalidParameter;
+            *OutHandle = nullptr;
+            return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle); }, InDevice);
+        } : nullptr;
     }
 
     static PFN_VULKAN_EvaluateFeature VULKAN_EvaluateFeature()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_EvaluateFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.VULKAN_EvaluateFeature ? +[](VkCommandBuffer InCmdList,
+                                                       const NVSDK_NGX_Handle* InFeatureHandle,
+                                                       const NVSDK_NGX_Parameter* InParameters,
+                                                       PFN_NVSDK_NGX_ProgressCallback InCallback) -> NVSDK_NGX_Result
+        {
+            return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback); });
+        } : nullptr;
     }
 
     static PFN_VULKAN_ReleaseFeature VULKAN_ReleaseFeature()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_ReleaseFeature;
+        // Availability is stable; admission is checked when the pointer is called.
+        // This also protects pointers cached before a concurrent shutdown.
+        return _module.VULKAN_ReleaseFeature ? +[](NVSDK_NGX_Handle* InHandle) -> NVSDK_NGX_Result
+        {
+            return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
+                [&] { return _module.VULKAN_ReleaseFeature(InHandle); });
+        } : nullptr;
     }
 
     static PFN_VULKAN_Shutdown VULKAN_Shutdown()
     {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_Shutdown;
+        return _module.VULKAN_Shutdown ? +[]() { return ShutdownVulkan(nullptr); } : nullptr;
     }
 
-    static PFN_VULKAN_Shutdown1 VULKAN_Shutdown1()
-    {
-        if (!IsVulkanInited())
-            return nullptr;
-
-        return _module.VULKAN_Shutdown1;
-    }
+    static PFN_VULKAN_Shutdown1 VULKAN_Shutdown1() { return _module.VULKAN_Shutdown1 ? &ShutdownVulkan : nullptr; }
 
     static PFN_UpdateFeature UpdateFeature()
     {

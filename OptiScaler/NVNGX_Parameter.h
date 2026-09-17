@@ -275,7 +275,7 @@ bool TryDestroyNGXParameters(NVSDK_NGX_Parameter* InParameters, PFN_DestroyNGXPa
             LOG_INFO("Calling NVFree");
             result = NVFree(InParameters);
             LOG_INFO("Calling NVFree result: {0:X}", (UINT) result);
-            return true;
+            return result == NVSDK_NGX_Result_Success;
         }
         else
             return false;

@@ -7,12 +7,14 @@
 
 // Tracks native Init/Shutdown ownership per API. Callbacks run without the
 // metadata lock. Overlapping/reentrant transitions fail rather than waiting on
-// a native DLL or loader callback. This does not yet lease Evaluate/Create calls.
+// a native DLL or loader callback. Operation admission covers the API as a whole
+// because legacy native handles do not all expose a reliable device association.
 class NativeDeviceLifecycle
 {
     std::mutex _mutex;
     std::unordered_map<const void*, bool> _devices;
     bool _transition = false;
+    size_t _operations = 0;
     const void* _target = nullptr;
     std::atomic_size_t _usable { 0 };
 
@@ -58,6 +60,28 @@ class NativeDeviceLifecycle
     }
 
     template <typename Result, typename Callback>
+    Result RunOperation(Result unavailable, Callback&& callback, const void* device = nullptr)
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            if (_transition || _devices.empty() || (device && !_devices.contains(device)))
+                return unavailable;
+            ++_operations;
+        }
+        // Native code runs without the metadata mutex, including callbacks.
+        struct Completion
+        {
+            NativeDeviceLifecycle& owner;
+            ~Completion()
+            {
+                std::scoped_lock lock(owner._mutex);
+                --owner._operations;
+            }
+        } completion { *this };
+        return std::forward<Callback>(callback)();
+    }
+
+    template <typename Result, typename Callback>
     Result Initialize(const void* device, Result success, Result invalid, Result busy, Callback&& callback)
     {
         if (!device)
@@ -68,6 +92,8 @@ class NativeDeviceLifecycle
                 return busy;
             if (_devices.contains(device))
                 return success;
+            if (_operations)
+                return busy;
             // Allocate bookkeeping before the native callback succeeds.
             _devices.emplace(device, false);
             _transition = true;
@@ -96,6 +122,8 @@ class NativeDeviceLifecycle
                 return busy;
             if (device ? !_devices.contains(device) : _devices.empty())
                 return success; // Nothing owned; do not call a native shutdown.
+            if (_operations)
+                return busy; // No waiting or deferred native teardown.
             _transition = true;
             _target = device; // nullptr means all devices in this API.
             UpdateUsable();

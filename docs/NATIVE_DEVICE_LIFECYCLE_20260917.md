@@ -24,3 +24,19 @@ This is an Init/Shutdown ownership checkpoint, not full concurrent operation adm
 Replacement FG providers have separate device/handle ownership and shutdown semantics, not covered by this native registry. Outer adapters still ignore their shutdown result. Global module loading, mutable shared depth/HUD resources and general State/Config ownership are not solved here. Aurora still has a single current-device cache; native multidevice bookkeeping does not make every renderer feature multidevice-safe. The process-exit skip intentionally leaves native bookkeeping until DLL teardown.
 
 The user has deferred real-game validation and authorized synchronization to aurora after code work/review/build completion. Remaining lifecycle work means that gate has not yet been reached. No main-branch merge or Release is performed by this checkpoint.
+
+## Init/Shutdown checkpoint validation
+
+Commit `3df849934112a115ef09fa280ffe810337b4042c` was pushed to Compatibility-fixes. [Windows DLL build, CPU checks and package](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35188944901) and [incremental format](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/35188944895) succeeded. Job `105097010598` confirms 37 device checks and 43 shutdown checks passed. Artifact `OptiScaler_Aurora_v1.0_20260917_compat_3df84993.7z` was uploaded (ID `10484080454`, 234774490 bytes).
+
+## Native operation admission follow-up
+
+Nine D3D12/Vulkan Create/Evaluate/Release/DestroyParameters getters now return same-signature guarded entry points rather than raw native pointers. Export availability is stable after module initialization; readiness is checked at invocation, including when a caller cached a pointer before shutdown. Create outputs are cleared on rejected admission, and Vulkan CreateFeature1 additionally verifies its explicitly supplied device. Shutdown getters also route through the ownership helper so callers cannot bypass it.
+
+An operation briefly increments an API-local active count and releases the metadata mutex before foreign code. Init of a new device and owned-device/global Shutdown reject while that API has active guarded calls. During a transition new calls are rejected. Exceptions unwind the active count. There is no wait across a native callback and no deferred teardown. Calls on another API remain independent. This is conservatively API-wide because legacy native handle and command-buffer routes do not expose complete device/generation ownership; it does not pretend those associations have been solved.
+
+The changed Busy return exposed an existing bug in TryDestroyNGXParameters: it returned true even if native DestroyParameters failed. It now reports success only for native Success, preserving the existing internal-table deletion and unknown-table policy.
+
+Focused tests now contain **55 device/admission checks** (18 added) and **236 new extracted-operation/parameter-destruction checks** covering all nine actual getters, cached pointers before/during/after shutdown, callback reentry, output clearing, absent exports, explicit unknown Vulkan device, retries, both shutdown getters and native destroy failure. The existing 43 shutdown routing checks were rerun because the shared lifecycle header changed; they passed. Local checks use counted native stand-ins. Cumulative MSVC validation will be recorded after this follow-up is pushed.
+
+Still open: calls bypassing these getters, parameter acquisition/query routes, old native handles after a device generation closes/reopens, D3D11, replacement-provider lifecycle, and global module publication. Existing higher-level owners may discard resources after a failed release; no general ownership redesign is claimed. These checks do not establish in-game behavior or complete the main-branch merge gate.

@@ -114,5 +114,57 @@ int main()
                             return 0;
                         }) == 0);
     check(dx.IsReady(&first));
+    // In-flight operations block both global and device teardown, without
+    // holding the metadata lock across their callbacks. A second API is free.
+    check(dx.RunOperation(-7,
+                          [&]
+                          {
+                              check(dx.Shutdown(&first, 0, -7, success) == -7);
+                              check(dx.Shutdown(&second, 0, -7, success) == -7);
+                              check(dx.Shutdown(nullptr, 0, -7, success) == -7);
+                              check(initialize(dx, &absent) == -7);
+                              check(initialize(dx, &first) == 0);
+                              check(vk.RunOperation(-7, [] { return 19; }) == 19);
+                              check(dx.RunOperation(-7, [] { return 21; }) == 21);
+                              return -4;
+                          }) == -4);
+    check(dx.RunOperation(-7, success, &absent) == -7);
+    threw = false;
+    try
+    {
+        dx.RunOperation(-7, []() -> int { throw std::runtime_error("evaluate"); });
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    check(threw);
+    std::promise<void> operating, finishOperation;
+    auto finish = finishOperation.get_future();
+    auto operation = std::async(std::launch::async,
+                                [&]
+                                {
+                                    return dx.RunOperation(-7,
+                                                           [&]
+                                                           {
+                                                               operating.set_value();
+                                                               finish.wait();
+                                                               return 29;
+                                                           });
+                                });
+    check(operating.get_future().wait_for(5s) == std::future_status::ready);
+    auto closeDuringOperation = std::async(std::launch::async, [&] { return dx.Shutdown(nullptr, 0, -7, success); });
+    check(closeDuringOperation.wait_for(5s) == std::future_status::ready && closeDuringOperation.get() == -7);
+    finishOperation.set_value();
+    check(operation.wait_for(5s) == std::future_status::ready && operation.get() == 29);
+    check(dx.Shutdown(nullptr, 0, -7,
+                      [&]
+                      {
+                          check(dx.RunOperation(-7, success) == -7);
+                          return 0;
+                      }) == 0);
+    check(dx.RunOperation(-7, success) == -7);
+    check(initialize(dx, &first) == 0);
+    check(dx.RunOperation(-7, [] { return 31; }, &first) == 31);
     std::cout << "PASS: " << checks << " native device lifecycle checks\n";
 }
