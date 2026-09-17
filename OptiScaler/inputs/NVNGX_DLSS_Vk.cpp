@@ -28,7 +28,6 @@ static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Vk>> VkCo
 static int evalCounter = 0;
 static bool shutdown = false;
 static thread_local bool _skipInit = false;
-static wchar_t const** paths;
 
 class ScopedInitVk
 {
@@ -45,9 +44,9 @@ class ScopedInitVk
     ~ScopedInitVk() { _skipInit = previousState; }
 };
 
-static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+[[nodiscard]] static NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    State::Instance().NVNGX_FeatureInfo_Paths.clear();
+    std::vector<std::wstring> initPaths;
 
     if (InFeatureInfo != nullptr)
     {
@@ -98,14 +97,14 @@ static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 
         // Override locations
         if (Config::Instance()->DLSSFeaturePath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(Config::Instance()->DLSSFeaturePath.value());
+            initPaths.push_back(Config::Instance()->DLSSFeaturePath.value());
 
         // If DLSS path is overriden
         if (Config::Instance()->NVNGX_DLSS_Library.has_value() && nvngxDlssPath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssPath.value().parent_path().wstring());
+            initPaths.push_back(nvngxDlssPath.value().parent_path().wstring());
 
         // OptiDll Path
-        State::Instance().NVNGX_FeatureInfo_Paths.push_back(Config::Instance()->MainDllPath.value());
+        initPaths.push_back(Config::Instance()->MainDllPath.value());
 
         // WAR: Doom Ethernal is sending junk data
         if (InFeatureInfo->PathListInfo.Length < 10)
@@ -114,35 +113,29 @@ static void UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
             for (size_t i = 0; i < InFeatureInfo->PathListInfo.Length; i++)
             {
                 const wchar_t* path = InFeatureInfo->PathListInfo.Path[i];
-                State::Instance().NVNGX_FeatureInfo_Paths.push_back(std::wstring(path));
+                initPaths.push_back(std::wstring(path));
             }
         }
 
         // Exe path
-        State::Instance().NVNGX_FeatureInfo_Paths.push_back(exePath.wstring());
+        initPaths.push_back(exePath.wstring());
 
         // If DLSS path is not overriden
         if (!Config::Instance()->NVNGX_DLSS_Library.has_value() && nvngxDlssPath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssPath.value().parent_path().wstring());
+            initPaths.push_back(nvngxDlssPath.value().parent_path().wstring());
 
         // Add found locations
         if (nvngxDlssDPath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssDPath.value().parent_path().wstring());
+            initPaths.push_back(nvngxDlssDPath.value().parent_path().wstring());
 
         if (nvngxDlssGPath.has_value())
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(nvngxDlssGPath.value().parent_path().wstring());
+            initPaths.push_back(nvngxDlssGPath.value().parent_path().wstring());
 
-        // Build pointer array
-        paths = new const wchar_t*[State::Instance().NVNGX_FeatureInfo_Paths.size()];
-        for (size_t i = 0; i < State::Instance().NVNGX_FeatureInfo_Paths.size(); ++i)
-        {
-            paths[i] = State::Instance().NVNGX_FeatureInfo_Paths[i].c_str();
-            LOG_DEBUG("Feature Path [{}]: {}", i, wstring_to_string(State::Instance().NVNGX_FeatureInfo_Paths[i]));
-        }
-
-        InFeatureInfo->PathListInfo.Path = paths;
-        InFeatureInfo->PathListInfo.Length = (int) State::Instance().NVNGX_FeatureInfo_Paths.size();
+        auto owner = State::Instance().NVNGX_FeatureInfo_Paths.Publish(std::move(initPaths));
+        owner->Bind(InFeatureInfo->PathListInfo);
+        return owner;
     }
+    return {};
 }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
@@ -157,8 +150,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     if (InFeatureInfo != nullptr)
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
-    if (!_skipInit)
-        UpdateInitPaths(&localFeatureInfo);
+    // A delegated call borrows its outer call's still-live snapshot.
+    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     State::Instance().NVNGX_ApplicationId = InApplicationId;
     State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
@@ -273,8 +266,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
     if (InFeatureInfo != nullptr)
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
-    if (!_skipInit)
-        UpdateInitPaths(&localFeatureInfo);
+    // A delegated call borrows its outer call's still-live snapshot.
+    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
@@ -324,8 +317,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
     if (InFeatureInfo != nullptr)
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
-    if (!_skipInit)
-        UpdateInitPaths(&localFeatureInfo);
+    // A delegated call borrows its outer call's still-live snapshot.
+    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
@@ -379,8 +372,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
     if (InFeatureInfo != nullptr)
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
-    if (!_skipInit)
-        UpdateInitPaths(&localFeatureInfo);
+    // A delegated call borrows its outer call's still-live snapshot.
+    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
@@ -430,8 +423,8 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
     if (InFeatureInfo != nullptr)
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
-    if (!_skipInit)
-        UpdateInitPaths(&localFeatureInfo);
+    // A delegated call borrows its outer call's still-live snapshot.
+    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {

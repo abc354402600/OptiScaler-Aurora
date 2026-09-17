@@ -14,6 +14,7 @@
 
 #include <filesystem>
 #include <proxies/NativeDeviceLifecycle.h>
+#include <proxies/NgxPathSnapshot.h>
 #include <framegen/ProviderPublication.h>
 #include <vulkan/vulkan.hpp>
 
@@ -627,32 +628,26 @@ class NVNGXProxy
         _modulePublication.GetOrCreate([&] { return BuildModule(nvngxModule); });
     }
 
-    static void GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo* fcInfo)
+    [[nodiscard]] static NgxPathSnapshot::Owner GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo* fcInfo)
     {
+        if (!fcInfo)
+            return {};
+        const auto cached = State::Instance().NVNGX_FeatureInfo_Paths.Read();
+        auto paths = cached ? cached->Strings() : std::vector<std::wstring> {};
         if (State::Instance().NVNGX_DLSS_Path.has_value())
         {
             std::filesystem::path dlssPath(State::Instance().NVNGX_DLSS_Path.value());
-            State::Instance().NVNGX_FeatureInfo_Paths.push_back(dlssPath.remove_filename().wstring());
+            paths.push_back(dlssPath.remove_filename().wstring());
         }
-
-        // Allocate memory for the array of const wchar_t*
-        wchar_t const** paths = new const wchar_t*[State::Instance().NVNGX_FeatureInfo_Paths.size()];
-
-        // Copy the strings from the vector to the array
-        for (size_t i = 0; i < State::Instance().NVNGX_FeatureInfo_Paths.size(); ++i)
-        {
-            paths[i] = State::Instance().NVNGX_FeatureInfo_Paths[i].c_str();
-            LOG_DEBUG("paths[{0}]: {1}", i, wstring_to_string(State::Instance().NVNGX_FeatureInfo_Paths[i]));
-        }
-
-        fcInfo->PathListInfo.Path = paths;
-        fcInfo->PathListInfo.Length = static_cast<unsigned int>(State::Instance().NVNGX_FeatureInfo_Paths.size());
+        auto owner = std::make_shared<const NgxPathSnapshot>(std::move(paths));
+        owner->Bind(fcInfo->PathListInfo);
 
         // Config logging
         fcInfo->LoggingInfo.MinimumLoggingLevel =
             Config::Instance()->LogLevel < 2 ? NVSDK_NGX_LOGGING_LEVEL_VERBOSE : NVSDK_NGX_LOGGING_LEVEL_ON;
         fcInfo->LoggingInfo.LoggingCallback = LogCallback;
         fcInfo->LoggingInfo.DisableOtherLoggingSinks = true;
+        return owner;
     }
 
     static HMODULE NVNGXModule() { return GetModule().dll; }
@@ -676,7 +671,7 @@ class NVNGXProxy
             return false;
 
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
-        GetFeatureCommonInfo(&fcInfo);
+        const auto initPaths = GetFeatureCommonInfo(&fcInfo);
         NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
         if (State::Instance().NVNGX_ProjectId != "" && GetModule().D3D11_Init_ProjectID != nullptr)
@@ -787,7 +782,7 @@ class NVNGXProxy
                            return NVSDK_NGX_Result_Fail;
 
                        NVSDK_NGX_FeatureCommonInfo fcInfo {};
-                       GetFeatureCommonInfo(&fcInfo);
+                       const auto initPaths = GetFeatureCommonInfo(&fcInfo);
                        NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
                        if (State::Instance().NVNGX_ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
@@ -930,7 +925,7 @@ class NVNGXProxy
                            return NVSDK_NGX_Result_Fail;
 
                        NVSDK_NGX_FeatureCommonInfo fcInfo {};
-                       GetFeatureCommonInfo(&fcInfo);
+                       const auto initPaths = GetFeatureCommonInfo(&fcInfo);
                        NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
                        if (State::Instance().NVNGX_ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)

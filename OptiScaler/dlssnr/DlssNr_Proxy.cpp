@@ -204,7 +204,7 @@ unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D1
             reinitialised = true;
 
             NVSDK_NGX_FeatureCommonInfo fcInfo {};
-            NVNGXProxy::GetFeatureCommonInfo(&fcInfo);
+            const auto initPaths = NVNGXProxy::GetFeatureCommonInfo(&fcInfo);
 
             const auto initResult = NVNGXProxy::D3D12_Init_Ext()(
                 app_id_override, State::Instance().NVNGX_ApplicationDataPath.c_str(), device,

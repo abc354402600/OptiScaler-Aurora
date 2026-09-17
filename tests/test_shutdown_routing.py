@@ -171,7 +171,7 @@ def main():
  inline static Module _module;
  static const Module& GetModule() { return _module; }
  static void InitNVNGX() {}
- static void GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo*) {}
+ static std::nullptr_t GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo*) { return nullptr; }
 '''+ '\n'.join(methods)+'\n};\n'
     source=(ROOT/'OptiScaler/upscalers/dlss/DLSSFeature_Dx12.cpp').read_text(encoding='utf-8')
     bodies=[function(source,'void DLSSFeatureDx12::ResetAfterNativeShutdown(')]
