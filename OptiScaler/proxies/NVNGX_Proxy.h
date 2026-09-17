@@ -777,42 +777,41 @@ class NVNGXProxy
     // DirectX12
     static bool InitDx12(ID3D12Device* InDevice)
     {
-        return RunDx12Init(InDevice,
-                           [&]() -> NVSDK_NGX_Result
-                           {
-                               InitNVNGX();
+        return RunDx12Init(
+                   InDevice,
+                   [&]() -> NVSDK_NGX_Result
+                   {
+                       InitNVNGX();
 
-                               if (GetModule().dll == nullptr)
-                                   return NVSDK_NGX_Result_Fail;
+                       if (GetModule().dll == nullptr)
+                           return NVSDK_NGX_Result_Fail;
 
-                               NVSDK_NGX_FeatureCommonInfo fcInfo {};
-                               GetFeatureCommonInfo(&fcInfo);
-                               NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
+                       NVSDK_NGX_FeatureCommonInfo fcInfo {};
+                       GetFeatureCommonInfo(&fcInfo);
+                       NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-                               if (State::Instance().NVNGX_ProjectId != "" &&
-                                   GetModule().D3D12_Init_ProjectID != nullptr)
-                               {
-                                   LOG_INFO("GetModule().D3D12_Init_ProjectID!");
+                       if (State::Instance().NVNGX_ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
+                       {
+                           LOG_INFO("GetModule().D3D12_Init_ProjectID!");
 
-                                   nvResult = GetModule().D3D12_Init_ProjectID(
-                                       State::Instance().NVNGX_ProjectId.c_str(), State::Instance().NVNGX_Engine,
-                                       State::Instance().NVNGX_EngineVersion.c_str(),
-                                       State::Instance().NVNGX_ApplicationDataPath.c_str(), InDevice,
-                                       State::Instance().NVNGX_Version, &fcInfo);
-                               }
-                               else if (GetModule().D3D12_Init_Ext != nullptr)
-                               {
-                                   LOG_INFO("GetModule().D3D12_Init_Ext!");
-                                   nvResult =
-                                       GetModule().D3D12_Init_Ext(State::Instance().NVNGX_ApplicationId,
-                                                                  State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                                                                  InDevice, State::Instance().NVNGX_Version, &fcInfo);
-                               }
+                           nvResult = GetModule().D3D12_Init_ProjectID(
+                               State::Instance().NVNGX_ProjectId.c_str(), State::Instance().NVNGX_Engine,
+                               State::Instance().NVNGX_EngineVersion.c_str(),
+                               State::Instance().NVNGX_ApplicationDataPath.c_str(), InDevice,
+                               State::Instance().NVNGX_Version, &fcInfo);
+                       }
+                       else if (GetModule().D3D12_Init_Ext != nullptr)
+                       {
+                           LOG_INFO("GetModule().D3D12_Init_Ext!");
+                           nvResult = GetModule().D3D12_Init_Ext(State::Instance().NVNGX_ApplicationId,
+                                                                 State::Instance().NVNGX_ApplicationDataPath.c_str(),
+                                                                 InDevice, State::Instance().NVNGX_Version, &fcInfo);
+                       }
 
-                               LOG_INFO("result: {0:X}", (UINT) nvResult);
+                       LOG_INFO("result: {0:X}", (UINT) nvResult);
 
-                               return nvResult;
-                           }) == NVSDK_NGX_Result_Success;
+                       return nvResult;
+                   }) == NVSDK_NGX_Result_Success;
     }
 
     template <typename Callback> static NVSDK_NGX_Result RunDx12Init(ID3D12Device* InDevice, Callback&& callback)
