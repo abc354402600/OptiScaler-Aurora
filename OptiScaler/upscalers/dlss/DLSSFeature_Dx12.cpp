@@ -19,7 +19,7 @@ bool DLSSFeatureDx12::InitDLSS(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
         return false;
     }
 
-    if (!_dlssInitedDx12)
+    if (!_dlssInitedDx12 || !NVNGXProxy::IsDx12DeviceInited(Device))
     {
         _dlssInitedDx12 = NVNGXProxy::InitDx12(Device);
 
@@ -108,17 +108,10 @@ bool DLSSFeatureDx12::EvaluateInternal(ID3D12GraphicsCommandList* InCommandList,
     return true;
 }
 
-void DLSSFeatureDx12::Shutdown(ID3D12Device* InDevice)
+void DLSSFeatureDx12::ResetAfterNativeShutdown()
 {
-    if (_dlssInitedDx12)
-    {
-        if (NVNGXProxy::D3D12_Shutdown() != nullptr)
-            NVNGXProxy::D3D12_Shutdown()();
-        else if (NVNGXProxy::D3D12_Shutdown1() != nullptr)
-            NVNGXProxy::D3D12_Shutdown1()(InDevice);
-    }
-
-    DLSSFeature::Shutdown();
+    _dlssInitedDx12 = false;
+    // Shared NGX hooks also serve other devices/APIs. Keep them installed here.
 }
 
 DLSSFeatureDx12::DLSSFeatureDx12(unsigned int InHandleId, NVSDK_NGX_Parameter* InParameters)

@@ -19,7 +19,7 @@ bool DLSSFeatureVk::InitInternal(VkCommandBuffer InCmdList, NVSDK_NGX_Parameter*
 
     do
     {
-        if (!_dlssInitedVk)
+        if (!_dlssInitedVk || !NVNGXProxy::IsVulkanDeviceInited(Device))
         {
 
             _dlssInitedVk = NVNGXProxy::InitVulkan(Instance, PhysicalDevice, Device, GIPA, GDPA);

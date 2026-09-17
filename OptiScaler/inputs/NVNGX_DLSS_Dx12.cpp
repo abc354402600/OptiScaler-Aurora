@@ -182,12 +182,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
         {
             LOG_INFO("calling NVNGXProxy::D3D12_Init_Ext");
 
-            auto result = NVNGXProxy::D3D12_Init_Ext()(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion,
-                                                       &localFeatureInfo);
+            auto result = NVNGXProxy::RunDx12Init(InDevice,
+                                                  [&]
+                                                  {
+                                                      return NVNGXProxy::D3D12_Init_Ext()(
+                                                          InApplicationId, InApplicationDataPath, InDevice,
+                                                          InSDKVersion, &localFeatureInfo);
+                                                  });
             LOG_INFO("calling NVNGXProxy::D3D12_Init_Ext result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetDx12Inited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
         else
         {
@@ -254,13 +259,18 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplica
         {
             LOG_INFO("calling NVNGXProxy::D3D12_Init");
 
-            auto result = NVNGXProxy::D3D12_Init()(InApplicationId, InApplicationDataPath, InDevice, &localFeatureInfo,
-                                                   InSDKVersion);
+            auto result =
+                NVNGXProxy::RunDx12Init(InDevice,
+                                        [&]
+                                        {
+                                            return NVNGXProxy::D3D12_Init()(InApplicationId, InApplicationDataPath,
+                                                                            InDevice, &localFeatureInfo, InSDKVersion);
+                                        });
 
             LOG_INFO("calling NVNGXProxy::D3D12_Init result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetDx12Inited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -313,13 +323,18 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
             LOG_INFO("calling NVNGXProxy::D3D12_Init_ProjectID");
 
             auto result =
-                NVNGXProxy::D3D12_Init_ProjectID()(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
-                                                   InDevice, InSDKVersion, &localFeatureInfo);
+                NVNGXProxy::RunDx12Init(InDevice,
+                                        [&]
+                                        {
+                                            return NVNGXProxy::D3D12_Init_ProjectID()(
+                                                InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
+                                                InDevice, InSDKVersion, &localFeatureInfo);
+                                        });
 
             LOG_INFO("calling NVNGXProxy::D3D12_Init_ProjectID result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetDx12Inited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -373,79 +388,51 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
 
 #pragma region DLSS Shutdown Calls
 
-static NVSDK_NGX_Result ShutdownD3D12(bool shutdownProvider)
+static NVSDK_NGX_Result ShutdownD3D12(ID3D12Device* device)
 {
-    shutdown = true;
-    State::Instance().nvngxDx12Inited = false;
-
-    D3D12Device = nullptr;
-
-    State::Instance().currentFeature = nullptr;
-
-    // Unhooking and cleaning stuff causing issues during shutdown.
-    // Disabled for now to check if it cause any issues
-    // UnhookAll();
-    DLSSFeatureDx12::Shutdown(D3D12Device);
-
-    // Added `&& !State::Instance().isShuttingDown` hack for crash on exit
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsDx12Inited() &&
-        NVNGXProxy::D3D12_Shutdown() != nullptr && !State::Instance().isShuttingDown)
+    // Retain the existing process-exit workaround. During normal shutdown,
+    // failure must preserve native ownership and local state for a retry.
+    if (!State::Instance().isShuttingDown)
     {
-        auto result = NVNGXProxy::D3D12_Shutdown()();
-        NVNGXProxy::SetDx12Inited(false);
+        const auto result = NVNGXProxy::ShutdownDx12(device);
+        if (result != NVSDK_NGX_Result_Success)
+            return result;
     }
 
-    // Unhooking and cleaning stuff causing issues during shutdown.
-    // Disabled for now to check if it cause any issues
-    // HooksDx::UnHook();
+    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
+    {
+        if (device)
+            Nvngx_FG::D3D12_Shutdown1(device);
+        else
+            Nvngx_FG::D3D12_Shutdown();
+    }
 
-    // Disabled to prevent crash
+    if (device && device != D3D12Device)
+        return NVSDK_NGX_Result_Success;
+
+    shutdown = true;
+    DLSSFeatureDx12::ResetAfterNativeShutdown();
+    if (State::Instance().api == API::DX12)
+        State::Instance().currentFeature = nullptr;
+
     if (State::Instance().currentFG != nullptr && State::Instance().activeFgInput == FGInput::Upscaler)
     {
         if (State::Instance().isShuttingDown)
             State::Instance().currentFG->Shutdown();
         else
             State::Instance().currentFG->DestroyFGContext();
-
         State::Instance().clearCapturedHudlesses = true;
     }
 
-    shutdown = false;
-
-    if (shutdownProvider && State::Instance().activeFgNvngx != FGNvngxReplacement::None)
-    {
-        Nvngx_FG::D3D12_Shutdown();
-    }
-
+    D3D12Device = nullptr;
     State::Instance().nvngxDx12Inited = false;
-
+    shutdown = false;
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(true); }
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(nullptr); }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
-{
-    shutdown = true;
-    State::Instance().nvngxDx12Inited = false;
-
-    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
-    {
-        Nvngx_FG::D3D12_Shutdown1(InDevice);
-    }
-
-    // Added `&& !State::Instance().isShuttingDown` hack for crash on exit
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsDx12Inited() &&
-        NVNGXProxy::D3D12_Shutdown1() != nullptr && !State::Instance().isShuttingDown)
-    {
-        auto result = NVNGXProxy::D3D12_Shutdown1()(InDevice);
-        NVNGXProxy::SetDx12Inited(false);
-    }
-
-    // The provider already received Shutdown1. Run local cleanup without a second,
-    // global provider shutdown which can invalidate other native device state.
-    return ShutdownD3D12(false);
-}
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice) { return ShutdownD3D12(InDevice); }
 
 #pragma endregion
 

@@ -1,6 +1,6 @@
 # Compatibility branch handoff — 2026-09-15
 
-The user abandoned the RC3 one-click installer branch and authorized compatibility work, local commits, and ordinary pushes to `Compatibility-fixes`. No merge to `aurora` or Release. No replacement ZIP deliverable.
+The user abandoned the RC3 one-click installer branch and authorized compatibility work, local commits, and ordinary pushes to `Compatibility-fixes`. Their latest 2026-09-17 instruction authorizes synchronization to `aurora` after the ongoing code work, review and validation are complete, with real-game testing deferred. No Release or replacement ZIP deliverable.
 
 ## Baseline and evidence
 
@@ -13,7 +13,7 @@ The user abandoned the RC3 one-click installer branch and authorized compatibili
 
 ## Continuation rules
 
-Latest user constraints: no ZZZ installation/feedback is available, and Witcher cannot currently be retested. Keep these as pending validation; continue independent code work without repeatedly requesting game tests. New features are deferred. The user's conditional main-branch merge request requires sufficient stability confidence, which has not yet been established.
+Latest user constraints: no ZZZ installation/feedback is available, and Witcher cannot currently be retested. Keep these as pending validation; continue independent code work without repeatedly requesting game tests. New features are deferred. The latest authorization removes game tests as a merge prerequisite, but does not mean unfinished lifecycle work should be merged or that regression-free game behavior has been established.
 
 Official upstream is `https://github.com/optiscaler/OptiScaler.git`; the local remote named `upstream` is instead the grim-susemi fork. Official audit cutoff is now `a4890db5b3c7c6918f4b35d0fd3318b42e2ccc66`. It adds only the Sword and Fairy 7 quirk after `4af2417b`; adopted with provenance. Nine commits before that, after `731f3b79`, were already reviewed. Do not repeat those audits.
 
@@ -29,7 +29,7 @@ The same audit's shutdown follow-up removes duplicate provider Shutdown calls af
 
 The user subsequently provided ZZZ 11008 component-error screenshots and reports of disappearing files, and NTE menu stutter with an NPI workaround. GPU is tentatively RTX 40; exact build, missing filenames, protection history, and crash logs remain unknown. See [NTE/ZZZ follow-up](NTE_ZZZ_COMPATIBILITY.md). Do not confuse component errors, GPU exceptions, and absent FG input. No driver/game settings were changed by this work.
 
-Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Push only `origin Compatibility-fixes`.
+Git network requests on this host have worked with per-command `http.proxy=http://127.0.0.1:7897`; do not alter global proxy or disable TLS verification. Work on `origin Compatibility-fixes`; synchronize `aurora` only after completing the authorized code-validation gate above.
 
 The 2026-09-17 continuation fixes private provider construction/publication and explicit Pending routing, plus no-lazy-load shutdown. Read [provider publication audit](PROVIDER_PUBLICATION_20260917.md). Native API/device initialization and concurrent Shutdown/Evaluate after publication remain open; do not call the complete lifecycle audit finished.
 

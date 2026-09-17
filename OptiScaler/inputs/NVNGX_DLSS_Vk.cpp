@@ -177,12 +177,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::VULKAN_Init_Ext2() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::VULKAN_Init_Ext2");
-            auto result = NVNGXProxy::VULKAN_Init_Ext2()(InApplicationId, InApplicationDataPath, InInstance, InPD,
-                                                         InDevice, InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+            auto result = NVNGXProxy::RunVulkanInit(InDevice,
+                                                    [&]
+                                                    {
+                                                        return NVNGXProxy::VULKAN_Init_Ext2()(
+                                                            InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                            InDevice, InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+                                                    });
             LOG_INFO("NVNGXProxy::VULKAN_Init_Ext2 result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -283,12 +288,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::VULKAN_Init_Ext() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::VULKAN_Init_Ext");
-            auto result = NVNGXProxy::VULKAN_Init_Ext()(InApplicationId, InApplicationDataPath, InInstance, InPD,
-                                                        InDevice, InSDKVersion, &localFeatureInfo);
+            auto result = NVNGXProxy::RunVulkanInit(InDevice,
+                                                    [&]
+                                                    {
+                                                        return NVNGXProxy::VULKAN_Init_Ext()(
+                                                            InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                            InDevice, InSDKVersion, &localFeatureInfo);
+                                                    });
             LOG_INFO("NVNGXProxy::VULKAN_Init_Ext result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -326,13 +336,18 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::VULKAN_Init_ProjectID_Ext() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::VULKAN_Init_ProjectID_Ext");
-            auto result = NVNGXProxy::VULKAN_Init_ProjectID_Ext()(InProjectId, InEngineType, InEngineVersion,
-                                                                  InApplicationDataPath, InInstance, InPD, InDevice,
-                                                                  InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+            auto result = NVNGXProxy::RunVulkanInit(InDevice,
+                                                    [&]
+                                                    {
+                                                        return NVNGXProxy::VULKAN_Init_ProjectID_Ext()(
+                                                            InProjectId, InEngineType, InEngineVersion,
+                                                            InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
+                                                            InGDPA, InSDKVersion, &localFeatureInfo);
+                                                    });
             LOG_INFO("NVNGXProxy::VULKAN_Init_ProjectID_Ext result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -379,12 +394,17 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::VULKAN_Init() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::VULKAN_Init");
-            auto result = NVNGXProxy::VULKAN_Init()(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
-                                                    InGIPA, InGDPA, &localFeatureInfo, InSDKVersion);
+            auto result = NVNGXProxy::RunVulkanInit(InDevice,
+                                                    [&]
+                                                    {
+                                                        return NVNGXProxy::VULKAN_Init()(
+                                                            InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                            InDevice, InGIPA, InGDPA, &localFeatureInfo, InSDKVersion);
+                                                    });
             LOG_INFO("NVNGXProxy::VULKAN_Init result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -425,13 +445,18 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
         if (NVNGXProxy::NVNGXModule() != nullptr && NVNGXProxy::VULKAN_Init_ProjectID() != nullptr)
         {
             LOG_INFO("calling NVNGXProxy::VULKAN_Init_ProjectID");
-            auto result = NVNGXProxy::VULKAN_Init_ProjectID()(InProjectId, InEngineType, InEngineVersion,
-                                                              InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
-                                                              InGDPA, InSDKVersion, &localFeatureInfo);
+            auto result = NVNGXProxy::RunVulkanInit(InDevice,
+                                                    [&]
+                                                    {
+                                                        return NVNGXProxy::VULKAN_Init_ProjectID()(
+                                                            InProjectId, InEngineType, InEngineVersion,
+                                                            InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
+                                                            InGDPA, InSDKVersion, &localFeatureInfo);
+                                                    });
             LOG_INFO("NVNGXProxy::VULKAN_Init_ProjectID result: {0:X}", (UINT) result);
 
-            if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+            if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
+                return result;
         }
     }
 
@@ -1165,60 +1190,31 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }
 
-static NVSDK_NGX_Result ShutdownVulkan(bool shutdownProvider)
+static NVSDK_NGX_Result ShutdownVulkan(VkDevice device)
 {
+    const auto result = NVNGXProxy::ShutdownVulkan(device);
+    if (result != NVSDK_NGX_Result_Success)
+        return result;
+
+    if (device)
+        Nvngx_FG::VULKAN_Shutdown1(device);
+    else
+        Nvngx_FG::VULKAN_Shutdown();
+
+    if (device && device != vkDevice)
+        return NVSDK_NGX_Result_Success;
+
     shutdown = true;
-
-    // for (auto const& [key, val] : VkContexts) {
-    //     if (val.feature)
-    //         NVSDK_NGX_VULKAN_ReleaseFeature(val.feature->Handle());
-    // }
-
-    // VkContexts.clear();
-
     vkInstance = nullptr;
     vkPD = nullptr;
     vkDevice = nullptr;
-
-    State::Instance().currentFeature = nullptr;
-
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsVulkanInited() &&
-        NVNGXProxy::VULKAN_Shutdown() != nullptr)
-    {
-        auto result = NVNGXProxy::VULKAN_Shutdown()();
-        NVNGXProxy::SetVulkanInited(false);
-    }
-
-    // Unhooking and cleaning stuff causing issues during shutdown.
-    // Disabled for now to check if it cause any issues
-    // MenuOverlayVk::UnHookVk();
-
-    if (shutdownProvider)
-        Nvngx_FG::VULKAN_Shutdown();
-
-    shutdown = false;
+    if (State::Instance().api == API::Vulkan)
+        State::Instance().currentFeature = nullptr;
     State::Instance().nvngxVkInited = false;
-
+    shutdown = false;
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(true); }
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(nullptr); }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
-{
-    shutdown = true;
-
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsVulkanInited() &&
-        NVNGXProxy::VULKAN_Shutdown1() != nullptr)
-    {
-        auto result = NVNGXProxy::VULKAN_Shutdown1()(InDevice);
-        NVNGXProxy::SetVulkanInited(false);
-    }
-
-    Nvngx_FG::VULKAN_Shutdown1(InDevice);
-
-    shutdown = false;
-
-    // Do not follow the provider's device shutdown with a second global shutdown.
-    return ShutdownVulkan(false);
-}
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice) { return ShutdownVulkan(InDevice); }

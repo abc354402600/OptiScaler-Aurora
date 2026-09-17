@@ -19,7 +19,7 @@ bool DLSSDFeatureDx12::InitDLSSD(ID3D12GraphicsCommandList* InCommandList, NVSDK
         return false;
     }
 
-    if (!_dlssdInitedDx12)
+    if (!_dlssdInitedDx12 || !NVNGXProxy::IsDx12DeviceInited(Device))
     {
         _dlssdInitedDx12 = NVNGXProxy::InitDx12(Device);
 
