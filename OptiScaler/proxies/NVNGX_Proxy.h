@@ -771,40 +771,40 @@ class NVNGXProxy
     // DirectX12
     static bool InitDx12(ID3D12Device* InDevice)
     {
-        return RunDx12Init(
-                   InDevice,
-                   [&]() -> NVSDK_NGX_Result
-                   {
-                       InitNVNGX();
+        return RunDx12Init(InDevice,
+                           [&]() -> NVSDK_NGX_Result
+                           {
+                               InitNVNGX();
 
-                       if (GetModule().dll == nullptr)
-                           return NVSDK_NGX_Result_Fail;
+                               if (GetModule().dll == nullptr)
+                                   return NVSDK_NGX_Result_Fail;
 
-                       NVSDK_NGX_FeatureCommonInfo fcInfo {};
-                       const auto initPaths = GetFeatureCommonInfo(&fcInfo);
-                       const auto metadata = State::Instance().NVNGX_Init.Read();
-                       NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
+                               NVSDK_NGX_FeatureCommonInfo fcInfo {};
+                               const auto initPaths = GetFeatureCommonInfo(&fcInfo);
+                               const auto metadata = State::Instance().NVNGX_Init.Read();
+                               NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-                       if (metadata->ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
-                       {
-                           LOG_INFO("GetModule().D3D12_Init_ProjectID!");
+                               if (metadata->ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
+                               {
+                                   LOG_INFO("GetModule().D3D12_Init_ProjectID!");
 
-                           nvResult = GetModule().D3D12_Init_ProjectID(
-                               metadata->ProjectId.c_str(), metadata->EngineType, metadata->EngineVersion.c_str(),
-                               metadata->ApplicationDataPath.c_str(), InDevice, metadata->SdkVersion, &fcInfo);
-                       }
-                       else if (GetModule().D3D12_Init_Ext != nullptr)
-                       {
-                           LOG_INFO("GetModule().D3D12_Init_Ext!");
-                           nvResult = GetModule().D3D12_Init_Ext(metadata->ApplicationId,
-                                                                 metadata->ApplicationDataPath.c_str(), InDevice,
-                                                                 metadata->SdkVersion, &fcInfo);
-                       }
+                                   nvResult = GetModule().D3D12_Init_ProjectID(
+                                       metadata->ProjectId.c_str(), metadata->EngineType,
+                                       metadata->EngineVersion.c_str(), metadata->ApplicationDataPath.c_str(), InDevice,
+                                       metadata->SdkVersion, &fcInfo);
+                               }
+                               else if (GetModule().D3D12_Init_Ext != nullptr)
+                               {
+                                   LOG_INFO("GetModule().D3D12_Init_Ext!");
+                                   nvResult = GetModule().D3D12_Init_Ext(metadata->ApplicationId,
+                                                                         metadata->ApplicationDataPath.c_str(),
+                                                                         InDevice, metadata->SdkVersion, &fcInfo);
+                               }
 
-                       LOG_INFO("result: {0:X}", (UINT) nvResult);
+                               LOG_INFO("result: {0:X}", (UINT) nvResult);
 
-                       return nvResult;
-                   }) == NVSDK_NGX_Result_Success;
+                               return nvResult;
+                           }) == NVSDK_NGX_Result_Success;
     }
 
     template <typename Callback> static NVSDK_NGX_Result RunDx12Init(ID3D12Device* InDevice, Callback&& callback)
@@ -913,40 +913,39 @@ class NVNGXProxy
     static bool InitVulkan(VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
                            PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA)
     {
-        return RunVulkanInit(
-                   InDevice,
-                   [&]() -> NVSDK_NGX_Result
-                   {
-                       InitNVNGX();
+        return RunVulkanInit(InDevice,
+                             [&]() -> NVSDK_NGX_Result
+                             {
+                                 InitNVNGX();
 
-                       if (GetModule().dll == nullptr)
-                           return NVSDK_NGX_Result_Fail;
+                                 if (GetModule().dll == nullptr)
+                                     return NVSDK_NGX_Result_Fail;
 
-                       NVSDK_NGX_FeatureCommonInfo fcInfo {};
-                       const auto initPaths = GetFeatureCommonInfo(&fcInfo);
-                       const auto metadata = State::Instance().NVNGX_Init.Read();
-                       NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
+                                 NVSDK_NGX_FeatureCommonInfo fcInfo {};
+                                 const auto initPaths = GetFeatureCommonInfo(&fcInfo);
+                                 const auto metadata = State::Instance().NVNGX_Init.Read();
+                                 NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-                       if (metadata->ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)
-                       {
-                           LOG_DEBUG("GetModule().VULKAN_Init_ProjectID!");
-                           nvResult = GetModule().VULKAN_Init_ProjectID(
-                               metadata->ProjectId.c_str(), metadata->EngineType, metadata->EngineVersion.c_str(),
-                               metadata->ApplicationDataPath.c_str(), InInstance, InPD, InDevice, InGIPA, InGDPA,
-                               metadata->SdkVersion, &fcInfo);
-                       }
-                       else if (GetModule().VULKAN_Init_Ext != nullptr)
-                       {
-                           LOG_DEBUG("GetModule().VULKAN_Init_Ext!");
-                           nvResult = GetModule().VULKAN_Init_Ext(metadata->ApplicationId,
-                                                                  metadata->ApplicationDataPath.c_str(), InInstance,
-                                                                  InPD, InDevice, metadata->SdkVersion, &fcInfo);
-                       }
+                                 if (metadata->ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)
+                                 {
+                                     LOG_DEBUG("GetModule().VULKAN_Init_ProjectID!");
+                                     nvResult = GetModule().VULKAN_Init_ProjectID(
+                                         metadata->ProjectId.c_str(), metadata->EngineType,
+                                         metadata->EngineVersion.c_str(), metadata->ApplicationDataPath.c_str(),
+                                         InInstance, InPD, InDevice, InGIPA, InGDPA, metadata->SdkVersion, &fcInfo);
+                                 }
+                                 else if (GetModule().VULKAN_Init_Ext != nullptr)
+                                 {
+                                     LOG_DEBUG("GetModule().VULKAN_Init_Ext!");
+                                     nvResult = GetModule().VULKAN_Init_Ext(
+                                         metadata->ApplicationId, metadata->ApplicationDataPath.c_str(), InInstance,
+                                         InPD, InDevice, metadata->SdkVersion, &fcInfo);
+                                 }
 
-                       LOG_DEBUG("result: {0:X}", (UINT) nvResult);
+                                 LOG_DEBUG("result: {0:X}", (UINT) nvResult);
 
-                       return nvResult;
-                   }) == NVSDK_NGX_Result_Success;
+                                 return nvResult;
+                             }) == NVSDK_NGX_Result_Success;
     }
 
     template <typename Callback> static NVSDK_NGX_Result RunVulkanInit(VkDevice InDevice, Callback&& callback)
