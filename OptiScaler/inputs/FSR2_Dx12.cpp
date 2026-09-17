@@ -415,10 +415,11 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Dx12(Fsr212::FfxFsr2Context* co
     {
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
         auto exePath = Util::ExePath().remove_filename();
+        const auto metadata = State::Instance().NVNGX_Init.Read();
 
         auto nvResult = NVSDK_NGX_D3D12_Init_with_ProjectID(
-            OPTI_GUID, state.NVNGX_Engine, OPTI_VERSION, exePath.c_str(), _d3d12Device, &fcInfo,
-            state.NVNGX_Version == 0 ? NVSDK_NGX_Version_API : state.NVNGX_Version);
+            OPTI_GUID, metadata->EngineType, OPTI_VERSION, exePath.c_str(), _d3d12Device, &fcInfo,
+            metadata->SdkVersion == 0 ? NVSDK_NGX_Version_API : metadata->SdkVersion);
 
         if (nvResult != NVSDK_NGX_Result_Success)
             return Fsr212::FFX_ERROR_BACKEND_API_ERROR;
@@ -505,10 +506,11 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Pattern_Dx12(Fsr212::FfxFsr2Con
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
 
         auto exePath = Util::ExePath().remove_filename();
+        const auto metadata = State::Instance().NVNGX_Init.Read();
 
         auto nvResult = NVSDK_NGX_D3D12_Init_with_ProjectID(
-            OPTI_GUID, state.NVNGX_Engine, OPTI_VERSION, exePath.c_str(), _d3d12Device, &fcInfo,
-            state.NVNGX_Version == 0 ? NVSDK_NGX_Version_API : state.NVNGX_Version);
+            OPTI_GUID, metadata->EngineType, OPTI_VERSION, exePath.c_str(), _d3d12Device, &fcInfo,
+            metadata->SdkVersion == 0 ? NVSDK_NGX_Version_API : metadata->SdkVersion);
 
         if (nvResult != NVSDK_NGX_Result_Success)
             return Fsr212::FFX_ERROR_BACKEND_API_ERROR;

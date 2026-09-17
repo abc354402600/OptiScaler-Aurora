@@ -18,7 +18,7 @@
 // NVSDK_NGX_API uint32_t NVSDK_NGX_GetApplicationId()
 //{
 //	LOG_FUNC();
-//	return State::Instance().NVNGX_ApplicationId;
+//	return State::Instance().NVNGX_Init.Read()->ApplicationId;
 //}
 //
 // NVSDK_NGX_API uint32_t NVSDK_NGX_GetDriverVersion()
@@ -113,20 +113,19 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_UpdateFeature(const NVSDK_NGX_Applicati
                              ? app_id_override
                              : ApplicationId->v.ApplicationId;
             LOG_INFO("Update ApplicationId: {0:X}", appId);
-            State::Instance().NVNGX_ApplicationId = appId;
+            State::Instance().NVNGX_Init.UpdateApplicationId(appId);
         }
         else if (ApplicationId->IdentifierType == NVSDK_NGX_Application_Identifier_Type_Project_Id)
         {
             auto projectId = Config::Instance()->UseGenericAppIdWithDlss.value_or_default()
                                  ? project_id_override
                                  : std::string(ApplicationId->v.ProjectDesc.ProjectId);
-            State::Instance().NVNGX_ProjectId = projectId;
-            State::Instance().NVNGX_Engine = ApplicationId->v.ProjectDesc.EngineType;
-            State::Instance().NVNGX_EngineVersion = std::string(ApplicationId->v.ProjectDesc.EngineVersion);
+            const auto metadata = State::Instance().NVNGX_Init.UpdateProject(
+                projectId, ApplicationId->v.ProjectDesc.EngineType, ApplicationId->v.ProjectDesc.EngineVersion);
 
             LOG_INFO("Update InProjectId: {0}", projectId);
-            LOG_INFO("Update InEngineType: {0}", (int) State::Instance().NVNGX_Engine);
-            LOG_INFO("Update InEngineVersion: {0}", State::Instance().NVNGX_EngineVersion);
+            LOG_INFO("Update InEngineType: {0}", (int) metadata->EngineType);
+            LOG_INFO("Update InEngineVersion: {0}", metadata->EngineVersion);
         }
         else
         {

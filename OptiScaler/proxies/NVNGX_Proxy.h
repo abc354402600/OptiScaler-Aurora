@@ -672,23 +672,22 @@ class NVNGXProxy
 
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
         const auto initPaths = GetFeatureCommonInfo(&fcInfo);
+        const auto metadata = State::Instance().NVNGX_Init.Read();
         NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-        if (State::Instance().NVNGX_ProjectId != "" && GetModule().D3D11_Init_ProjectID != nullptr)
+        if (metadata->ProjectId != "" && GetModule().D3D11_Init_ProjectID != nullptr)
         {
             LOG_DEBUG("GetModule().D3D11_Init_ProjectID!");
 
             nvResult = GetModule().D3D11_Init_ProjectID(
-                State::Instance().NVNGX_ProjectId.c_str(), State::Instance().NVNGX_Engine,
-                State::Instance().NVNGX_EngineVersion.c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                InDevice, State::Instance().NVNGX_Version, &fcInfo);
+                metadata->ProjectId.c_str(), metadata->EngineType, metadata->EngineVersion.c_str(),
+                metadata->ApplicationDataPath.c_str(), InDevice, metadata->SdkVersion, &fcInfo);
         }
         else if (GetModule().D3D11_Init_Ext != nullptr)
         {
             LOG_DEBUG("GetModule().D3D11_Init_Ext!");
-            nvResult = GetModule().D3D11_Init_Ext(State::Instance().NVNGX_ApplicationId,
-                                                  State::Instance().NVNGX_ApplicationDataPath.c_str(), InDevice,
-                                                  State::Instance().NVNGX_Version, &fcInfo);
+            nvResult = GetModule().D3D11_Init_Ext(metadata->ApplicationId, metadata->ApplicationDataPath.c_str(),
+                                                  InDevice, metadata->SdkVersion, &fcInfo);
         }
 
         LOG_DEBUG("result: {0:X}", (UINT) nvResult);
@@ -783,24 +782,23 @@ class NVNGXProxy
 
                        NVSDK_NGX_FeatureCommonInfo fcInfo {};
                        const auto initPaths = GetFeatureCommonInfo(&fcInfo);
+                       const auto metadata = State::Instance().NVNGX_Init.Read();
                        NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-                       if (State::Instance().NVNGX_ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
+                       if (metadata->ProjectId != "" && GetModule().D3D12_Init_ProjectID != nullptr)
                        {
                            LOG_INFO("GetModule().D3D12_Init_ProjectID!");
 
                            nvResult = GetModule().D3D12_Init_ProjectID(
-                               State::Instance().NVNGX_ProjectId.c_str(), State::Instance().NVNGX_Engine,
-                               State::Instance().NVNGX_EngineVersion.c_str(),
-                               State::Instance().NVNGX_ApplicationDataPath.c_str(), InDevice,
-                               State::Instance().NVNGX_Version, &fcInfo);
+                               metadata->ProjectId.c_str(), metadata->EngineType, metadata->EngineVersion.c_str(),
+                               metadata->ApplicationDataPath.c_str(), InDevice, metadata->SdkVersion, &fcInfo);
                        }
                        else if (GetModule().D3D12_Init_Ext != nullptr)
                        {
                            LOG_INFO("GetModule().D3D12_Init_Ext!");
-                           nvResult = GetModule().D3D12_Init_Ext(State::Instance().NVNGX_ApplicationId,
-                                                                 State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                                                                 InDevice, State::Instance().NVNGX_Version, &fcInfo);
+                           nvResult = GetModule().D3D12_Init_Ext(metadata->ApplicationId,
+                                                                 metadata->ApplicationDataPath.c_str(), InDevice,
+                                                                 metadata->SdkVersion, &fcInfo);
                        }
 
                        LOG_INFO("result: {0:X}", (UINT) nvResult);
@@ -926,24 +924,23 @@ class NVNGXProxy
 
                        NVSDK_NGX_FeatureCommonInfo fcInfo {};
                        const auto initPaths = GetFeatureCommonInfo(&fcInfo);
+                       const auto metadata = State::Instance().NVNGX_Init.Read();
                        NVSDK_NGX_Result nvResult = NVSDK_NGX_Result_Fail;
 
-                       if (State::Instance().NVNGX_ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)
+                       if (metadata->ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)
                        {
                            LOG_DEBUG("GetModule().VULKAN_Init_ProjectID!");
                            nvResult = GetModule().VULKAN_Init_ProjectID(
-                               State::Instance().NVNGX_ProjectId.c_str(), State::Instance().NVNGX_Engine,
-                               State::Instance().NVNGX_EngineVersion.c_str(),
-                               State::Instance().NVNGX_ApplicationDataPath.c_str(), InInstance, InPD, InDevice, InGIPA,
-                               InGDPA, State::Instance().NVNGX_Version, &fcInfo);
+                               metadata->ProjectId.c_str(), metadata->EngineType, metadata->EngineVersion.c_str(),
+                               metadata->ApplicationDataPath.c_str(), InInstance, InPD, InDevice, InGIPA, InGDPA,
+                               metadata->SdkVersion, &fcInfo);
                        }
                        else if (GetModule().VULKAN_Init_Ext != nullptr)
                        {
                            LOG_DEBUG("GetModule().VULKAN_Init_Ext!");
-                           nvResult = GetModule().VULKAN_Init_Ext(State::Instance().NVNGX_ApplicationId,
-                                                                  State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                                                                  InInstance, InPD, InDevice,
-                                                                  State::Instance().NVNGX_Version, &fcInfo);
+                           nvResult = GetModule().VULKAN_Init_Ext(metadata->ApplicationId,
+                                                                  metadata->ApplicationDataPath.c_str(), InInstance,
+                                                                  InPD, InDevice, metadata->SdkVersion, &fcInfo);
                        }
 
                        LOG_DEBUG("result: {0:X}", (UINT) nvResult);

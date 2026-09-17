@@ -24,6 +24,7 @@ def function(source, declaration):
 
 PRELUDE = r'''
 #include "proxies/NativeDeviceLifecycle.h"
+#include "proxies/NgxInitMetadata.h"
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -50,9 +51,7 @@ struct State {
  void* currentFeature=nullptr; FG* currentFG=&fg; API api=API::DX12;
  FGInput activeFgInput=FGInput::Upscaler;
  FGNvngxReplacement activeFgNvngx=FGNvngxReplacement::Nukems;
- std::string NVNGX_ProjectId="",NVNGX_EngineVersion="";
- std::wstring NVNGX_ApplicationDataPath=L"";
- int NVNGX_Engine=0,NVNGX_Version=0; unsigned long long NVNGX_ApplicationId=0;
+ NgxInitMetadata<int,int,int> NVNGX_Init{0,0};
  static State& Instance() { static State s; return s; }
 };
 int initCalls=0,initResult=0,globalDx=0,deviceDx=0,globalVk=0,deviceVk=0,nativeResult=0;

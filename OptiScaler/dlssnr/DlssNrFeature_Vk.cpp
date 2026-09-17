@@ -673,7 +673,7 @@ bool EvaluateAtSeamVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, Vk
         }
 
         const int result =
-            g_vk.init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
+            g_vk.init(snippet->wstring().c_str(), State::Instance().NVNGX_Init.Read()->ApplicationDataPath.c_str(),
                       (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
 
         if (result != 1)

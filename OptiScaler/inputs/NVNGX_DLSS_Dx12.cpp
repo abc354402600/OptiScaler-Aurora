@@ -157,10 +157,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     // A delegated call borrows its outer call's still-live snapshot.
     const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    State::Instance().NVNGX_ApplicationId = InApplicationId;
-    State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
-    State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_Version = InSDKVersion;
+    State::Instance().NVNGX_Init.UpdateApplication(InApplicationId, InApplicationDataPath, InSDKVersion);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
@@ -193,7 +190,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     }
 
     if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
-        State::Instance().NVNGX_Logger = InFeatureInfo->LoggingInfo;
+        State::Instance().NVNGX_Init.UpdateLogging(InFeatureInfo->LoggingInfo);
 
     if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
     {
@@ -334,9 +331,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
     LOG_INFO("InEngineType: {0}", (int) InEngineType);
     LOG_INFO("InEngineVersion: {0}", InEngineVersion);
 
-    State::Instance().NVNGX_ProjectId = std::string(InProjectId);
-    State::Instance().NVNGX_Engine = InEngineType;
-    State::Instance().NVNGX_EngineVersion = std::string(InEngineVersion);
+    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
 
     if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
     {
@@ -361,9 +356,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
     LOG_INFO("InEngineType: {0}", (int) InEngineType);
     LOG_INFO("InEngineVersion: {0}", InEngineVersion);
 
-    State::Instance().NVNGX_ProjectId = std::string(InProjectId);
-    State::Instance().NVNGX_Engine = InEngineType;
-    State::Instance().NVNGX_EngineVersion = std::string(InEngineVersion);
+    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
 
     if (State::Instance().nvngxDx12Inited)
     {

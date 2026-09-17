@@ -209,7 +209,7 @@ bool IFeature_Dx11wDx12::Init(ID3D11Device* InDevice, ID3D11DeviceContext* InCon
     if (IsInited())
         return true;
 
-    if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+    if (State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
         State::Instance().gameEngine == GameEngineType::Unreal ||
         State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
     {

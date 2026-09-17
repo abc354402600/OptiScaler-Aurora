@@ -67,7 +67,7 @@ bool XeSSFeature::InitXeSS(ID3D12Device* device, const NVSDK_NGX_Parameter* InPa
 
         xessParams.initFlags = XESS_INIT_FLAG_NONE;
 
-        const bool isUE = State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+        const bool isUE = State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
                           State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine;
 
         if (DepthInverted())

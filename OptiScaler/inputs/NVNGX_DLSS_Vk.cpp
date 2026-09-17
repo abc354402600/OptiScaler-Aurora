@@ -153,10 +153,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     // A delegated call borrows its outer call's still-live snapshot.
     const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    State::Instance().NVNGX_ApplicationId = InApplicationId;
-    State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
-    State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_Version = InSDKVersion;
+    State::Instance().NVNGX_Init.UpdateApplication(InApplicationId, InApplicationDataPath, InSDKVersion);
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
     {
@@ -184,7 +181,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     }
 
     if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
-        State::Instance().NVNGX_Logger = InFeatureInfo->LoggingInfo;
+        State::Instance().NVNGX_Init.UpdateLogging(InFeatureInfo->LoggingInfo);
 
     if (State::Instance().nvngxVkInited && InInstance == vkInstance && InDevice == vkDevice && InPD == vkPD)
     {
@@ -351,9 +348,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
     LOG_DEBUG("InEngineType: {0}", (int) InEngineType);
     LOG_DEBUG("InEngineVersion: {0}", InEngineVersion);
 
-    State::Instance().NVNGX_ProjectId = std::string(InProjectId);
-    State::Instance().NVNGX_Engine = InEngineType;
-    State::Instance().NVNGX_EngineVersion = std::string(InEngineVersion);
+    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
 
     return result;
 }

@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <proxies/NgxPathSnapshot.h>
+#include <proxies/NgxInitMetadata.h>
 #include <set>
 #include <deque>
 #include <mutex>
@@ -177,14 +178,10 @@ class State
     bool clearCapturedHudlesses = false;
 
     // NVNGX init parameters
-    uint64_t NVNGX_ApplicationId = 1337;
-    std::wstring NVNGX_ApplicationDataPath;
-    std::string NVNGX_ProjectId;
-    NVSDK_NGX_Version NVNGX_Version {};
+    NgxInitMetadata<NVSDK_NGX_Version, NVSDK_NGX_EngineType, NVSDK_NGX_LoggingInfo> NVNGX_Init {
+        NVSDK_NGX_ENGINE_TYPE_CUSTOM, { nullptr, NVSDK_NGX_LOGGING_LEVEL_OFF, false }
+    };
     NgxPathCache NVNGX_FeatureInfo_Paths;
-    NVSDK_NGX_LoggingInfo NVNGX_Logger { nullptr, NVSDK_NGX_LOGGING_LEVEL_OFF, false };
-    NVSDK_NGX_EngineType NVNGX_Engine = NVSDK_NGX_ENGINE_TYPE_CUSTOM;
-    std::string NVNGX_EngineVersion;
     std::optional<std::wstring> NVNGX_DLSS_Path;
     std::optional<std::wstring> NVNGX_DLSSD_Path;
     std::optional<std::wstring> NVNGX_DLSSG_Path;

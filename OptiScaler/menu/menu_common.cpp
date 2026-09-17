@@ -4749,8 +4749,9 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
                 // Issue mostly shows up on AMD on Windows on pre-RDNA3 in some non-UE games
                 // Hide to reduce confusion, config is still read
-                const bool isUnrealEngine = State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
-                                            State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine;
+                const bool isUnrealEngine =
+                    State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+                    State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine;
                 const bool isDllProxyNvngxType =
                     activeNvngxFg == FGNvngxReplacement::Nukems || activeNvngxFg == FGNvngxReplacement::Arturs;
                 if (isDllProxyNvngxType && !primaryGpu.dlssCapable && primaryGpu.fsr4Support == FSR4Support::None &&

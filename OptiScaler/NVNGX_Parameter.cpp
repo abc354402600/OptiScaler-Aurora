@@ -707,7 +707,7 @@ void InitNGXParameters(NVSDK_NGX_Parameter* InParams, API api)
 {
     InParams->Set(NVSDK_NGX_Parameter_SuperSampling_Available, 1);
 
-    if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+    if (State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
         State::Instance().gameEngine == GameEngineType::Unreal ||
         State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
     {
@@ -783,7 +783,7 @@ void InitNGXParameters(NVSDK_NGX_Parameter* InParams, API api)
     {
         InParams->Set("SuperSamplingDenoising.NeedsUpdatedDriver", 0);
 
-        if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+        if (State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
             State::Instance().gameEngine == GameEngineType::Unreal ||
             State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
         {
@@ -823,7 +823,7 @@ void InitNGXParameters(NVSDK_NGX_Parameter* InParams, API api)
         }
         InParams->Set("DLSSG.MultiFrameCountMax", countMax);
 
-        if (State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+        if (State::Instance().NVNGX_Init.Read()->EngineType == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
             State::Instance().gameEngine == GameEngineType::Unreal ||
             State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine)
         {

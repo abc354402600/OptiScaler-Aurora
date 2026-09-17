@@ -133,10 +133,11 @@ xess_result_t hk_xessVKCreateContext(VkInstance instance, VkPhysicalDevice physi
     {
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
         auto exePath = Util::ExePath().remove_filename();
+        const auto metadata = State::Instance().NVNGX_Init.Read();
 
         auto nvResult = NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
             OPTI_GUID, NVSDK_NGX_ENGINE_TYPE_CUSTOM, OPTI_VERSION, exePath.c_str(), _instance, _physicalDevice, _device,
-            vkGetInstanceProcAddr, vkGetDeviceProcAddr, State::Instance().NVNGX_Version, &fcInfo);
+            vkGetInstanceProcAddr, vkGetDeviceProcAddr, metadata->SdkVersion, &fcInfo);
 
         if (nvResult != NVSDK_NGX_Result_Success)
             return XESS_RESULT_ERROR_UNINITIALIZED;

@@ -130,15 +130,18 @@ void PrepareLogger()
             auto callback_sink = std::make_shared<spdlog::sinks::callback_sink_mt>(
                 [](const spdlog::details::log_msg& msg)
                 {
-                    if (Config::Instance()->LogToNGX.value_or_default() &&
-                        State::Instance().NVNGX_Logger.LoggingCallback != nullptr &&
-                        State::Instance().NVNGX_Logger.MinimumLoggingLevel != NVSDK_NGX_LOGGING_LEVEL_OFF &&
-                        (State::Instance().NVNGX_Logger.MinimumLoggingLevel == NVSDK_NGX_LOGGING_LEVEL_VERBOSE ||
+                    if (!Config::Instance()->LogToNGX.value_or_default())
+                        return;
+                    const auto metadata = State::Instance().NVNGX_Init.Read();
+                    const auto& logging = metadata->Logger;
+                    if (logging.LoggingCallback != nullptr &&
+                        logging.MinimumLoggingLevel != NVSDK_NGX_LOGGING_LEVEL_OFF &&
+                        (logging.MinimumLoggingLevel == NVSDK_NGX_LOGGING_LEVEL_VERBOSE ||
                          msg.level >= spdlog::level::info))
                     {
-                        auto message = (char*) msg.payload.data();
-                        State::Instance().NVNGX_Logger.LoggingCallback(message, NVSDK_NGX_LOGGING_LEVEL_ON,
-                                                                       NVSDK_NGX_Feature_SuperSampling);
+                        std::string message(msg.payload.data(), msg.payload.size());
+                        logging.LoggingCallback(message.c_str(), NVSDK_NGX_LOGGING_LEVEL_ON,
+                                                NVSDK_NGX_Feature_SuperSampling);
                     }
                 });
 

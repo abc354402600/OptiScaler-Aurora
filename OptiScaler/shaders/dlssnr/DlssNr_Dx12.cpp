@@ -2300,17 +2300,15 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ScopedNrStateEnvelope creationEnvelope(cmdList);
 
         SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
-        g_nr.feature =
-            g_nr.create(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                        device, cmdList, g_nr.capabilityParams, workWidth, workHeight,
-                        (int) cfg.DlssNrPreset.value_or_default(),
-                        cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
-                        cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
-                        cfg.DlssNrSkinStructure.value_or_default(),
-                        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0,
-                        // UI correction at the model's own default: with no UI layer fed to it there
-                        // is nothing for it to correct.
-                        1);
+        g_nr.feature = g_nr.create(
+            snippet->wstring().c_str(), State::Instance().NVNGX_Init.Read()->ApplicationDataPath.c_str(), device,
+            cmdList, g_nr.capabilityParams, workWidth, workHeight, (int) cfg.DlssNrPreset.value_or_default(),
+            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
+            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
+            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0,
+            // UI correction at the model's own default: with no UI layer fed to it there
+            // is nothing for it to correct.
+            1);
 
         if (g_nr.feature == nullptr)
         {
@@ -2479,11 +2477,10 @@ void DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 const auto passTuning = TuningFor(cfg, i);
 
                 g_nr.passFeature[i] = g_nr.create(
-                    passSnippet->wstring().c_str(),
-                    State::Instance().NVNGX_ApplicationDataPath.c_str(), device, cmdList,
-                    g_nr.capabilityParams, workWidth, workHeight, (int) passTuning.Preset,
-                    passTuning.Intensity, (int) passTuning.Style, passTuning.LocalStructure,
-                    passTuning.LocalTone, passTuning.SkinStructure, passTuning.AutoMask ? 1 : 0, 1);
+                    passSnippet->wstring().c_str(), State::Instance().NVNGX_Init.Read()->ApplicationDataPath.c_str(),
+                    device, cmdList, g_nr.capabilityParams, workWidth, workHeight, (int) passTuning.Preset,
+                    passTuning.Intensity, (int) passTuning.Style, passTuning.LocalStructure, passTuning.LocalTone,
+                    passTuning.SkinStructure, passTuning.AutoMask ? 1 : 0, 1);
             }
 
             g_nr.passBuildAfter = g_frames + kSettleFrames;
@@ -3506,8 +3503,9 @@ void ProbeD3D11(void* d3d11Device)
     int attempt = 0;
     int results[4] = { -9, -9, -9, -9 };
 
-    const int result = init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                            d3d11Device, 0x0000015, &attempt, results);
+    const int result =
+        init(snippet->wstring().c_str(), State::Instance().NVNGX_Init.Read()->ApplicationDataPath.c_str(), d3d11Device,
+             0x0000015, &attempt, results);
 
     static const char* kNames[4] = { "Init_Ext on our own copy", "Init on our own copy",
                                      "Init_Ext on the shared module", "Init on the shared module" };

@@ -340,11 +340,12 @@ static FfxErrorCode ffxFsr2ContextCreate_Vk(FfxFsr2Context* context, FfxFsr2Cont
     {
         NVSDK_NGX_FeatureCommonInfo fcInfo {};
         auto exePath = Util::ExePath().remove_filename();
+        const auto metadata = State::Instance().NVNGX_Init.Read();
 
         auto nvResult = NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
-            OPTI_GUID, state.NVNGX_Engine, OPTI_VERSION, exePath.c_str(), State::Instance().VulkanInstance,
+            OPTI_GUID, metadata->EngineType, OPTI_VERSION, exePath.c_str(), State::Instance().VulkanInstance,
             _vkPhysicalDevice, _vkDevice, vkGetInstanceProcAddr, vkGetDeviceProcAddr,
-            state.NVNGX_Version == 0 ? NVSDK_NGX_Version_API : state.NVNGX_Version, &fcInfo);
+            metadata->SdkVersion == 0 ? NVSDK_NGX_Version_API : metadata->SdkVersion, &fcInfo);
 
         if (nvResult != NVSDK_NGX_Result_Success)
             return FFX_ERROR_BACKEND_API_ERROR;
