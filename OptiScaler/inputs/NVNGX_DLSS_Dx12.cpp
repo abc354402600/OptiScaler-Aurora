@@ -33,7 +33,7 @@ static std::unordered_map<unsigned int, NVSDK_NGX_Feature> HandleToFeature;
 static ID3D12Device* D3D12Device = nullptr;
 static int evalCounter = 0;
 static bool shutdown = false;
-static bool _skipInit = false;
+static thread_local bool _skipInit = false;
 static wchar_t const** paths;
 
 class ScopedInitDx12
@@ -167,7 +167,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     State::Instance().NVNGX_ApplicationId = InApplicationId;
     State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
     State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_FeatureInfo = &localFeatureInfo;
     State::Instance().NVNGX_Version = InSDKVersion;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)

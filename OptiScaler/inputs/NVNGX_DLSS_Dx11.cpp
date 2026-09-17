@@ -21,7 +21,7 @@ static ID3D11Device* D3D11Device = nullptr;
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Dx11>> Dx11Contexts;
 static int evalCounter = 0;
 static bool shutdown = false;
-static bool _skipInit = false;
+static thread_local bool _skipInit = false;
 static wchar_t const** paths;
 
 class ScopedInitDx11
@@ -153,7 +153,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_Init_Ext(unsigned long long InApp
     State::Instance().NVNGX_ApplicationId = InApplicationId;
     State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
     State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_FeatureInfo = InFeatureInfo;
     State::Instance().NVNGX_Version = InSDKVersion;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)

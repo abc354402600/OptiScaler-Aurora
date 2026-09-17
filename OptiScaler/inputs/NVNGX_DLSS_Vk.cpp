@@ -27,7 +27,7 @@ PFN_vkGetDeviceProcAddr vkGDPA;
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Vk>> VkContexts;
 static int evalCounter = 0;
 static bool shutdown = false;
-static bool _skipInit = false;
+static thread_local bool _skipInit = false;
 static wchar_t const** paths;
 
 class ScopedInitVk
@@ -163,7 +163,6 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     State::Instance().NVNGX_ApplicationId = InApplicationId;
     State::Instance().NVNGX_ApplicationDataPath = std::wstring(InApplicationDataPath);
     State::Instance().NVNGX_Version = InSDKVersion;
-    State::Instance().NVNGX_FeatureInfo = &localFeatureInfo;
     State::Instance().NVNGX_Version = InSDKVersion;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
