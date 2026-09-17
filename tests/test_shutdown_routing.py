@@ -169,6 +169,7 @@ def main():
     cls='''struct NVNGXProxy {
  inline static NativeDeviceLifecycle _dx12Devices,_vulkanDevices;
  inline static Module _module;
+ static const Module& GetModule() { return _module; }
  static void InitNVNGX() {}
  static void GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo*) {}
 '''+ '\n'.join(methods)+'\n};\n'

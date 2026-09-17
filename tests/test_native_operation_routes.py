@@ -115,7 +115,7 @@ def main():
     cpp=PRELUDE+'\n'.join(typedefs)+'\nstruct NvngxModule {\n'+'\n'.join(fields)+'\n};\n'
     parameter_source=(ROOT/'OptiScaler/NVNGX_Parameter.h').read_text(encoding='utf-8')
     cpp+=function(parameter_source,'template <typename PFN_DestroyNGXParameters>')+'\n'
-    cpp+='struct NVNGXProxy { inline static NativeDeviceLifecycle _dx12Devices,_vulkanDevices; inline static NvngxModule _module;\n'
+    cpp+='struct NVNGXProxy { inline static NativeDeviceLifecycle _dx12Devices,_vulkanDevices; inline static NvngxModule _module; static const NvngxModule& GetModule() { return _module; }\n'
     cpp+='\n'.join(methods)+'\n};\nint main() {\n'+'\n'.join(checks)+r'''
     // Native destroy failures and Busy must not be reported as released.
     using Free=int(*)(NVSDK_NGX_Parameter*);
