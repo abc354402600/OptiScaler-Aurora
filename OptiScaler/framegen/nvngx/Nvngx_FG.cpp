@@ -313,8 +313,8 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     return _handles.Release(
-        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
-        [&](Nvngx_FG_Handle& handle) { return provider->D3D12_ReleaseFeature(handle.nativeHandle); },
+        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
+        [&](const Nvngx_FG_Handle& handle) { return provider->D3D12_ReleaseFeature(handle.nativeHandle); },
         [](NVSDK_NGX_Result result) { return result == NVSDK_NGX_Result_Success; });
 }
 
@@ -344,8 +344,8 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     return _handles.Read(
-        InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
-        [&](Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
+        InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
+        [&](const Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
         {
             bool applyHudCutoff = Config::Instance()->FGHudCutoff.value_or_default() > 0.0f ||
                                   State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup;
@@ -537,8 +537,8 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     return _handles.Release(
-        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
-        [&](Nvngx_FG_Handle& handle) { return provider->VULKAN_ReleaseFeature(handle.nativeHandle); },
+        InHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
+        [&](const Nvngx_FG_Handle& handle) { return provider->VULKAN_ReleaseFeature(handle.nativeHandle); },
         [](NVSDK_NGX_Result result) { return result == NVSDK_NGX_Result_Success; });
 }
 
@@ -567,8 +567,8 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_EvaluateFeature(VkCommandBuffer InCmdList, con
     if (!InFeatureHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    return _handles.Read(InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound,
-                         [&](Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
+    return _handles.Read(InFeatureHandle, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
+                         [&](const Nvngx_FG_Handle& handle) -> NVSDK_NGX_Result
                          {
                              // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
 

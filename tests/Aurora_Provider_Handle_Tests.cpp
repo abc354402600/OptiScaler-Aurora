@@ -55,7 +55,7 @@ int main()
                                [&]
                                {
                                    return registry.Release(
-                                       handle, -1,
+                                       handle, -1, -3,
                                        [&](auto&)
                                        {
                                            ++nativeReleases;
@@ -63,11 +63,20 @@ int main()
                                        },
                                        [](int r) { return r == 0; });
                                });
-    const bool releaseWaited = releaser.wait_for(std::chrono::milliseconds(30)) == std::future_status::timeout;
+    const bool releaseReturned = releaser.wait_for(std::chrono::seconds(2)) == std::future_status::ready;
     const bool retained = !lifetime.expired() && nativeReleases == 0;
     resume.set_value();
-    check(releaseWaited && retained, "release waits while evaluate uses native handle");
-    check(reader.get() == 7 && releaser.get() == 0, "evaluate completes before successful release");
+    check(releaseReturned && retained, "busy release returns without waiting or touching native handle");
+    check(reader.get() == 7 && releaser.get() == -3, "evaluate completes and busy release can be retried");
+    check(registry.Release(
+              handle, -1, -3,
+              [&](const auto&)
+              {
+                  ++nativeReleases;
+                  return 0;
+              },
+              [](int r) { return r == 0; }) == 0,
+          "explicit release retry succeeds after evaluate");
     check(!lifetime.expired() && nativeReleases == 1, "retired public token remains owned after native release");
     check(registry.GetIdentity(handle, [](const auto& h) { return h.id; }) == 42,
           "router can identify a retired handle without reading its address");
@@ -108,5 +117,73 @@ int main()
     for (auto& result : releases)
         successes += result.get() == 0;
     check(successes == 1 && nativeReleases == 1, "concurrent releases invoke provider exactly once");
+
+    auto third = registry.Prepare({ 45, std::make_shared<int>(10) });
+    auto* thirdHandle = registry.Publish(third);
+    third.reset();
+    const auto isSuccess = [](int result) { return result == 0; };
+    check(registry.Read(thirdHandle, -1, -3,
+                        [&](const auto&)
+                        {
+                            check(registry.GetIdentity(thirdHandle, [](const auto& h) { return h.id; }) == 45,
+                                  "identity lookup can reenter Evaluate");
+                            check(registry.Release(
+                                      thirdHandle, -1, -3, [](const auto&) { return 0; }, isSuccess) == -3,
+                                  "Evaluate callback release fails busy without deadlock");
+                            return 4;
+                        }) == 4,
+          "Evaluate survives callback reentry");
+
+    check(registry.Release(
+              thirdHandle, -1, -3,
+              [&](const auto&)
+              {
+                  check(registry.GetIdentity(thirdHandle, [](const auto& h) { return h.id; }) == 45,
+                        "identity lookup remains routable during Release");
+                  check(registry.Read(thirdHandle, -1, -3, [](const auto&) { return 0; }) == -3,
+                        "Evaluate callback during Release fails busy");
+                  check(registry.Release(
+                            thirdHandle, -1, -3, [](const auto&) { return 0; }, isSuccess) == -3,
+                        "nested Release fails busy");
+                  auto worker =
+                      std::async(std::launch::async,
+                                 [&] { return registry.Read(thirdHandle, -1, -3, [](const auto&) { return 0; }); });
+                  check(worker.wait_for(std::chrono::seconds(2)) == std::future_status::ready && worker.get() == -3,
+                        "callback may join another thread without a registry lock cycle");
+                  return -2;
+              },
+              isSuccess) == -2,
+          "failed reentrant Release keeps ownership");
+    check(registry.Read(thirdHandle, -1, -3, [](const auto&) { return 9; }) == 9,
+          "failed reentrant Release permits Evaluate again");
+
+    bool threw = false;
+    try
+    {
+        registry.Read(thirdHandle, -1, -3, [](const auto&) -> int { throw std::runtime_error("evaluate"); });
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    check(threw, "Evaluate exception propagated");
+    threw = false;
+    try
+    {
+        registry.Release(
+            thirdHandle, -1, -3, [](const auto&) -> int { throw std::runtime_error("release"); }, isSuccess);
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    check(threw, "Release exception propagated and read admission was unwound");
+    check(registry.Read(thirdHandle, -1, -3, [](const auto&) { return 5; }) == 5,
+          "Release exception restores read admission");
+    check(registry.Release(
+              thirdHandle, -1, -3, [](const auto&) { return 0; }, isSuccess) == 0,
+          "Release after exceptions succeeds");
+    check(registry.Read(thirdHandle, -1, -3, [](const auto&) { return 0; }) == -1,
+          "retired handle is missing rather than busy");
     std::cout << "PASS: " << passed << " provider handle lifetime checks\n";
 }

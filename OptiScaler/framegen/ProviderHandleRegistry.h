@@ -3,19 +3,20 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <unordered_map>
 #include <utility>
 
-// Lookup retains ownership before taking the per-handle lock. A Release can
-// retire the public pointer while queued callers still safely own the entry.
+// Lookup retains the token. Admission is checked under a short per-handle lock;
+// provider callbacks never run under that lock and busy releases never wait.
 template <typename Value> class ProviderHandleRegistry
 {
   public:
     struct Entry
     {
         Value value;
-        std::shared_mutex mutex;
+        std::mutex mutex;
+        size_t readers = 0;
+        bool releasing = false;
         bool retired = false;
         explicit Entry(Value v) : value(std::move(v)) {}
     };
@@ -40,36 +41,77 @@ template <typename Value> class ProviderHandleRegistry
         auto entry = Find(key);
         if (!entry)
             return std::nullopt;
-        std::shared_lock lock(entry->mutex);
+        // Published wrapper fields are immutable; native resources they point
+        // to are only accessed through Read/Release admission below.
         return identity(static_cast<const Value&>(entry->value));
     }
 
     template <typename Result, typename Function> Result Read(const void* key, Result missing, Function&& function)
     {
+        return Read(key, missing, missing, std::forward<Function>(function));
+    }
+
+    template <typename Result, typename Function>
+    Result Read(const void* key, Result missing, Result busy, Function&& function)
+    {
         auto entry = Find(key);
         if (!entry)
             return missing;
-        std::shared_lock lock(entry->mutex);
-        return entry->retired ? missing : function(entry->value);
+        {
+            std::scoped_lock lock(entry->mutex);
+            if (entry->retired)
+                return missing;
+            if (entry->releasing)
+                return busy;
+            ++entry->readers;
+        }
+        struct ReadScope
+        {
+            Entry& entry;
+            ~ReadScope()
+            {
+                std::scoped_lock lock(entry.mutex);
+                --entry.readers;
+            }
+        } scope { *entry };
+        return function(static_cast<const Value&>(entry->value));
     }
 
     template <typename Result, typename Function, typename Success>
     Result Release(const void* key, Result missing, Function&& function, Success&& success)
     {
+        return Release(key, missing, missing, std::forward<Function>(function), std::forward<Success>(success));
+    }
+
+    template <typename Result, typename Function, typename Success>
+    Result Release(const void* key, Result missing, Result busy, Function&& function, Success&& success)
+    {
         auto entry = Find(key);
         if (!entry)
             return missing;
-        std::scoped_lock lock(entry->mutex);
-        if (entry->retired)
-            return missing;
-        auto result = function(entry->value);
-        if (success(result))
         {
-            entry->retired = true;
-            // Keep the small public token until registry destruction. Native
-            // resources were released above; no callback may use this value again.
+            std::scoped_lock lock(entry->mutex);
+            if (entry->retired)
+                return missing;
+            if (entry->releasing || entry->readers != 0)
+                return busy;
+            entry->releasing = true;
         }
-        // The entry's mutex is unlocked before this local shared_ptr is released.
+        struct ReleaseScope
+        {
+            Entry& entry;
+            bool succeeded = false;
+            ~ReleaseScope()
+            {
+                std::scoped_lock lock(entry.mutex);
+                entry.retired = succeeded;
+                entry.releasing = false;
+            }
+        } scope { *entry };
+        auto result = function(static_cast<const Value&>(entry->value));
+        scope.succeeded = success(result);
+        // Retain public tokens until registry destruction to avoid address reuse.
+        // Failed/busy releases retain native ownership for an explicit retry.
         return result;
     }
 
