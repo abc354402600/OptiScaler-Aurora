@@ -24,10 +24,12 @@ def function(source, declaration):
 
 PRELUDE = r'''
 #include "proxies/NativeDeviceLifecycle.h"
+#include "framegen/ProviderCallAdmission.h"
 #include "proxies/NgxInitMetadata.h"
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <functional>
 #define NVSDK_NGX_API
 #define LOG_FUNC(...)
 #define LOG_INFO(...)
@@ -70,12 +72,21 @@ struct Module {
  int (*D3D12_Shutdown)()=&closeDx; int (*D3D12_Shutdown1)(ID3D12Device*)=&closeDx1;
  int (*VULKAN_Shutdown)()=&closeVk; int (*VULKAN_Shutdown1)(VkDevice)=&closeVk1;
 };
-struct Nvngx_FG {
+struct Provider {
+ bool isDx12Available() { return true; }
+ bool isVulkanAvailable() { return true; }
  inline static int globalDx=0,deviceDx=0,globalVk=0,deviceVk=0;
- static int D3D12_Shutdown() { ++globalDx; return 0; }
- static int D3D12_Shutdown1(ID3D12Device*) { ++deviceDx; return 0; }
- static int VULKAN_Shutdown() { ++globalVk; return 0; }
- static int VULKAN_Shutdown1(VkDevice) { ++deviceVk; return 0; }
+ inline static int result=0;
+ static int D3D12_Shutdown() { ++globalDx; return result; }
+ static int D3D12_Shutdown1(ID3D12Device*) { ++deviceDx; return result; }
+ static int VULKAN_Shutdown() { ++globalVk; return result; }
+ static int VULKAN_Shutdown1(VkDevice) { ++deviceVk; return result; }
+};
+struct Nvngx_FG : Provider {
+ inline static ProviderCallAdmission _calls;
+ struct Publication { Provider* Peek() { static Provider p; return &p; } };
+ inline static Publication _provider;
+ // ACTUAL_SHUTDOWN_COORDINATORS
 };
 struct DLSSFeatureDx12 {
  inline static bool _dlssInitedDx12=true;
@@ -151,6 +162,27 @@ int main() {
  // Existing process-exit workaround still skips native D3D12 calls.
  check(NVNGXProxy::InitDx12(&a)); D3D12Device=&a; state.isShuttingDown=true; before=globalDx;
  check(NVSDK_NGX_D3D12_Shutdown()==0 && globalDx==before && NVNGXProxy::IsDx12DeviceInited(&a));
+ // Admission spans native shutdown and all subsequent local cleanup.
+ state.isShuttingDown=false; nativeResult=0;
+ check(NVNGXProxy::InitDx12(&a) && NVNGXProxy::InitVulkan(nullptr,nullptr,&a,nullptr,nullptr));
+ D3D12Device=&a; vkDevice=&a; state.nvngxDx12Inited=true; state.nvngxVkInited=true; state.currentFeature=&feature;
+ before=deviceDx; int beforeVk=deviceVk;
+ {
+   auto operation=Nvngx_FG::_calls.TryOperation();
+   check(NVSDK_NGX_D3D12_Shutdown1(&a)==-7 && NVSDK_NGX_VULKAN_Shutdown1(&a)==-7);
+   check(deviceDx==before && deviceVk==beforeVk && D3D12Device==&a && vkDevice==&a && state.currentFeature==&feature);
+ }
+ Nvngx_FG::result=-9; before=deviceDx;
+ check(NVSDK_NGX_D3D12_Shutdown1(&a)==-9);
+ check(deviceDx==before+1 && !NVNGXProxy::IsDx12DeviceInited(&a) && D3D12Device==&a && state.nvngxDx12Inited && state.currentFeature==&feature);
+ Nvngx_FG::result=0;
+ check(NVSDK_NGX_D3D12_Shutdown1(&a)==0 && deviceDx==before+1 && !D3D12Device && !state.nvngxDx12Inited);
+ state.currentFeature=&feature; state.api=API::Vulkan;
+ Nvngx_FG::result=-9; before=deviceVk;
+ check(NVSDK_NGX_VULKAN_Shutdown1(&a)==-9);
+ check(deviceVk==before+1 && !NVNGXProxy::IsVulkanDeviceInited(&a) && vkDevice==&a && state.nvngxVkInited && state.currentFeature==&feature);
+ Nvngx_FG::result=0;
+ check(NVSDK_NGX_VULKAN_Shutdown1(&a)==0 && deviceVk==before+1 && !vkDevice && !state.nvngxVkInited && !state.currentFeature);
  std::cout << "PASS: " << checks << " native shutdown routing checks\n";
 }
 '''
@@ -182,7 +214,10 @@ def main():
             bodies.append(function(source,declaration))
     with tempfile.TemporaryDirectory(prefix='aurora-native-shutdown-') as folder:
         path=Path(folder); cpp=path/'test.cpp'; exe=path/'test.exe'
-        cpp.write_text(PRELUDE+cls+'\n'.join(bodies)+CHECKS,encoding='utf-8')
+        header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
+        coordinators='\n'.join(function(header,'template <typename Callback> static NVSDK_NGX_Result '+name+'(') for name in ('WithDx12Shutdown','WithVulkanShutdown'))
+        prelude=PRELUDE.replace('// ACTUAL_SHUTDOWN_COORDINATORS',coordinators)
+        cpp.write_text(prelude+cls+'\n'.join(bodies)+CHECKS,encoding='utf-8')
         command=[args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower()=='cl': command+=['/nologo','/EHsc','/std:c++20','/I'+str(ROOT/'OptiScaler'),str(cpp),'/Fe:'+str(exe)]
         else: command+=['-std=c++20','-I'+str(ROOT/'OptiScaler'),str(cpp),'-o',str(exe)]

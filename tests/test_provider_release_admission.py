@@ -8,6 +8,7 @@ from test_shutdown_routing import function
 ROOT=Path(__file__).resolve().parents[1]
 PRELUDE=r'''
 #include "framegen/ProviderHandleRegistry.h"
+#include "framegen/ProviderCallAdmission.h"
 #include <functional>
 #include <iostream>
 #include <cstdlib>
@@ -25,6 +26,7 @@ struct Nvngx_FG {
  struct Nvngx_FG_Handle { unsigned id; NVSDK_NGX_Handle* nativeHandle; };
  inline static ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
  inline static bool available=true;
+ inline static ProviderCallAdmission _calls;
  static Provider* getProvider() { return available?&provider:nullptr; }
  static int D3D12_ReleaseFeature(NVSDK_NGX_Handle*);
  static int VULKAN_ReleaseFeature(NVSDK_NGX_Handle*);

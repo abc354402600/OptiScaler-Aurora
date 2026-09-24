@@ -1179,27 +1179,30 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
 
 static NVSDK_NGX_Result ShutdownVulkan(VkDevice device)
 {
-    const auto result = NVNGXProxy::ShutdownVulkan(device);
-    if (result != NVSDK_NGX_Result_Success)
-        return result;
+    return Nvngx_FG::WithVulkanShutdown(
+        [&](auto closeProvider) -> NVSDK_NGX_Result
+        {
+            const auto result = NVNGXProxy::ShutdownVulkan(device);
+            if (result != NVSDK_NGX_Result_Success)
+                return result;
 
-    if (device)
-        Nvngx_FG::VULKAN_Shutdown1(device);
-    else
-        Nvngx_FG::VULKAN_Shutdown();
+            const auto providerResult = closeProvider(device);
+            if (providerResult != NVSDK_NGX_Result_Success)
+                return providerResult;
 
-    if (device && device != vkDevice)
-        return NVSDK_NGX_Result_Success;
+            if (device && device != vkDevice)
+                return NVSDK_NGX_Result_Success;
 
-    shutdown = true;
-    vkInstance = nullptr;
-    vkPD = nullptr;
-    vkDevice = nullptr;
-    if (State::Instance().api == API::Vulkan)
-        State::Instance().currentFeature = nullptr;
-    State::Instance().nvngxVkInited = false;
-    shutdown = false;
-    return NVSDK_NGX_Result_Success;
+            shutdown = true;
+            vkInstance = nullptr;
+            vkPD = nullptr;
+            vkDevice = nullptr;
+            if (State::Instance().api == API::Vulkan)
+                State::Instance().currentFeature = nullptr;
+            State::Instance().nvngxVkInited = false;
+            shutdown = false;
+            return NVSDK_NGX_Result_Success;
+        });
 }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(nullptr); }

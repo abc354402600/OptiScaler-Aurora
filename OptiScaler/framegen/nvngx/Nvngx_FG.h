@@ -8,6 +8,7 @@
 #include "IFGNvngx.h"
 #include <framegen/ProviderHandleRegistry.h>
 #include <framegen/ProviderPublication.h>
+#include <framegen/ProviderCallAdmission.h>
 
 class Nvngx_FG
 {
@@ -23,6 +24,7 @@ class Nvngx_FG
     static inline std::atomic_uint32_t lastIdCreated = 0;
     static inline ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
     static inline ProviderPublication<IFGNvngx> _provider;
+    static inline ProviderCallAdmission _calls;
     static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
 
     static std::unique_ptr<IFGNvngx> createProvider();
@@ -30,6 +32,38 @@ class Nvngx_FG
     static IFGNvngx* getProvider();
 
   public:
+    // The exported API holds this admission through native shutdown, provider
+    // shutdown and local cleanup. A rejected transition changes none of them.
+    template <typename Callback> static NVSDK_NGX_Result WithDx12Shutdown(Callback&& callback)
+    {
+        auto lease = _calls.TryTransition();
+        if (!lease)
+            return NVSDK_NGX_Result_FAIL_NotInitialized;
+        return std::forward<Callback>(callback)(
+            [](ID3D12Device* device)
+            {
+                auto* provider = _provider.Peek();
+                if (!provider || !provider->isDx12Available())
+                    return NVSDK_NGX_Result_Success;
+                return device ? provider->D3D12_Shutdown1(device) : provider->D3D12_Shutdown();
+            });
+    }
+
+    template <typename Callback> static NVSDK_NGX_Result WithVulkanShutdown(Callback&& callback)
+    {
+        auto lease = _calls.TryTransition();
+        if (!lease)
+            return NVSDK_NGX_Result_FAIL_NotInitialized;
+        return std::forward<Callback>(callback)(
+            [](VkDevice device)
+            {
+                auto* provider = _provider.Peek();
+                if (!provider || !provider->isVulkanAvailable())
+                    return NVSDK_NGX_Result_Success;
+                return device ? provider->VULKAN_Shutdown1(device) : provider->VULKAN_Shutdown();
+            });
+    }
+
     static std::optional<unsigned int> GetHandleId(const NVSDK_NGX_Handle* handle)
     {
         return _handles.GetIdentity(handle, [](const Nvngx_FG_Handle& value) { return value.id; });

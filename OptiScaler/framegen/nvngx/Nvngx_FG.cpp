@@ -230,6 +230,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init(unsigned long long InApplicationId, const 
                                       ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                       NVSDK_NGX_Version InSDKVersion)
 {
+    auto lease = _calls.TryTransition();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     const auto lookup = lookupProvider();
     if (lookup.status == ProviderStatus::Pending)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
@@ -245,6 +249,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
                                           ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                           const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
+    auto lease = _calls.TryTransition();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     const auto lookup = lookupProvider();
     if (lookup.status == ProviderStatus::Pending)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
@@ -258,27 +266,21 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown()
 {
-    auto* provider = _provider.Peek();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    return provider->D3D12_Shutdown();
+    return WithDx12Shutdown([&](auto closeProvider) { return closeProvider(nullptr); });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
-    auto* provider = _provider.Peek();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    return provider->D3D12_Shutdown1(InDevice);
+    return WithDx12Shutdown([&](auto closeProvider) { return closeProvider(InDevice); });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
                                                       const NVSDK_NGX_Parameter* InParameters, size_t* OutSizeInBytes)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -290,6 +292,14 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatur
 NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                                NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
                                 NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
                                 [&](Nvngx_FG_Handle& handle)
@@ -304,6 +314,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdL
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -322,6 +336,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_GetFeatureRequirements(IDXGIAdapter* Adapter,
                                                         const NVSDK_NGX_FeatureDiscoveryInfo* FeatureDiscoveryInfo,
                                                         NVSDK_NGX_FeatureRequirement* OutSupported)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -335,6 +353,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
                                                  NVSDK_NGX_Parameter* InParameters,
                                                  PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -404,6 +426,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -417,6 +443,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init(unsigned long long InApplicationId, const
                                        PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
                                        const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, NVSDK_NGX_Version InSDKVersion)
 {
+    auto lease = _calls.TryTransition();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     const auto lookup = lookupProvider();
     if (lookup.status == ProviderStatus::Pending)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
@@ -434,6 +464,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext(unsigned long long InApplicationId, c
                                            NVSDK_NGX_Version InSDKVersion,
                                            const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
+    auto lease = _calls.TryTransition();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     const auto lookup = lookupProvider();
     if (lookup.status == ProviderStatus::Pending)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
@@ -452,6 +486,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
                                             NVSDK_NGX_Version InSDKVersion,
                                             const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
+    auto lease = _calls.TryTransition();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     const auto lookup = lookupProvider();
     if (lookup.status == ProviderStatus::Pending)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
@@ -466,27 +504,21 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown()
 {
-    auto* provider = _provider.Peek();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    return provider->VULKAN_Shutdown();
+    return WithVulkanShutdown([&](auto closeProvider) { return closeProvider(nullptr); });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown1(VkDevice InDevice)
 {
-    auto* provider = _provider.Peek();
-
-    if (!provider)
-        return NVSDK_NGX_Result_Fail;
-
-    return provider->VULKAN_Shutdown1(InDevice);
+    return WithVulkanShutdown([&](auto closeProvider) { return closeProvider(InDevice); });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
                                                        const NVSDK_NGX_Parameter* InParameters, size_t* OutSizeInBytes)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -498,6 +530,14 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature InFeatu
 NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Feature InFeatureID,
                                                 NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
                                 NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
                                 [&](Nvngx_FG_Handle& handle)
@@ -514,6 +554,14 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuf
                                                  NVSDK_NGX_Feature InFeatureID, NVSDK_NGX_Parameter* InParameters,
                                                  NVSDK_NGX_Handle** OutHandle)
 {
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     return CreateProviderHandle(_handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET },
                                 NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
                                 [&](Nvngx_FG_Handle& handle)
@@ -528,6 +576,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuf
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -547,6 +599,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_GetFeatureRequirements(const VkInstance Instan
                                                          const NVSDK_NGX_FeatureDiscoveryInfo* FeatureDiscoveryInfo,
                                                          NVSDK_NGX_FeatureRequirement* OutSupported)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -559,6 +615,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_EvaluateFeature(VkCommandBuffer InCmdList, con
                                                   NVSDK_NGX_Parameter* InParameters,
                                                   PFN_NVSDK_NGX_ProgressCallback InCallback)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)
@@ -579,6 +639,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_EvaluateFeature(VkCommandBuffer InCmdList, con
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_PopulateParameters_Impl(NVSDK_NGX_Parameter* InParameters)
 {
+    auto lease = _calls.TryOperation();
+    if (!lease)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     auto* provider = getProvider();
 
     if (!provider)

@@ -13,6 +13,7 @@ from test_shutdown_routing import function
 ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = r'''
 #include "framegen/ProviderPublication.h"
+#include "framegen/ProviderCallAdmission.h"
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -50,6 +51,8 @@ struct NVSDK_NGX_FeatureRequirement { int FeatureSupported=0; int MinHWArchitect
 
 std::unordered_map<unsigned, NVSDK_NGX_Feature> HandleToFeature;
 struct Provider {
+ bool isDx12Available() { return true; }
+ bool isVulkanAvailable() { return true; }
  inline static int shutdowns=0;
  inline static void* lastDevice=nullptr;
  int D3D12_Shutdown() { ++shutdowns; return 0; }
@@ -59,6 +62,8 @@ struct Provider {
 };
 struct Nvngx_FG {
  inline static ProviderPublication<Provider> _provider;
+ inline static ProviderCallAdmission _calls;
+ // ACTUAL_SHUTDOWN_COORDINATORS
  inline static ProviderStatus status=ProviderStatus::Pending;
  inline static int queries=0, creates=0, lazyLoads=0;
  static ProviderStatus D3D12_ProviderStatus() { ++queries; return status; }
@@ -78,11 +83,11 @@ int main() {
  auto check=[&](bool ok) { if(!ok) { std::cerr << "route regression at " << checks+1 << '\n'; std::exit(2); } ++checks; };
  ID3D12Device device; ID3D12GraphicsCommandList cmd;
  // No lookup on shutdown: zero DLL construction even before the first Init.
- check(Nvngx_FG::D3D12_Shutdown()==-1 && Nvngx_FG::D3D12_Shutdown1(&device)==-1);
- check(Nvngx_FG::VULKAN_Shutdown()==-1 && Nvngx_FG::VULKAN_Shutdown1(&device)==-1);
+ check(Nvngx_FG::D3D12_Shutdown()==0 && Nvngx_FG::D3D12_Shutdown1(&device)==0);
+ check(Nvngx_FG::VULKAN_Shutdown()==0 && Nvngx_FG::VULKAN_Shutdown1(&device)==0);
  check(Nvngx_FG::lazyLoads==0 && Provider::shutdowns==0);
  Nvngx_FG::_provider.GetOrCreate([&] {
-   check(Nvngx_FG::D3D12_Shutdown()==-1 && Nvngx_FG::VULKAN_Shutdown()==-1);
+   check(Nvngx_FG::D3D12_Shutdown()==0 && Nvngx_FG::VULKAN_Shutdown()==0);
    check(Nvngx_FG::lazyLoads==0 && Provider::shutdowns==0);
    return std::make_unique<Provider>();
  });
@@ -155,7 +160,10 @@ def main():
             bodies.append(function(source,f'NVSDK_NGX_Result Nvngx_FG::{api}_Shutdown{suffix}('))
     with tempfile.TemporaryDirectory(prefix='aurora-publication-route-') as folder:
         path=Path(folder); cpp=path/'test.cpp'; exe=path/'test.exe'
-        cpp.write_text(PRELUDE+'\n'.join(bodies)+CHECKS,encoding='utf-8')
+        header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
+        coordinators='\n'.join(function(header,'template <typename Callback> static NVSDK_NGX_Result '+name+'(') for name in ('WithDx12Shutdown','WithVulkanShutdown'))
+        prelude=PRELUDE.replace('// ACTUAL_SHUTDOWN_COORDINATORS',coordinators)
+        cpp.write_text(prelude+'\n'.join(bodies)+CHECKS,encoding='utf-8')
         cmd=[args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower()=='cl':
             cmd+=['/nologo','/EHsc','/std:c++20','/I'+str(ROOT/'OptiScaler'),str(cpp),'/Fe:'+str(exe)]

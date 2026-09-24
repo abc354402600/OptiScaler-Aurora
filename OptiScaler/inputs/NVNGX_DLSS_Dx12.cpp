@@ -375,44 +375,44 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
 
 static NVSDK_NGX_Result ShutdownD3D12(ID3D12Device* device)
 {
-    // Retain the existing process-exit workaround. During normal shutdown,
-    // failure must preserve native ownership and local state for a retry.
-    if (!State::Instance().isShuttingDown)
-    {
-        const auto result = NVNGXProxy::ShutdownDx12(device);
-        if (result != NVSDK_NGX_Result_Success)
-            return result;
-    }
+    return Nvngx_FG::WithDx12Shutdown(
+        [&](auto closeProvider) -> NVSDK_NGX_Result
+        {
+            // Retain the existing process-exit workaround. During normal shutdown,
+            // failure must preserve native ownership and local state for a retry.
+            if (!State::Instance().isShuttingDown)
+            {
+                const auto result = NVNGXProxy::ShutdownDx12(device);
+                if (result != NVSDK_NGX_Result_Success)
+                    return result;
+            }
 
-    if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
-    {
-        if (device)
-            Nvngx_FG::D3D12_Shutdown1(device);
-        else
-            Nvngx_FG::D3D12_Shutdown();
-    }
+            const auto providerResult = closeProvider(device);
+            if (providerResult != NVSDK_NGX_Result_Success)
+                return providerResult;
 
-    if (device && device != D3D12Device)
-        return NVSDK_NGX_Result_Success;
+            if (device && device != D3D12Device)
+                return NVSDK_NGX_Result_Success;
 
-    shutdown = true;
-    DLSSFeatureDx12::ResetAfterNativeShutdown();
-    if (State::Instance().api == API::DX12)
-        State::Instance().currentFeature = nullptr;
+            shutdown = true;
+            DLSSFeatureDx12::ResetAfterNativeShutdown();
+            if (State::Instance().api == API::DX12)
+                State::Instance().currentFeature = nullptr;
 
-    if (State::Instance().currentFG != nullptr && State::Instance().activeFgInput == FGInput::Upscaler)
-    {
-        if (State::Instance().isShuttingDown)
-            State::Instance().currentFG->Shutdown();
-        else
-            State::Instance().currentFG->DestroyFGContext();
-        State::Instance().clearCapturedHudlesses = true;
-    }
+            if (State::Instance().currentFG != nullptr && State::Instance().activeFgInput == FGInput::Upscaler)
+            {
+                if (State::Instance().isShuttingDown)
+                    State::Instance().currentFG->Shutdown();
+                else
+                    State::Instance().currentFG->DestroyFGContext();
+                State::Instance().clearCapturedHudlesses = true;
+            }
 
-    D3D12Device = nullptr;
-    State::Instance().nvngxDx12Inited = false;
-    shutdown = false;
-    return NVSDK_NGX_Result_Success;
+            D3D12Device = nullptr;
+            State::Instance().nvngxDx12Inited = false;
+            shutdown = false;
+            return NVSDK_NGX_Result_Success;
+        });
 }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(nullptr); }
