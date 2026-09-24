@@ -13,6 +13,7 @@ from test_shutdown_routing import function
 ROOT=Path(__file__).resolve().parents[1]
 PRELUDE=r'''
 #include "framegen/ProviderCallAdmission.h"
+#include <unordered_set>
 #include <functional>
 #include <future>
 #include <chrono>
@@ -49,6 +50,7 @@ EXTRA=r'''
  }
  check(bool(Nvngx_FG::_calls.TryTransition()));
  // Joining a callback thread does not wait on a lock held by the initiating call.
+ Nvngx_FG::_dx12InitAttempts.insert(nullptr);
  provider.callback=[] {
    auto worker=std::async(std::launch::async,[] {
      return !Nvngx_FG::_calls.TryOperation() && !Nvngx_FG::_calls.TryTransition();
@@ -58,6 +60,7 @@ EXTRA=r'''
  };
  check(Nvngx_FG::D3D12_Shutdown()==-8);
  check(bool(Nvngx_FG::_calls.TryOperation()));
+ Nvngx_FG::_vulkanInitAttempts.insert(nullptr);
  provider.callback=[]()->int { throw std::runtime_error("native close"); };
  bool threw=false;
  try { Nvngx_FG::VULKAN_Shutdown(); } catch(const std::runtime_error&) { threw=true; }
@@ -72,9 +75,9 @@ EXTRA=r'''
  // No provider and unsupported API are no-op shutdowns, with no lazy loading.
  Nvngx_FG::_provider.present=false; int before=provider.calls;
  check(Nvngx_FG::D3D12_Shutdown()==0 && Nvngx_FG::VULKAN_Shutdown()==0 && provider.calls==before);
- Nvngx_FG::_provider.present=true; provider.supportsVk=false;
+ Nvngx_FG::_provider.present=true; provider.supportsVk=false; Nvngx_FG::_vulkanInitAttempts.insert(nullptr);
  check(Nvngx_FG::VULKAN_Shutdown()==0 && provider.calls==before);
- provider.supportsVk=true; provider.supportsDx=false;
+ provider.supportsVk=true; provider.supportsDx=false; Nvngx_FG::_dx12InitAttempts.insert(nullptr);
  check(Nvngx_FG::D3D12_Shutdown()==0 && provider.calls==before);
  std::cout<<"PASS: "<<checks<<" provider call admission checks\n";
 }
@@ -103,6 +106,9 @@ def main():
             elif any(x in param for x in ('InApplicationId','InSDKVersion','InFeatureID','InFeatureId')): arguments.append('0')
             else: arguments.append('nullptr')
         call=f'Nvngx_FG::{name}('+','.join(arguments)+')'
+        if '_Shutdown' in name:
+            target='_dx12InitAttempts' if name.startswith('D3D12') else '_vulkanInitAttempts'
+            checks.append(f'Nvngx_FG::{target}.insert(nullptr);')
         checks.append(f'out=&sentinel; check({call}==42);')
         if 'CreateFeature' in name: checks.append('check(out==nullptr);')
         checks.append('{ auto transition=Nvngx_FG::_calls.TryTransition(); out=&sentinel; '+f'check({call}==-7);')
@@ -112,6 +118,8 @@ def main():
         checks.append('{ auto operation=Nvngx_FG::_calls.TryOperation(); '+f'check({call}=={expected});'+' }')
     cls='''struct Nvngx_FG {
  inline static ProviderCallAdmission _calls;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
  struct Publication { bool present; Provider* Peek() { return present?&provider:nullptr; } };
  inline static Publication _provider{true};
 '''+ '\n'.join(methods)+'\n'+'\n'.join(function(header,'template <typename Callback> static NVSDK_NGX_Result '+name+'(') for name in ('WithDx12Shutdown','WithVulkanShutdown'))+'\n};\n'

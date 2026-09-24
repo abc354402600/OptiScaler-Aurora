@@ -9,6 +9,7 @@
 #include <framegen/ProviderHandleRegistry.h>
 #include <framegen/ProviderPublication.h>
 #include <framegen/ProviderCallAdmission.h>
+#include <unordered_set>
 
 class Nvngx_FG
 {
@@ -25,6 +26,10 @@ class Nvngx_FG
     static inline ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
     static inline ProviderPublication<IFGNvngx> _provider;
     static inline ProviderCallAdmission _calls;
+    // Accessed only with transition admission. An attempted Init may have
+    // partially initialized a provider even when it reports failure.
+    static inline std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+    static inline std::unordered_set<VkDevice> _vulkanInitAttempts;
     static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
 
     static std::unique_ptr<IFGNvngx> createProvider();
@@ -42,10 +47,20 @@ class Nvngx_FG
         return std::forward<Callback>(callback)(
             [](ID3D12Device* device)
             {
-                auto* provider = _provider.Peek();
-                if (!provider || !provider->isDx12Available())
+                if (device ? !_dx12InitAttempts.contains(device) : _dx12InitAttempts.empty())
                     return NVSDK_NGX_Result_Success;
-                return device ? provider->D3D12_Shutdown1(device) : provider->D3D12_Shutdown();
+                auto* provider = _provider.Peek();
+                const auto result = !provider || !provider->isDx12Available() ? NVSDK_NGX_Result_Success
+                                    : device                                  ? provider->D3D12_Shutdown1(device)
+                                                                              : provider->D3D12_Shutdown();
+                if (result == NVSDK_NGX_Result_Success)
+                {
+                    if (device)
+                        _dx12InitAttempts.erase(device);
+                    else
+                        _dx12InitAttempts.clear();
+                }
+                return result;
             });
     }
 
@@ -57,10 +72,20 @@ class Nvngx_FG
         return std::forward<Callback>(callback)(
             [](VkDevice device)
             {
-                auto* provider = _provider.Peek();
-                if (!provider || !provider->isVulkanAvailable())
+                if (device ? !_vulkanInitAttempts.contains(device) : _vulkanInitAttempts.empty())
                     return NVSDK_NGX_Result_Success;
-                return device ? provider->VULKAN_Shutdown1(device) : provider->VULKAN_Shutdown();
+                auto* provider = _provider.Peek();
+                const auto result = !provider || !provider->isVulkanAvailable() ? NVSDK_NGX_Result_Success
+                                    : device                                    ? provider->VULKAN_Shutdown1(device)
+                                                                                : provider->VULKAN_Shutdown();
+                if (result == NVSDK_NGX_Result_Success)
+                {
+                    if (device)
+                        _vulkanInitAttempts.erase(device);
+                    else
+                        _vulkanInitAttempts.clear();
+                }
+                return result;
             });
     }
 

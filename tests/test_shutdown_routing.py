@@ -25,6 +25,7 @@ def function(source, declaration):
 PRELUDE = r'''
 #include "proxies/NativeDeviceLifecycle.h"
 #include "framegen/ProviderCallAdmission.h"
+#include <unordered_set>
 #include "proxies/NgxInitMetadata.h"
 #include <cstdlib>
 #include <iostream>
@@ -84,6 +85,8 @@ struct Provider {
 };
 struct Nvngx_FG : Provider {
  inline static ProviderCallAdmission _calls;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
  struct Publication { Provider* Peek() { static Provider p; return &p; } };
  inline static Publication _provider;
  // ACTUAL_SHUTDOWN_COORDINATORS
@@ -98,6 +101,7 @@ CHECKS = r'''
 int main() {
  int checks=0; auto check=[&](bool ok) { if(!ok) { std::cerr << "native route regression at " << checks+1 << '\n'; std::exit(2); } ++checks; };
  ID3D12Device a,b; int feature=1;
+ Nvngx_FG::_dx12InitAttempts.insert(nullptr);
  auto& state=State::Instance();
  check(NVSDK_NGX_D3D12_Shutdown()==0 && globalDx==0 && deviceDx==0);
  initResult=-4;
@@ -196,7 +200,8 @@ def main():
                             f'template <typename Callback> static NVSDK_NGX_Result Run{api}Init(',
                             f'static bool Is{api}DeviceInited(',f'static bool Is{api}Inited(',
                             f'static NVSDK_NGX_Result Shutdown{api}('):
-            methods.append(function(proxy,declaration))
+            body=function(proxy,declaration)
+            methods.append(body)
     cls='''struct NVNGXProxy {
  inline static NativeDeviceLifecycle _dx12Devices,_vulkanDevices;
  inline static Module _module;
@@ -217,7 +222,19 @@ def main():
         header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
         coordinators='\n'.join(function(header,'template <typename Callback> static NVSDK_NGX_Result '+name+'(') for name in ('WithDx12Shutdown','WithVulkanShutdown'))
         prelude=PRELUDE.replace('// ACTUAL_SHUTDOWN_COORDINATORS',coordinators)
-        cpp.write_text(prelude+cls+'\n'.join(bodies)+CHECKS,encoding='utf-8')
+        # Fixture helpers model a provider attempt beside native initialization;
+        # the extracted native Init and shutdown bodies remain unchanged.
+        setup=r'''
+        bool InitDx12WithProvider(ID3D12Device* d) {
+          Nvngx_FG::_dx12InitAttempts.insert(d); return NVNGXProxy::InitDx12(d);
+        }
+        bool InitVkWithProvider(VkInstance i,VkPhysicalDevice p,VkDevice d,
+                                PFN_vkGetInstanceProcAddr g,PFN_vkGetDeviceProcAddr h) {
+          Nvngx_FG::_vulkanInitAttempts.insert(d); return NVNGXProxy::InitVulkan(i,p,d,g,h);
+        }
+        '''
+        checks=CHECKS.replace('NVNGXProxy::InitDx12(', 'InitDx12WithProvider(').replace('NVNGXProxy::InitVulkan(', 'InitVkWithProvider(')
+        cpp.write_text(prelude+cls+'\n'.join(bodies)+setup+checks,encoding='utf-8')
         command=[args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower()=='cl': command+=['/nologo','/EHsc','/std:c++20','/I'+str(ROOT/'OptiScaler'),str(cpp),'/Fe:'+str(exe)]
         else: command+=['-std=c++20','-I'+str(ROOT/'OptiScaler'),str(cpp),'-o',str(exe)]

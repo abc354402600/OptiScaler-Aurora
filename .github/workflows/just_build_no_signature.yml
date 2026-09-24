@@ -133,7 +133,7 @@ jobs:
             & $env:ComSpec /d /c $command
             if ($LASTEXITCODE) { throw "Compatibility guard test failed: $name" }
         }
-          foreach ($script in @('test_shutdown_routing.py','test_provider_publication_routes.py','test_provider_dll_boundary.py','test_combo_release.py','test_native_operation_routes.py','test_native_module_publication.py','test_native_init_scopes.py','test_ngx_init_paths.py','test_ngx_init_metadata.py','test_provider_release_admission.py','test_provider_call_admission.py')) {
+          foreach ($script in @('test_shutdown_routing.py','test_provider_publication_routes.py','test_provider_dll_boundary.py','test_combo_release.py','test_native_operation_routes.py','test_native_module_publication.py','test_native_init_scopes.py','test_ngx_init_paths.py','test_ngx_init_metadata.py','test_provider_release_admission.py','test_provider_call_admission.py','test_provider_init_footprint.py')) {
             $command = 'call "' + $vcvars + '" && python tests\' + $script + ' --compiler cl'
             & $env:ComSpec /d /c $command
             if ($LASTEXITCODE) { throw "Compatibility routing test failed: $script" }

@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = r'''
 #include "framegen/ProviderPublication.h"
 #include "framegen/ProviderCallAdmission.h"
+#include <unordered_set>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -63,6 +64,8 @@ struct Provider {
 struct Nvngx_FG {
  inline static ProviderPublication<Provider> _provider;
  inline static ProviderCallAdmission _calls;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
  // ACTUAL_SHUTDOWN_COORDINATORS
  inline static ProviderStatus status=ProviderStatus::Pending;
  inline static int queries=0, creates=0, lazyLoads=0;
@@ -91,7 +94,9 @@ int main() {
    check(Nvngx_FG::lazyLoads==0 && Provider::shutdowns==0);
    return std::make_unique<Provider>();
  });
+ Nvngx_FG::_dx12InitAttempts.insert(&device); Nvngx_FG::_vulkanInitAttempts.insert(&device);
  check(Nvngx_FG::D3D12_Shutdown()==0 && Nvngx_FG::VULKAN_Shutdown()==0);
+ Nvngx_FG::_dx12InitAttempts.insert(&device); Nvngx_FG::_vulkanInitAttempts.insert(&device);
  check(Nvngx_FG::D3D12_Shutdown1(&device)==0 && Nvngx_FG::VULKAN_Shutdown1(&device)==0);
  check(Provider::shutdowns==4 && Provider::lastDevice==&device && Nvngx_FG::lazyLoads==0);
  auto exerciseCreate=[&](auto call) {
