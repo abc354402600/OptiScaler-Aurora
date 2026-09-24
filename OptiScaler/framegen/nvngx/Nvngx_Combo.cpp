@@ -22,8 +22,13 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_Init_Ext(unsigned long long InApplicationId,
                                              ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                              const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
+    if (!InDevice)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
+    _artursInitAttempts.insert(InDevice);
     auto resultArturs =
         artursProvider->D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
+    _ffxInitAttempts.insert(InDevice);
     auto resultFfx =
         ffxProvider->D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
 
@@ -35,30 +40,13 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_Init_Ext(unsigned long long InApplicationId,
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_Result Nvngx_Combo::D3D12_Shutdown()
-{
-    auto resultArturs = artursProvider->D3D12_Shutdown();
-    auto resultFfx = ffxProvider->D3D12_Shutdown();
-
-    if (resultArturs != NVSDK_NGX_Result_Success || resultFfx != NVSDK_NGX_Result_Success)
-    {
-        return NVSDK_NGX_Result_Fail;
-    }
-
-    return NVSDK_NGX_Result_Success;
-}
+NVSDK_NGX_Result Nvngx_Combo::D3D12_Shutdown() { return D3D12_Shutdown1(nullptr); }
 
 NVSDK_NGX_Result Nvngx_Combo::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
-    auto resultArturs = artursProvider->D3D12_Shutdown1(InDevice);
-    auto resultFfx = ffxProvider->D3D12_Shutdown1(InDevice);
-
-    if (resultArturs != NVSDK_NGX_Result_Success || resultFfx != NVSDK_NGX_Result_Success)
-    {
-        return NVSDK_NGX_Result_Fail;
-    }
-
-    return NVSDK_NGX_Result_Success;
+    const auto resultArturs = ShutdownChild(_artursInitAttempts, *artursProvider, InDevice);
+    const auto resultFfx = ShutdownChild(_ffxInitAttempts, *ffxProvider, InDevice);
+    return resultArturs != NVSDK_NGX_Result_Success ? resultArturs : resultFfx;
 }
 
 NVSDK_NGX_Result Nvngx_Combo::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,

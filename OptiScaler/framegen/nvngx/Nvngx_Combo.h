@@ -3,6 +3,7 @@
 #include "Nvngx_FFX.h"
 #include "Nvngx_Arturs.h"
 #include <d3d12.h>
+#include <unordered_set>
 
 struct Nvngx_Combo_Handle
 {
@@ -20,6 +21,28 @@ class Nvngx_Combo : public IFGNvngx
 
     std::unique_ptr<Nvngx_Arturs> artursProvider = nullptr;
     std::unique_ptr<Nvngx_FFX> ffxProvider = nullptr;
+
+    // The outer Nvngx_FG transition admission serializes Init/Shutdown.
+    // Record each child separately so retry never closes a completed child twice.
+    std::unordered_set<ID3D12Device*> _artursInitAttempts;
+    std::unordered_set<ID3D12Device*> _ffxInitAttempts;
+
+    template <typename Provider>
+    static NVSDK_NGX_Result ShutdownChild(std::unordered_set<ID3D12Device*>& attempts, Provider& child,
+                                          ID3D12Device* device)
+    {
+        if (device ? !attempts.contains(device) : attempts.empty())
+            return NVSDK_NGX_Result_Success;
+        const auto result = device ? child.D3D12_Shutdown1(device) : child.D3D12_Shutdown();
+        if (result == NVSDK_NGX_Result_Success)
+        {
+            if (device)
+                attempts.erase(device);
+            else
+                attempts.clear();
+        }
+        return result;
+    }
 
   public:
     Nvngx_Combo()
