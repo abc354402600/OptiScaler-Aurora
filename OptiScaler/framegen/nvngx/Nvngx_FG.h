@@ -16,10 +16,17 @@ class Nvngx_FG
   private:
     // The public handle remains the address returned by CreateFeature. Registry
     // ownership protects Evaluate/Release callers without dereferencing stale IDs.
+    enum class HandleApi
+    {
+        D3D12,
+        Vulkan
+    };
+
     struct Nvngx_FG_Handle
     {
         unsigned int id;
         NVSDK_NGX_Handle* nativeHandle = nullptr;
+        HandleApi api = HandleApi::D3D12;
     };
 
     static inline std::atomic_uint32_t lastIdCreated = 0;

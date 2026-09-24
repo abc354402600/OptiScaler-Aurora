@@ -23,7 +23,7 @@ struct Provider {
  int VULKAN_ReleaseFeature(NVSDK_NGX_Handle*) { ++calls; return callback?callback():0; }
 } provider;
 struct Nvngx_FG {
- struct Nvngx_FG_Handle { unsigned id; NVSDK_NGX_Handle* nativeHandle; };
+ // ACTUAL_HANDLE_TYPES
  inline static ProviderHandleRegistry<Nvngx_FG_Handle> _handles;
  inline static bool available=true;
  inline static ProviderCallAdmission _calls;
@@ -38,8 +38,10 @@ CHECKS=r'''
 int main() {
  NVSDK_NGX_Handle native{1};
  for(auto release:{&Nvngx_FG::D3D12_ReleaseFeature,&Nvngx_FG::VULKAN_ReleaseFeature}) {
-   auto* token=reinterpret_cast<NVSDK_NGX_Handle*>(Nvngx_FG::_handles.Publish(Nvngx_FG::_handles.Prepare({42,&native})));
+   auto* token=reinterpret_cast<NVSDK_NGX_Handle*>(Nvngx_FG::_handles.Publish(Nvngx_FG::_handles.Prepare({42,&native,release==&Nvngx_FG::D3D12_ReleaseFeature?Nvngx_FG::HandleApi::D3D12:Nvngx_FG::HandleApi::Vulkan})));
    provider.calls=0; provider.callback={};
+   auto wrong=release==&Nvngx_FG::D3D12_ReleaseFeature?&Nvngx_FG::VULKAN_ReleaseFeature:&Nvngx_FG::D3D12_ReleaseFeature;
+   check(wrong(token)==-3 && provider.calls==0);
    check(release(nullptr)==-2);
    check(release(reinterpret_cast<NVSDK_NGX_Handle*>(1))==-3 && provider.calls==0);
    check(Nvngx_FG::_handles.Read(token,-3,[&](const auto&) { return release(token); })==-7 && provider.calls==0);
@@ -64,7 +66,10 @@ def main():
     source=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.cpp').read_text(encoding='utf-8')
     bodies='\n'.join(function(source,f'NVSDK_NGX_Result Nvngx_FG::{api}_ReleaseFeature(') for api in ('D3D12','VULKAN'))
     with tempfile.TemporaryDirectory(prefix='aurora-provider-release-') as folder:
-        path=Path(folder);cpp=path/'test.cpp';exe=path/'test.exe';cpp.write_text(PRELUDE+bodies+CHECKS,encoding='utf-8')
+        header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
+        types=header[header.index('    enum class HandleApi'):header.index('    static inline std::atomic_uint32_t')]
+        prelude=PRELUDE.replace('// ACTUAL_HANDLE_TYPES',types)
+        path=Path(folder);cpp=path/'test.cpp';exe=path/'test.exe';cpp.write_text(prelude+bodies+CHECKS,encoding='utf-8')
         command=[args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower()=='cl': command+=['/nologo','/EHsc','/std:c++20','/I'+str(ROOT/'OptiScaler'),str(cpp),'/Fe:'+str(exe)]
         else: command+=['-std=c++20','-I'+str(ROOT/'OptiScaler'),str(cpp),'-o',str(exe)]

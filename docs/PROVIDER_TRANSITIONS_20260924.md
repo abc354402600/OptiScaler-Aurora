@@ -22,18 +22,25 @@ Combo previously called both child Shutdown methods again on every retry. If Art
 
 The existing outer transition gate serializes these sets; no mutex is held over a child call. The change does not redefine FFX's no-op Shutdown as feature destruction, retire outstanding Combo handles, or fix partial Create rollback. Those require explicit feature ownership/generation handling next.
 
+## Handle API identity follow-up
+
+The shared registry previously identified a token without checking which API created it. A Vulkan token supplied to D3D12 Evaluate/Release (or the reverse) could therefore reach the wrong native API, and a mistaken Release could retire another API's live token. All three Create routes now publish immutable D3D12/Vulkan identity. Both Evaluate and Release routes reject a mismatched token with FeatureNotFound before native handle use. A rejected wrong-API Release does not retire it, so the original API can still release it normally.
+
+This solves API identity only. Device identity and initialization generations remain separate work; the Vulkan Create variant without an explicit device needs a verified association instead of blindly using mutable global state.
+
 ## Focused checks
 
+- 42 new extracted API-routing checks cover all three Create routes, wrong/right API Evaluate/Release, failed Release retry, retired tokens and failed Create output clearing. Affected Release admission checks expand from 18 to 20. D3D12 shader work is replaced by a stand-in only after the actual API guard.
 - 85 new extracted entry-prefix/production-admission checks cover all 22 provider SDK entry points, busy transition/operation routing, empty Create outputs, moved leases, reentrant callback threads, exceptions, admission retained through caller cleanup, and no-op unsupported/absent-provider shutdown. Native/GPU bodies beyond ordinary admission are stand-ins.
 - 104 new checks execute all five complete Init bodies and the real shutdown coordinators with fake SDK results: never-initialized provider, wrong/null device, busy/Pending/unavailable lookup, failed/throwing Init and close, retry, global clearing, and independent API footprints.
 - 132 new extracted Combo Init/Shutdown checks exercise both child error permutations, global/per-device close, unknown device, retry without double close, repeated Init, exceptions before/after the first child, failed Init cleanup and multi-device retention. The 44 existing affected Combo Release checks also pass.
 - Actual exported native/provider shutdown checks expand from 43 to 52: blocked shutdown changes neither API/device ownership nor local state, provider failure is propagated, and retry does not repeat a successful native shutdown.
-- Affected 36 provider publication-route and 18 per-handle Release-route checks pass with the actual new coordinator bodies.
+- Affected 36 provider publication-route and 20 per-handle Release-route checks pass with the actual new coordinator bodies.
 - Negative control: removing the D3D12 Init-footprint insertion in a temporary source copy fails check 7 of the new complete-Init suite; production files were not mutated.
 - Full Windows build/format/package outcome will be recorded after CI completes. These CPU checks do not establish that the Witcher loading/toggle crash is fixed.
 
 ## Remaining lifecycle work
 
-This excludes simultaneous teardown/operation execution; it does not yet associate replacement handles with an API/device generation or define all partially successful shutdown states. In particular, an admitted successful shutdown followed by Init must not make an old handle valid again. FFX shutdown is currently a no-op, DLL shutdown forwards teardown, and Combo now remembers independently completed child closes; those contracts must be handled explicitly before automatic handle retirement. Shared HUD/depth resources and concurrent ordinary Evaluate calls remain outside this transition fix. Native Init before the replacement-provider call and other global State/Config updates are not made one transaction by this change.
+This excludes simultaneous teardown/operation execution; it does not yet associate replacement handles with a device/generation or define all partially successful shutdown states. In particular, an admitted successful shutdown followed by Init must not make an old handle valid again. FFX shutdown is currently a no-op, DLL shutdown forwards teardown, and Combo now remembers independently completed child closes; those contracts must be handled explicitly before automatic handle retirement. Shared HUD/depth resources and concurrent ordinary Evaluate calls remain outside this transition fix. Native Init before the replacement-provider call and other global State/Config updates are not made one transaction by this change.
 
 Next work remains device/generation and outstanding-feature ownership, including release/recovery of resources whose parent shutdown did not free them. Do not merge unfinished lifecycle work into aurora or describe compatibility as fully verified. Real-game tests remain deferred by the user.
