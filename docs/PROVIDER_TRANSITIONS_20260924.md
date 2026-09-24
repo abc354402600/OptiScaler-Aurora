@@ -37,10 +37,26 @@ This solves API identity only. Device identity and initialization generations re
 - Actual exported native/provider shutdown checks expand from 43 to 52: blocked shutdown changes neither API/device ownership nor local state, provider failure is propagated, and retry does not repeat a successful native shutdown.
 - Affected 36 provider publication-route and 20 per-handle Release-route checks pass with the actual new coordinator bodies.
 - Negative control: removing the D3D12 Init-footprint insertion in a temporary source copy fails check 7 of the new complete-Init suite; production files were not mutated.
-- Full Windows build/format/package outcome will be recorded after CI completes. These CPU checks do not establish that the Witcher loading/toggle crash is fixed.
+- Additional negative controls fail as intended: omitting completed-child clearing fails Combo check 6, and removing API guards fails API-route check 4. Each mutation ran in a temporary source copy.
+- `6f5597ac` (transition admission) and `19e934e8` (Init footprints) are pushed. Full Windows build/package `35946609088` and format `35946609043` succeeded for `19e934e8`; its MSVC log confirms 85 admission, 104 complete Init, 52 shutdown and 36 publication checks passed.
+- Follow-ups `d1111d53` (Combo child cleanup) and `5ac7f631` (handle API identity) are pushed. Windows build/package `35946840518` and format `35946840507` passed for `d1111d53`; final Windows build/package `35947175730` and format `35947175655` passed for `5ac7f631`. These CPU checks do not establish that the Witcher loading/toggle crash is fixed.
 
 ## Remaining lifecycle work
 
 This excludes simultaneous teardown/operation execution; it does not yet associate replacement handles with a device/generation or define all partially successful shutdown states. In particular, an admitted successful shutdown followed by Init must not make an old handle valid again. FFX shutdown is currently a no-op, DLL shutdown forwards teardown, and Combo now remembers independently completed child closes; those contracts must be handled explicitly before automatic handle retirement. Shared HUD/depth resources and concurrent ordinary Evaluate calls remain outside this transition fix. Native Init before the replacement-provider call and other global State/Config updates are not made one transaction by this change.
 
 Next work remains device/generation and outstanding-feature ownership, including release/recovery of resources whose parent shutdown did not free them. Do not merge unfinished lifecycle work into aurora or describe compatibility as fully verified. Real-game tests remain deferred by the user.
+
+## Next implementation boundary, from local source review
+
+- NGX's bundled SDK contract (`external/nvngx_dlss_sdk/nvsdk_ngx.h` and `nvsdk_ngx_vk.h`) says Shutdown1(device) affects only that device, and Shutdown1(nullptr) equals global Shutdown. Do not retire all devices' handles on a device-specific close.
+- D3D12 Create can obtain device identity from its command list; Vulkan CreateFeature1 receives it explicitly. Legacy Vulkan CreateFeature does not. Do not assume the last global vkDevice is the owner of every command buffer.
+- Before automatic token retirement, distinguish FFX wrappers (Release drops an owned D3D12 device reference and destroys the context) from DLL-managed feature resources. FFX Shutdown1 itself returns success without releasing a feature. Dropping its token on Shutdown would leak those resources.
+- Combo may retain one child after a partial Release; existing releaseStarted blocks its Evaluate. Partial parent Shutdown is now accounted for at child level, but outstanding feature handles still need corresponding invalidation/drain handling before subsequent Evaluate/Release can be declared safe.
+- Nukem debug/interpolated-only setters invoke RefreshGlobalConfiguration outside the 22 SDK admission routes. They are a separate mutable callback surface to include in the remaining admission review. This batch does not silently claim they are covered.
+
+## Final validation recorded 2026-09-25
+
+Latest built code: `5ac7f631ccffda0177f47608f89a15c4b5ce2193`. Windows job `107467622284` completed full MSBuild, runtime inventory/copy, MSVC compatibility checks, package and artifact upload successfully. Its log confirms all four new suites (85 + 104 + 132 + 42 checks), plus affected 52 shutdown, 36 publication, 20 Release and 44 Combo Release checks passed. Local Zig checks and three negative controls are additional CPU evidence, not game verification.
+
+Artifact: `OptiScaler_Aurora_v1.0_20260924_compat_5ac7f631.7z`, id `10787248364`, 234785937 bytes, Actions digest `sha256:53b4720d36819516cb8d73e5db32cbc767e69fedba1a5a0792fdad70acee6879`. No release was published and no installed game files changed. Remote `aurora` remains `e1673a16673070401612db04cc0593ca4dc3a6f6`; remaining lifecycle boundaries above are not yet a completed merge gate.
