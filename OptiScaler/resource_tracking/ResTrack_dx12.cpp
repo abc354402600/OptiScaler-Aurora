@@ -151,12 +151,26 @@ static thread_local HeapCacheTLS cacheCR;
 
 bool ResTrack_Dx12::CheckResource(ID3D12Resource* resource)
 {
-    if (State::Instance().isShuttingDown)
+    if (!resource || State::Instance().isShuttingDown)
         return false;
 
     auto resDesc = resource->GetDesc();
 
     if (resDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D)
+        return false;
+
+    // depth etc
+    if (resDesc.DepthOrArraySize != 1 || resDesc.SampleDesc.Count != 1)
+        return false;
+
+    // depth, rt, video etc
+    constexpr auto unsupportedFlags =
+        D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL |
+        D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE |
+        D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY;
+
+    // Early reject
+    if ((resDesc.Flags & unsupportedFlags) != 0)
         return false;
 
     auto& s = State::Instance();
