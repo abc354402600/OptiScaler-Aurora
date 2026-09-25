@@ -198,32 +198,43 @@ feature_version Nvngx_FG::extraVersion()
     return provider->extraVersion();
 }
 
-void Nvngx_FG::setDebugView(bool enabled)
+bool Nvngx_FG::setDebugView(bool enabled)
 {
-    auto* provider = getProvider();
+    auto lease = _calls.TryTransition();
+    if (!lease || (_dx12InitAttempts.empty() && _vulkanInitAttempts.empty()))
+        return false;
+
+    // UI callbacks must neither construct a provider nor race Evaluate/Shutdown.
+    auto* provider = _provider.Peek();
 
     if (!provider)
-        return;
+        return false;
 
     if (provider->getType() == FGNvngxReplacement::Nukems)
     {
         auto* nukemsProvider = static_cast<Nvngx_Nukems*>(provider);
-        nukemsProvider->setDebugView(enabled);
+        return nukemsProvider->setDebugView(enabled);
     }
+    return false;
 }
 
-void Nvngx_FG::setInterpolatedOnly(bool enabled)
+bool Nvngx_FG::setInterpolatedOnly(bool enabled)
 {
-    auto* provider = getProvider();
+    auto lease = _calls.TryTransition();
+    if (!lease || (_dx12InitAttempts.empty() && _vulkanInitAttempts.empty()))
+        return false;
+
+    auto* provider = _provider.Peek();
 
     if (!provider)
-        return;
+        return false;
 
     if (provider->getType() == FGNvngxReplacement::Nukems)
     {
         auto* nukemsProvider = static_cast<Nvngx_Nukems*>(provider);
-        nukemsProvider->setInterpolatedOnly(enabled);
+        return nukemsProvider->setInterpolatedOnly(enabled);
     }
+    return false;
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,

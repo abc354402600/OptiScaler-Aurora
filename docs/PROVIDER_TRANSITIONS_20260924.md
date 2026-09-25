@@ -55,6 +55,16 @@ Next work remains device/generation and outstanding-feature ownership, including
 - Combo may retain one child after a partial Release; existing releaseStarted blocks its Evaluate. Partial parent Shutdown is now accounted for at child level, but outstanding feature handles still need corresponding invalidation/drain handling before subsequent Evaluate/Release can be declared safe.
 - Nukem debug/interpolated-only setters invoke RefreshGlobalConfiguration outside the 22 SDK admission routes. They are a separate mutable callback surface to include in the remaining admission review. This batch does not silently claim they are covered.
 
+## Nukem settings follow-up — 2026-09-25
+
+The two mutable UI callbacks above now take the same exclusive transition admission as Init/Shutdown. This excludes them from ordinary SDK calls (including Evaluate) and other transitions, without holding the metadata mutex inside the DLL callback. They use only an already-published provider and require an existing attempted-Init cleanup footprint; they no longer lazily construct a provider to service a menu checkbox. A footprint is not proof that a failed Init became usable, and full device/generation readiness remains separate work.
+
+Both routes return whether the setting was applied. Missing refresh export, absent/wrong provider, no footprint, busy admission and failed environment-variable update return false. On rejection the menu restores its checkbox and displays a Chinese retry explanation; it does not silently pretend success. No deferred request is queued across shutdown/reinitialization. The low-level setter does not invoke RefreshGlobalConfiguration after SetEnvironmentVariableW fails.
+
+Thirty executable checks compile the complete production high-level and low-level setters with real ProviderCallAdmission and stand-ins for environment writes/DLL refresh. They cover both settings, enabled/disabled values, D3D12/Vulkan footprints, missing/busy/wrong provider, missing export, failed write, same-call and worker-thread callback rejection, and admission release on an exception. Replacing transition admission with ordinary operation admission in a temporary source copy fails check2. The affected 85 existing admission checks pass. These tests do not simulate actual Nukem DLL internals or promise exception recovery after a DLL partially changes its own configuration.
+
+Device/generation identity, outstanding FFX/Combo feature cleanup and global native Init transactions remain open. This bounded callback fix does not complete those larger contracts.
+
 ## Final validation recorded 2026-09-25
 
 Latest built code: `5ac7f631ccffda0177f47608f89a15c4b5ce2193`. Windows job `107467622284` completed full MSBuild, runtime inventory/copy, MSVC compatibility checks, package and artifact upload successfully. Its log confirms all four new suites (85 + 104 + 132 + 42 checks), plus affected 52 shutdown, 36 publication, 20 Release and 44 Combo Release checks passed. Local Zig checks and three negative controls are additional CPU evidence, not game verification.

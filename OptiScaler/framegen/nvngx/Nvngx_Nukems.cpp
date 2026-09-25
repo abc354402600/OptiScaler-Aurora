@@ -57,25 +57,26 @@ void Nvngx_Nukems::LoadLibraries()
     }
 }
 
-void Nvngx_Nukems::setSetting(const wchar_t* setting, const wchar_t* value)
+bool Nvngx_Nukems::setSetting(const wchar_t* setting, const wchar_t* value)
 {
-    if (is120orNewer())
+    if (is120orNewer() && SetEnvironmentVariableW(setting, value))
     {
-        SetEnvironmentVariable(setting, value);
         _refreshGlobalConfiguration();
+        return true;
     }
+    return false;
 }
 
-void Nvngx_Nukems::setDebugView(bool enabled)
+bool Nvngx_Nukems::setDebugView(bool enabled)
 {
     auto setting = L"DLSSGTOFSR3_EnableDebugOverlay";
     auto value = enabled ? L"1" : L"";
-    setSetting(setting, value);
+    return setSetting(setting, value);
 }
 
-void Nvngx_Nukems::setInterpolatedOnly(bool enabled)
+bool Nvngx_Nukems::setInterpolatedOnly(bool enabled)
 {
     auto setting = L"DLSSGTOFSR3_EnableInterpolatedFramesOnly";
     auto value = enabled ? L"1" : L"";
-    setSetting(setting, value);
+    return setSetting(setting, value);
 }

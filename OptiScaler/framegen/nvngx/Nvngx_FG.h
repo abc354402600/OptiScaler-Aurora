@@ -110,8 +110,8 @@ class Nvngx_FG
     static feature_version extraVersion();
 
     // TODO: nukem-specific, unify
-    static void setDebugView(bool enabled);
-    static void setInterpolatedOnly(bool enabled);
+    static bool setDebugView(bool enabled);
+    static bool setInterpolatedOnly(bool enabled);
 
     static NVSDK_NGX_Result D3D12_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
                                        ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,

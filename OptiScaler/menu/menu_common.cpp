@@ -4870,14 +4870,21 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
             if (activeNvngxFg == FGNvngxReplacement::Nukems)
             {
+                static bool settingRejected = false;
                 if (ImGui::Checkbox(AURORA_CN("启用调试视图"), &state.dlssgDebugView))
                 {
-                    Nvngx_FG::setDebugView(state.dlssgDebugView);
+                    settingRejected = !Nvngx_FG::setDebugView(state.dlssgDebugView);
+                    if (settingRejected)
+                        state.dlssgDebugView = !state.dlssgDebugView;
                 }
                 if (ImGui::Checkbox(AURORA_CN("仅显示插值帧"), &state.dlssgInterpolatedOnly))
                 {
-                    Nvngx_FG::setInterpolatedOnly(state.dlssgInterpolatedOnly);
+                    settingRejected = !Nvngx_FG::setInterpolatedOnly(state.dlssgInterpolatedOnly);
+                    if (settingRejected)
+                        state.dlssgInterpolatedOnly = !state.dlssgInterpolatedOnly;
                 }
+                if (settingRejected)
+                    ImGui::TextWrapped(AURORA_CN("设置未应用：帧生成忙碌或当前运行库不支持，请稍后重试。"));
             }
 
             if (activeNvngxFg == FGNvngxReplacement::FFX || activeNvngxFg == FGNvngxReplacement::Combo)
