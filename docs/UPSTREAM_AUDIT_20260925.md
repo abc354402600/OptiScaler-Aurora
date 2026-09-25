@@ -71,3 +71,67 @@ Genshin bridge (`AizawaHikaru233/genshin_fsr_brigde`) has 100 commits from the p
 - BuildInfo: ordinary resource.h consumer compiled without generated headers; Release BuildInfo compiled with test headers and confirmed `OptiScaler Aurora v1.0` and Aurora version/fork/commit/date fields. No FPS benchmark claim.
 - Focused incremental formatting and the full Windows DLL/RC/package/MSVC test build are required before the validation section is closed. Build result will be appended after Actions completes.
 - Previous unfinished provider device/generation ownership, outstanding FFX/Combo feature cleanup and native Init transaction boundaries remain documented in PROVIDER_TRANSITIONS_20260924.md. This audit does not close that work or justify merging the unfinished branch into aurora.
+
+## Commit inventory (not blanket acceptance)
+
+| Commit | Subject | Disposition |
+| --- | --- | --- |
+| `02e8d8b9` | Fix DX11 swapchain format diagnostic syntax | Already correct in Aurora |
+| `7543d143` | Bind active Streamline plugins and correct graphics resource handling | Partial overlap with prior active SL work; preserve Aurora private runtime |
+| `4291bb9f` | Made check more readable | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `d794b18d` | Tried to prevent deadlocks at input system | Deferred: input transaction review |
+| `b52cf663` | Use KernelBaseProxy::GetProcAddress when possible | Deferred: input hook publication review |
+| `2e5a8770` | Make Nukem's the default Nvngx FG replacement | Deferred: provider/GPU policy change |
+| `361fd12f` | Adjust to upstream | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `22e6ea28` | Fix active Streamline binding and resource view cleanup [#1157] | Merge inventory; PR1157 already reviewed |
+| `8e2e9441` | Formatting | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `f08115a5` | Just in case added output check to UpscaleEnd | Adopted as documented above |
+| `cbb57ac6` | Removed unnecessary check | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `08880f88` | Added Unknown format check for CompareResourceFormats | Adopted as documented above |
+| `ce9ab02f` | Safer copy rect calculation | Adopted as documented above |
+| `b9b0bec9` | Use state parameter for all barriers | Adopted as documented above |
+| `9282dde1` | Add/moved mutexes for consistency | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `659d743d` | Remove unused hudfix objects | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `95a3f584` | Use existing resource info | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `d0a556c3` | Remove mutex from loop | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `07d360b8` | Added early reject condutions to resource tracker | Adopted as documented above |
+| `71199dcb` | Added Trails in the Sky 2nd Chapter quirks | Adopted as documented above |
+| `4c682650` | Added IsChanged check for Dx11wDx12 swapchain to prevent unnecesarry resize calls to FG swapchain. Trying to avoid resize calls to FG swapchain because we are not %100 sure about buffer status of it. It might be in use currently etc. | Deferred: resize transition contract |
+| `26aca741` | Fix the misleading name of method | Deferred: resize transition contract |
+| `3bc197c2` | Added a mutex to prevent resize during present for XeFG | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `34917612` | Disable XeFG backbuffer release hack | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `9df3ed0c` | Applied Dx11 like lock for XeFG on Dx12 | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `166260bc` | Remove resource from hudless lists when released | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `f1436251` | Removed unneded _drawMutex | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `579a23ab` | Quesry resource description once | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `5f995606` | Use atomics for decisive booleans, tighter state checks | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `f4e314aa` | Better pre-build event script | Adopted as documented above |
+| `877e658b` | Faster Release & ReleaseDebug builds | Adopted as documented above |
+| `e8c9834d` | Removed JustTrackCmdList and hooks needed for it | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `71541762` | Made hudfix relax amount relative to resolution It's %5 per axis | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `3bae8a59` | Fix possible hudfix capture when using extended | Deferred: capture-order dependency |
+| `53050eeb` | Added delayed removal of captured resources | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `7aba4fcc` | Use a smaller descriptor struct for tracking | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `75b779a7` | Forgot to decrease relaxed hudfix to %5 | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `3fdb1b06` | Track possible hudlesses regardless of current config settings | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `6f0d1fdd` | Use ID3DDestructionNotifier instead of hooking release | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `5d827360` | Implemented per commandlist binding tracking | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `57b6fa0d` | Added an option for old Hudfix behaviour (or at least something close to it) | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `a6713718` | Implemented fast descriptor copy path | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `5666be0a` | Improve heap caching | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `48f3a5bb` | More cache improvements to the heap tracking | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `93fbf1b2` | More cache improvements to the heap tracking | Inventoried; deferred with dependent tracker/XeFG/shader cluster |
+| `e968ce8c` | Update clang-format to 22 | Skipped: retain incremental format20 |
+| `1560d55d` | Update setup-msbuild to v3 | Adopted as documented above |
+| `aa0119fc` | Update two other workflows to setup-msbuild v3 | Adopted as documented above |
+| `6ec6681d` | Added FBC: Firebreak quirk | Adopted as documented above |
+| `6ded74bf` | Factor out FGPreserveSwapChain handling into common code | Reviewed: commonization, not standalone crash fix |
+| `20d9d147` | Added CONTROL Resonant quirk | Adopted as documented above |
+
+## Completed upstream-port Windows validation
+
+Code `644bd42e5db235b38a2dcc50afbfa6cbb3c4b279`: Windows run `36149754727`, job `108119737755`, full DLL/RC build, MSVC guard suites, package and upload all succeeded. Format run `36149754411` succeeded. The MSVC log specifically confirms the new 110 resource checks; existing compatibility suites also passed in the required build workflow. Artifact `OptiScaler_Aurora_v1.0_20260925_compat_644bd42e.7z`, id `10871791467`, 234789045 bytes, Actions digest `sha256:efc205081cd389677e85aad3f75e98e082d04e637307b85e017ee71ad6c878b6`. Local edited-line format check passed for all nine changed C/C++ files.
+
+## Final Windows validation of settings follow-up
+
+Code `bda5304592b5ae7305033cc0412a030ad8026fba`: Windows run `36150242520`, job `108121375387`, DLL/RC build, MSVC compatibility checks, packaging and upload succeeded. Format run `36150242474` succeeded. MSVC confirms 30 new settings checks, 110 upstream resource checks and 85 affected admission checks passed. Artifact `OptiScaler_Aurora_v1.0_20260925_compat_bda53045.7z`, id `10871792070`, 234782526 bytes, Actions digest `sha256:7c4924b1c3685f797317c77dc58003c06f892994b8c670c0f498ee6ca2c60239`. No game validation or release publication; aurora remains unchanged.

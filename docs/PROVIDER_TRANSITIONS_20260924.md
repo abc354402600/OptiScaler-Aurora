@@ -70,3 +70,7 @@ Device/generation identity, outstanding FFX/Combo feature cleanup and global nat
 Latest built code: `5ac7f631ccffda0177f47608f89a15c4b5ce2193`. Windows job `107467622284` completed full MSBuild, runtime inventory/copy, MSVC compatibility checks, package and artifact upload successfully. Its log confirms all four new suites (85 + 104 + 132 + 42 checks), plus affected 52 shutdown, 36 publication, 20 Release and 44 Combo Release checks passed. Local Zig checks and three negative controls are additional CPU evidence, not game verification.
 
 Artifact: `OptiScaler_Aurora_v1.0_20260924_compat_5ac7f631.7z`, id `10787248364`, 234785937 bytes, Actions digest `sha256:53b4720d36819516cb8d73e5db32cbc767e69fedba1a5a0792fdad70acee6879`. No release was published and no installed game files changed. Remote `aurora` remains `e1673a16673070401612db04cc0593ca4dc3a6f6`; remaining lifecycle boundaries above are not yet a completed merge gate.
+
+## Final Windows validation of settings follow-up
+
+Code `bda5304592b5ae7305033cc0412a030ad8026fba`: Windows run `36150242520`, job `108121375387`, DLL/RC build, MSVC compatibility checks, packaging and upload succeeded. Format run `36150242474` succeeded. MSVC confirms 30 new settings checks, 110 upstream resource checks and 85 affected admission checks passed. Artifact `OptiScaler_Aurora_v1.0_20260925_compat_bda53045.7z`, id `10871792070`, 234782526 bytes, Actions digest `sha256:7c4924b1c3685f797317c77dc58003c06f892994b8c670c0f498ee6ca2c60239`. No game validation or release publication; aurora remains unchanged.
