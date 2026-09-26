@@ -33,6 +33,9 @@ class IFGNvngx
                                             const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo) = 0;
     virtual NVSDK_NGX_Result D3D12_Shutdown() = 0;
     virtual NVSDK_NGX_Result D3D12_Shutdown1(ID3D12Device* InDevice) = 0;
+    // Internal pre-shutdown hook, under exclusive Nvngx_FG transition admission.
+    // Drain owned objects that failed creation before a public token existed.
+    virtual NVSDK_NGX_Result D3D12_DrainPending(ID3D12Device* InDevice) { return NVSDK_NGX_Result_Success; }
     virtual NVSDK_NGX_Result D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
                                                         const NVSDK_NGX_Parameter* InParameters,
                                                         size_t* OutSizeInBytes) = 0;

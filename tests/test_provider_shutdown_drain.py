@@ -91,6 +91,16 @@ int main() {
  check(Nvngx_FG::VULKAN_Shutdown1(&a)==0&&vkread(known)==-3&&vkread(vkB)==0&&read(ha)==0);
  check(Nvngx_FG::D3D12_Shutdown()==0&&read(ha)==-3&&vkread(vkB)==0);
  check(Nvngx_FG::VULKAN_Shutdown()==0&&vkread(vkB)==-3);
+ // Private failed-Create ownership must block the native callback even when
+ // there are zero published handles, and must respect API/device routing.
+ native=0;provider.pendingResult=-8;before=provider.calls;
+ check(closeA()==-8&&native==0&&provider.calls==before&&provider.pendingDevice==&a);
+ int drains=provider.pendingCalls;
+ check(Nvngx_FG::VULKAN_Shutdown()==0&&provider.pendingCalls==drains);
+ State::Instance().isShuttingDown=true;
+ check(closeA()==-7&&native==0&&provider.pendingCalls==drains);
+ State::Instance().isShuttingDown=false;provider.pendingResult=0;
+ check(closeA()==0&&native==1&&provider.pendingCalls==drains+1);
  std::cout<<"PASS: "<<checks<<" provider shutdown drain checks\n";
 }
 '''
@@ -116,7 +126,10 @@ def main():
 ''')
     cpp=cpp.replace('inline static ProviderHandleRegistry<Nvngx_FG_Handle> _handles;',
                     'inline static ProviderHandleRegistry<Nvngx_FG_Handle> _handles;\n'+declarations+coordinators)
-    cpp=cpp.replace('struct Provider {','struct Provider {\n std::function<int()> releaseCallback;')
+    cpp=cpp.replace('struct Provider {','''struct Provider {
+ int pendingResult=0,pendingCalls=0;ID3D12Device* pendingDevice=nullptr;
+ int D3D12_DrainPending(ID3D12Device* d){++pendingCalls;pendingDevice=d;return pendingResult;}
+ std::function<int()> releaseCallback;''')
     cpp=cpp.replace('++releases; return result;', '++releases; return releaseCallback?releaseCallback():result;')
     with tempfile.TemporaryDirectory(prefix='aurora-provider-drain-') as directory:
         path=Path(directory);test=path/'test.cpp';exe=path/'test.exe';test.write_text(cpp,encoding='utf-8')

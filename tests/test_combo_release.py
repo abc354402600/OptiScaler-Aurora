@@ -37,6 +37,7 @@ struct Child {
 };
 struct Nvngx_Combo {
  std::unique_ptr<Child> artursProvider=std::make_unique<Child>(), ffxProvider=std::make_unique<Child>();
+ int ReleaseChildren(Nvngx_Combo_Handle*);
  int D3D12_ReleaseFeature(NVSDK_NGX_Handle*);
  int D3D12_EvaluateFeature(ID3D12GraphicsCommandList*,const NVSDK_NGX_Handle*,NVSDK_NGX_Parameter*,PFN_NVSDK_NGX_ProgressCallback);
 };
@@ -95,7 +96,7 @@ def main():
     struct=header[header.index('struct Nvngx_Combo_Handle'):header.index('\nclass Nvngx_Combo')]
     # Count destruction without changing the production ownership fields.
     struct=struct.replace('\n};','\n    ~Nvngx_Combo_Handle() { ++destroyed; }\n};',1)
-    release=function(cpp_source,'NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(')
+    release=function(cpp_source,'NVSDK_NGX_Result Nvngx_Combo::ReleaseChildren(')+function(cpp_source,'NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(')
     evaluate=function(cpp_source,'NVSDK_NGX_Result Nvngx_Combo::D3D12_EvaluateFeature(')
     evaluate=evaluate[:evaluate.index('    // Assuming ffx')]+'    return 99;\n}'
     with tempfile.TemporaryDirectory(prefix='aurora-combo-release-') as folder:

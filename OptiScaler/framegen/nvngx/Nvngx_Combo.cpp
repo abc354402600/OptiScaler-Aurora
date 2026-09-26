@@ -44,9 +44,45 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_Shutdown() { return D3D12_Shutdown1(nullptr)
 
 NVSDK_NGX_Result Nvngx_Combo::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
+    const auto pending = D3D12_DrainPending(InDevice);
+    if (pending != NVSDK_NGX_Result_Success)
+        return pending;
     const auto resultArturs = ShutdownChild(_artursInitAttempts, *artursProvider, InDevice);
     const auto resultFfx = ShutdownChild(_ffxInitAttempts, *ffxProvider, InDevice);
     return resultArturs != NVSDK_NGX_Result_Success ? resultArturs : resultFfx;
+}
+
+void Nvngx_Combo::ForgetPending(const std::shared_ptr<PendingCreate>& pending)
+{
+    std::lock_guard lock(_pendingMutex);
+    std::erase(_pendingCreates, pending);
+}
+
+NVSDK_NGX_Result Nvngx_Combo::D3D12_DrainPending(ID3D12Device* InDevice)
+{
+    std::vector<std::shared_ptr<PendingCreate>> pending;
+    {
+        std::lock_guard lock(_pendingMutex);
+        for (const auto& entry : _pendingCreates)
+            if (!InDevice || entry->device.Get() == InDevice)
+                pending.push_back(entry);
+    }
+    // An interrupted third-party call or error with non-null output does not
+    // prove ownership. Do not pass that pointer to Release or close its parent.
+    for (const auto& entry : pending)
+        if (entry->uncertain)
+        {
+            LOG_ERROR("Combo creation ownership is uncertain; shutdown retained until process restart");
+            return NVSDK_NGX_Result_FAIL_NotInitialized;
+        }
+    for (const auto& entry : pending)
+    {
+        const auto result = ReleaseChildren(entry->handle.get());
+        if (result != NVSDK_NGX_Result_Success)
+            return result;
+        ForgetPending(entry);
+    }
+    return NVSDK_NGX_Result_Success;
 }
 
 NVSDK_NGX_Result Nvngx_Combo::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
@@ -64,42 +100,62 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFea
 NVSDK_NGX_Result Nvngx_Combo::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                                   NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
-    Nvngx_Combo_Handle** OutOurHandle = (Nvngx_Combo_Handle**) OutHandle;
-
-    if (!OutOurHandle || !InParameters)
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+    if (!InParameters || !InCmdList)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     if (InFeatureID != NVSDK_NGX_Feature_FrameGeneration)
         return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
 
-    *OutOurHandle = new Nvngx_Combo_Handle(lastIdCreated++, nullptr);
+    ComPtr<ID3D12Device> device;
+    if (FAILED(InCmdList->GetDevice(IID_PPV_ARGS(&device))) || !device)
+        return NVSDK_NGX_Result_FAIL_PlatformError;
 
-    auto resultArturs =
-        artursProvider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &(*OutOurHandle)->artursHandle);
-    auto resultFfx =
-        ffxProvider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &(*OutOurHandle)->ffxHandle);
-
-    if (resultArturs != NVSDK_NGX_Result_Success || resultFfx != NVSDK_NGX_Result_Success)
+    auto pending = std::make_shared<PendingCreate>();
+    pending->handle = std::make_unique<Nvngx_Combo_Handle>();
+    pending->handle->Id = lastIdCreated++;
+    // Retain identity too: a failed child must not let this address be reused
+    // for an unrelated device while its private cleanup is still pending.
+    pending->device.Attach(device.Detach());
     {
-        if (resultArturs == NVSDK_NGX_Result_Success)
-            artursProvider->D3D12_ReleaseFeature((*OutOurHandle)->artursHandle);
+        std::lock_guard lock(_pendingMutex);
+        _pendingCreates.push_back(pending);
+    }
+    // Register before the first external call. Exceptions retain the private
+    // ledger, and no partially constructed handle is exposed to the caller.
+    pending->uncertain = true;
+    const auto resultArturs =
+        artursProvider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &pending->uncertainHandle);
+    if (resultArturs != NVSDK_NGX_Result_Success || !pending->uncertainHandle)
+    {
+        if (resultArturs != NVSDK_NGX_Result_Success && !pending->uncertainHandle)
+            ForgetPending(pending);
+        return NVSDK_NGX_Result_Fail;
+    }
+    pending->handle->artursHandle = pending->uncertainHandle;
+    pending->uncertainHandle = nullptr;
+    pending->uncertain = false;
 
-        if (resultFfx == NVSDK_NGX_Result_Success)
-            ffxProvider->D3D12_ReleaseFeature((*OutOurHandle)->ffxHandle);
-
-        delete *OutOurHandle;
-        *OutOurHandle = nullptr;
-
+    // FFX Create has a strong output guarantee: failure/exception publishes no
+    // object. Its successful output and the first child stay ledger-owned here.
+    const auto resultFfx =
+        ffxProvider->D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, &pending->handle->ffxHandle);
+    if (resultFfx != NVSDK_NGX_Result_Success)
+    {
+        if (ReleaseChildren(pending->handle.get()) == NVSDK_NGX_Result_Success)
+            ForgetPending(pending);
         return NVSDK_NGX_Result_Fail;
     }
 
+    ForgetPending(pending);
+    *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(pending->handle.release());
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
+NVSDK_NGX_Result Nvngx_Combo::ReleaseChildren(Nvngx_Combo_Handle* InOurHandle)
 {
-    Nvngx_Combo_Handle* InOurHandle = (Nvngx_Combo_Handle*) InHandle;
-
     if (!InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
@@ -115,6 +171,15 @@ NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (InOurHandle->artursHandle || InOurHandle->ffxHandle)
         return NVSDK_NGX_Result_Fail;
 
+    return NVSDK_NGX_Result_Success;
+}
+
+NVSDK_NGX_Result Nvngx_Combo::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
+{
+    auto* InOurHandle = reinterpret_cast<Nvngx_Combo_Handle*>(InHandle);
+    const auto result = ReleaseChildren(InOurHandle);
+    if (result != NVSDK_NGX_Result_Success)
+        return result;
     delete InOurHandle;
     return NVSDK_NGX_Result_Success;
 }

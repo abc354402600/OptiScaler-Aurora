@@ -296,15 +296,22 @@ NVSDK_NGX_Result Nvngx_FG::DrainHandles(HandleApi api, const void* device)
             if (_handles.GetIdentity(key, [](const Nvngx_FG_Handle& handle) { return handle.device; }) == nullptr)
                 return NVSDK_NGX_Result_FAIL_NotInitialized;
 
-    if (keys.empty())
-        return NVSDK_NGX_Result_Success;
+    auto* provider = _provider.Peek();
+    if (!provider)
+        return keys.empty() ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_FAIL_NotInitialized;
     // DLL_PROCESS_DETACH may hold the loader lock. Do not start GPU/provider
     // destruction there; retain ownership rather than claiming a clean drain.
     if (State::Instance().isShuttingDown)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
-    auto* provider = _provider.Peek();
-    if (!provider)
-        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    // Failed Combo creation can own children without any public token. Drain
+    // those before native shutdown even when the registry is empty.
+    if (api == HandleApi::D3D12)
+    {
+        const auto result = provider->D3D12_DrainPending(static_cast<ID3D12Device*>(const_cast<void*>(device)));
+        if (result != NVSDK_NGX_Result_Success)
+            return result;
+    }
 
     for (const auto* key : keys)
         _handles.SuspendReads(key);

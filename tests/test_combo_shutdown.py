@@ -107,6 +107,7 @@ def main():
     cls = '''struct Nvngx_Combo {
  std::unique_ptr<Child> artursProvider=std::make_unique<Child>(),ffxProvider=std::make_unique<Child>();
  std::unordered_set<ID3D12Device*> _artursInitAttempts,_ffxInitAttempts;
+ int D3D12_DrainPending(ID3D12Device*) { return 0; } // Real private drain tested by test_combo_create.py.
 '''+helper+'\n'+'\n'.join(signatures)+'\n};\n'
     with tempfile.TemporaryDirectory(prefix='aurora-combo-shutdown-') as directory:
         path = Path(directory)

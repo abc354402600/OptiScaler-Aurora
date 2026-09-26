@@ -70,27 +70,32 @@ NVSDK_NGX_Result Nvngx_FFX::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatu
 NVSDK_NGX_Result Nvngx_FFX::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdList, NVSDK_NGX_Feature InFeatureID,
                                                 NVSDK_NGX_Parameter* InParameters, NVSDK_NGX_Handle** OutHandle)
 {
-    Nvngx_FFX_Handle** OutOurHandle = (Nvngx_FFX_Handle**) OutHandle;
-
-    if (!Init())
-        return NVSDK_NGX_Result_Fail;
-
-    if (!OutOurHandle || !InParameters)
+    if (!OutHandle)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+    *OutHandle = nullptr;
+    if (!InParameters || !InCmdList)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     if (InFeatureID != NVSDK_NGX_Feature_FrameGeneration)
         return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
 
-    ID3D12Device* pDevice = nullptr;
+    if (!Init())
+        return NVSDK_NGX_Result_Fail;
 
-    if (InCmdList->GetDevice(IID_PPV_ARGS(&pDevice)) != S_OK)
+    ComPtr<ID3D12Device> device;
+    if (FAILED(InCmdList->GetDevice(IID_PPV_ARGS(&device))) || !device)
         return NVSDK_NGX_Result_FAIL_PlatformError;
 
-    // Can't create FFX context yet, missing data
-    *OutOurHandle = new Nvngx_FFX_Handle(lastIdCreated++, nullptr, pDevice);
+    // Keep creation private until every potentially throwing operation is done.
+    // There is no FFX context yet; the temporary COM owner also covers allocation
+    // or parameter-read exceptions, without publishing a half-created handle.
+    auto handle = std::make_unique<Nvngx_FFX_Handle>();
+    handle->Id = lastIdCreated++;
+    InParameters->Get("Width", &handle->swapchainWidth);
+    InParameters->Get("Height", &handle->swapchainHeight);
 
-    InParameters->Get("Width", &(*OutOurHandle)->swapchainWidth);
-    InParameters->Get("Height", &(*OutOurHandle)->swapchainHeight);
+    handle->device = device.Detach();
+    *OutHandle = reinterpret_cast<NVSDK_NGX_Handle*>(handle.release());
 
     return NVSDK_NGX_Result_Success;
 }

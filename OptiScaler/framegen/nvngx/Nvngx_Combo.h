@@ -4,6 +4,9 @@
 #include "Nvngx_Arturs.h"
 #include <d3d12.h>
 #include <unordered_set>
+#include <mutex>
+#include <vector>
+#include <wrl/client.h>
 
 struct Nvngx_Combo_Handle
 {
@@ -21,6 +24,20 @@ class Nvngx_Combo : public IFGNvngx
 
     std::unique_ptr<Nvngx_Arturs> artursProvider = nullptr;
     std::unique_ptr<Nvngx_FFX> ffxProvider = nullptr;
+
+    struct PendingCreate
+    {
+        std::unique_ptr<Nvngx_Combo_Handle> handle;
+        Microsoft::WRL::ComPtr<ID3D12Device> device;
+        NVSDK_NGX_Handle* uncertainHandle = nullptr;
+        bool uncertain = false;
+    };
+    // Create calls may run concurrently. Hold this mutex only for bookkeeping,
+    // never across child callbacks; Shutdown is excluded by outer admission.
+    std::mutex _pendingMutex;
+    std::vector<std::shared_ptr<PendingCreate>> _pendingCreates;
+    void ForgetPending(const std::shared_ptr<PendingCreate>& pending);
+    NVSDK_NGX_Result ReleaseChildren(Nvngx_Combo_Handle* handle);
 
     // The outer Nvngx_FG transition admission serializes Init/Shutdown.
     // Record each child separately so retry never closes a completed child twice.
@@ -69,6 +86,7 @@ class Nvngx_Combo : public IFGNvngx
     NVSDK_NGX_Result D3D12_Shutdown() override;
 
     NVSDK_NGX_Result D3D12_Shutdown1(ID3D12Device* InDevice) override;
+    NVSDK_NGX_Result D3D12_DrainPending(ID3D12Device* InDevice) override;
 
     NVSDK_NGX_Result D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId, const NVSDK_NGX_Parameter* InParameters,
                                                 size_t* OutSizeInBytes) override;
