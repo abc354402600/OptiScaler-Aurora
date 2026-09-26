@@ -20,17 +20,37 @@ template <typename Value> class ProviderHandleRegistry
         bool releasing = false;
         bool retired = false;
         bool readsSuspended = false;
+        bool published = false; // Protected by the registry mutex.
         explicit Entry(Value v) : value(std::move(v)) {}
     };
     using Pending = std::shared_ptr<Entry>;
 
     static Pending Prepare(Value value) { return std::make_shared<Entry>(std::move(value)); }
 
+    // Allocate the map node/buckets before entering a provider Create callback.
+    // Reserved entries remain invisible to routing, Read, Release and drain.
+    void Reserve(const Pending& entry)
+    {
+        std::scoped_lock lock(_mutex);
+        _entries.emplace(&entry->value, entry);
+    }
+
+    void CancelUnpublished(const Pending& entry)
+    {
+        std::scoped_lock lock(_mutex);
+        if (!entry->published)
+            _entries.erase(&entry->value);
+    }
+
     Value* Publish(const Pending& entry)
     {
         std::scoped_lock lock(_mutex);
         auto* key = &entry->value;
-        _entries.emplace(key, entry);
+        // CreateProviderHandle reserves this exact entry before native work;
+        // that route performs no allocation after native creation succeeds.
+        if (!_entries.contains(key))
+            _entries.emplace(key, entry);
+        entry->published = true;
         return key;
     }
 
@@ -42,6 +62,8 @@ template <typename Value> class ProviderHandleRegistry
         std::scoped_lock lock(_mutex);
         for (const auto& [key, entry] : _entries)
         {
+            if (!entry->published)
+                continue;
             std::scoped_lock entryLock(entry->mutex);
             if (!entry->retired && predicate(static_cast<const Value&>(entry->value)))
                 keys.push_back(key);
@@ -148,7 +170,7 @@ template <typename Value> class ProviderHandleRegistry
     {
         std::scoped_lock lock(_mutex);
         const auto it = _entries.find(key);
-        return it == _entries.end() ? nullptr : it->second;
+        return it == _entries.end() || !it->second->published ? nullptr : it->second;
     }
     std::mutex _mutex;
     std::unordered_map<const void*, Pending> _entries;

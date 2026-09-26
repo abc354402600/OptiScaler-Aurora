@@ -76,3 +76,58 @@ access remain separate lifecycle work. No installer changes, game files, driver
 profiles, native SL1 policy or frame-multiplier algorithms were changed.
 Actual GPU/game behavior remains unverified at the user's request. No aurora
 synchronization or Release is implied by these focused checks.
+
+### Next implementation boundary checked against the current source
+
+- Exported D3D12 `Init_Ext` publishes path/application metadata and calls native
+  `RunDx12Init` before it reaches `Nvngx_FG::D3D12_Init_Ext` and its transition
+  admission. A busy provider can therefore reject after earlier side effects.
+  The analogous Vulkan entry and delegated Init variants need the same review.
+- Direct replacement-provider Init functions still admit repeated calls using
+  the attempted-Init sets as cleanup records, not readiness/idempotence records.
+  Native `NativeDeviceLifecycle::Initialize` already returns success for a known
+  ready device. Do not incorrectly replace attempted-Init obligations with a
+  success-only set or allow a failed partial Init to masquerade as ready.
+- Any new outer Init coordinator must acquire admission before metadata/native
+  side effects and use an explicit internal delegation route. A thread-local
+  "already owns transition" shortcut would let native callbacks bypass exclusion;
+  the existing `_skipInit` flags only describe path/native-call delegation and
+  must not become blanket authorization for reentrant mutation.
+- D3D11, D3D12 and Vulkan publish shared metadata through individually safe
+  snapshots. That does not make the combined path/application/project/logging
+  updates atomic. Direct `NVNGXProxy::InitDx12/InitVulkan` consumers also read these
+  snapshots and need consideration when defining the outer transaction.
+- Ordinary replacement Evaluate still admits concurrent readers. D3D12 uses
+  process-wide `_hudCopy`; `Nvngx_DllProxy::D3D12_EvaluateFeature` has a static depth
+  ring counter, provider-wide depth buffers and uses `currentD3D12Device` for
+  allocation. Per-token registry lifetime protection alone does not serialize
+  those mutable resources, nor prove their GPU lifetime or device affinity.
+  Simply changing every ordinary call to a transition would also reject valid
+  read/query callbacks; use a deliberately scoped design and explicit tests.
+
+## Adjacent publication-allocation follow-up
+
+After the Combo checkpoint `f2cd07b2`, review found a second ownership gap in
+`CreateProviderHandle`: the wrapper was allocated before the native call, but
+`ProviderHandleRegistry::Publish` still allocated its hash-map node/buckets after
+successful native creation. A bad allocation then lost the native handle despite
+successful child creation.
+
+The creation helper now reserves that registry entry before calling the provider.
+Reservations are invisible to identity routing, Read, Release and LiveKeys. An
+RAII scope removes unpublished reservations on error or exception; successful
+publication changes visibility without another map allocation. Existing
+Prepare/Publish callers remain supported. No SDK callback runs under the registry
+mutex, and immutable public identity is exposed only after creation finishes.
+
+`Aurora_Provider_Publication_Allocation_Tests.cpp` adds 34 executable checks with
+allocation failure injected into the actual standard-library allocation path:
+entry/node/bucket failures precede native callbacks, and all allocations may fail
+after native success without preventing publication. It also checks hidden
+reservation visibility, failure/exception cancellation and later Release.
+Existing 32 registry, 16 creation, 20 Release admission, 42 API routing, 50 drain
+and 44 Combo Release checks passed for the affected code. Removing reservation
+in temporary header copies fails the new test at check 3. The new suite is part
+of Windows CI. This does not infer ownership from a failing third-party Create
+that writes an arbitrary non-null output; its pre-existing conservative contract
+is unchanged.

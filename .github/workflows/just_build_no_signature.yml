@@ -128,7 +128,7 @@ jobs:
         $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
         $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
-          foreach ($name in @('Aurora_DLSSG_Frame_Guard_Tests','Aurora_Provider_Handle_Tests','Aurora_Input_Lock_Tests','Aurora_Streamline_Binding_Tests','Aurora_Provider_Create_Tests','Aurora_Provider_Publication_Tests','Aurora_Native_Device_Tests')) {
+          foreach ($name in @('Aurora_DLSSG_Frame_Guard_Tests','Aurora_Provider_Handle_Tests','Aurora_Input_Lock_Tests','Aurora_Streamline_Binding_Tests','Aurora_Provider_Create_Tests','Aurora_Provider_Publication_Tests','Aurora_Native_Device_Tests','Aurora_Provider_Publication_Allocation_Tests')) {
             $command = 'call "' + $vcvars + '" && cl /nologo /EHsc /std:c++20 /I OptiScaler tests\' + $name + '.cpp /Fe:x64\' + $name + '.exe && x64\' + $name + '.exe'
             & $env:ComSpec /d /c $command
             if ($LASTEXITCODE) { throw "Compatibility guard test failed: $name" }

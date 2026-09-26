@@ -12,6 +12,13 @@ Result CreateProviderHandle(Registry& registry, PublicHandle** output, Value ini
         return invalidParameter;
     *output = nullptr;
     auto pending = registry.Prepare(std::move(initial));
+    registry.Reserve(pending);
+    struct Reservation
+    {
+        Registry& registry;
+        decltype(pending)& entry;
+        ~Reservation() { registry.CancelUnpublished(entry); }
+    } reservation { registry, pending };
     const auto result = std::forward<Create>(create)(pending->value);
     if (result != success)
         return result;
