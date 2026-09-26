@@ -29,6 +29,7 @@ This covers the normal explicit Release path and the shutdown drain that uses it
 - Actual exported shutdown tests expand from 52 to 56 checks: failed drain reaches neither native close nor local cleanup and receives the exact requested device. Existing fixtures for unrelated routes model an empty successful drain; the new suite tests the actual drain.
 - Affected 85 admission, 104 Init-footprint, 36 publication-routing, 42 handle-API, 20 Release-admission, 44 Combo Release and 132 Combo shutdown checks passed locally.
 - Three negative controls in temporary copied sources detect removal of device filtering, ignored drain failure, and premature device release. Production files are never mutated by those controls.
+- The suspension follow-up adds a fourth negative control: omitting SuspendReads fails the drain suite when failed teardown would otherwise allow Evaluate. The unchanged 32 registry lifetime checks and affected 42 API/20 Release-route checks also pass.
 - The source extraction helper now tolerates whitespace in declarations because clang-format wraps the longer coordinator signatures. It still fails if the production declaration is absent.
 
 ## Remaining work and synchronization gate
@@ -36,3 +37,17 @@ This covers the normal explicit Release path and the shutdown drain that uses it
 Repeated Init while old features remain, native Init/global configuration transaction ordering, partial Create rollback, and concurrent ordinary Evaluate access to shared HUD/depth resources are not solved by this batch. A legacy Vulkan token without explicit device ownership intentionally constrains device-specific close. Preserve these boundaries in the next continuation; do not invent a device association or label CPU tests as game compatibility proof.
 
 The user on 2026-09-26 authorizes direct synchronization to aurora when the code-validation gate is actually met, without a separate confirmation or synchronization notification. Real-game tests remain deferred. No Release is authorized. This checkpoint alone does not close the remaining boundaries above. Full Windows validation will be appended after Actions completes.
+
+## Next concrete ownership boundary
+
+Nvngx_Combo::D3D12_CreateFeature still deletes its private wrapper after attempting to release a successful child when the other child creation fails. It ignores the Release result. Now that FFX Release correctly retains its wrapper/device on DestroyContext failure, the Combo Create rollback must retain that private child's ownership instead of losing the pointer. An outer published-handle drain cannot find such an unpublished orphan. Add an explicit private rollback ledger and drain it before parent teardown, or a similarly typed ownership contract; do not publish a failed Create as a usable game handle or guess that an arbitrary failing third-party Create output is valid. Allocation failure and exceptions between child creates also need this ownership model.
+
+Global native Init still writes metadata and initializes native NGX before replacement-provider transition admission. A quick additional lock inside replacement Init would not serialize the entire exported transaction and could reject legitimate delegated Init; keep the existing thread-local delegation semantics when designing that gate.
+
+## Windows validation, first checkpoint
+
+`1c57db0e280f45f26987ce6d56e8d646e5cdfb9d`: run `36221428934`, job `108347303573` passed full MSBuild, compatibility suites, packaging and upload. Format run `36221428908` passed. MSVC logs confirm the first checkpoint's 39 drain, 22 FFX ordering and 56 exported shutdown checks. Artifact `OptiScaler_Aurora_v1.0_20260926_compat_1c57db0e.7z`, id `10898598510`, 234786142 bytes, Actions digest `sha256:86c16229909d3dffcf6a10ed8d6e373f95d06b7c651e86a9fddf7996d701a98b`. The subsequent suspension follow-up has 46 drain checks and requires its own final build result below.
+
+## Final Windows validation
+
+`5ca3e6ecababefbef90e6d781835535148ab7404`: run `36221577866`, job `108347716832`, full DLL/RC build, compatibility tests, package and upload all succeeded. Format run `36221577867` succeeded. MSVC confirms 46 drain + 22 FFX checks, expanded 56 exported shutdown checks and the existing 32 registry tests; affected compatibility suites also passed. Artifact `OptiScaler_Aurora_v1.0_20260926_compat_5ca3e6ec.7z`, id `10899159613`, 234789638 bytes, Actions digest `sha256:6f6087a364668b116a9b787b0daeff7533eaad92483b99dd61a21803b66bbe0b`. No installed game/driver files were modified and no Release was published. CPU/GPU distinction and remaining initialization/private-rollback boundaries above still apply.
