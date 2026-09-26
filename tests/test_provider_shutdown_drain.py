@@ -36,7 +36,7 @@ int main() {
  check(closeA()==-7&&native==0&&provider.releases==before);State::Instance().isShuttingDown=false;
  {auto busy=Nvngx_FG::_calls.TryOperation();check(closeA()==-7&&native==0&&provider.releases==before);}
  provider.releaseCallback=[] {return -8;};
- check(closeA()==-8&&native==0&&Nvngx_FG::_dx12InitAttempts.size()==2&&read(ha)==0);
+ check(closeA()==-8&&native==0&&Nvngx_FG::_dx12InitAttempts.size()==2&&read(ha)==-7&&read(hb)==0);
  provider.releaseCallback=[&] {
    auto work=std::async(std::launch::async,[&]{
      return Nvngx_FG::D3D12_ReleaseFeature(ha)==-7&&Nvngx_FG::D3D12_Shutdown()==-7;
@@ -51,7 +51,7 @@ int main() {
  check(newer!=ha&&read(ha)==-3&&Nvngx_FG::D3D12_ReleaseFeature(ha)==-3);
  provider.releaseCallback=[]()->int{throw std::runtime_error("release");};bool threw=false;
  try{closeA();}catch(const std::runtime_error&){threw=true;}
- check(threw&&bool(Nvngx_FG::_calls.TryOperation())&&read(newer)==0);provider.releaseCallback={};
+ check(threw&&bool(Nvngx_FG::_calls.TryOperation())&&read(newer)==-7);provider.releaseCallback={};
  check(closeA()==0&&read(newer)==-3&&read(hb)==0);
  check(Nvngx_FG::D3D12_Shutdown()==0&&read(hb)==-3);
  // Partial drain: one success, then failure; completed work is not repeated.
@@ -61,6 +61,16 @@ int main() {
  check((read(one)==-3)!=(read(two)==-3));
  provider.releaseCallback=[&]{++releases;return 0;};check(closeA()==0&&releases==3&&native==1);
  provider.releaseCallback={};
+ // The first failure also suspends selected handles not yet visited. Explicit
+ // release remains possible; an unrelated device was already checked above.
+ auto* queued1=create(&a);auto* queued2=create(&a);auto* queued3=create(&a);
+ Nvngx_FG::_dx12InitAttempts.insert(&a);before=provider.releases;
+ provider.releaseCallback=[] {return -8;};
+ check(closeA()==-8&&provider.releases==before+1);
+ check(read(queued1)==-7&&read(queued2)==-7&&read(queued3)==-7);
+ provider.releaseCallback={};
+ check(Nvngx_FG::D3D12_ReleaseFeature(queued1)==0&&Nvngx_FG::D3D12_ReleaseFeature(queued2)==0&&Nvngx_FG::D3D12_ReleaseFeature(queued3)==0);
+ check(closeA()==0);
  // Native close failure after a completed drain retains the Init footprint.
  auto* last=create(&a);Nvngx_FG::_dx12InitAttempts.insert(&a);before=provider.calls;
  check(Nvngx_FG::WithDx12Shutdown([](auto){return -9;},&a)==-9&&read(last)==-3&&provider.calls==before);

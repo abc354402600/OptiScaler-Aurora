@@ -19,6 +19,7 @@ template <typename Value> class ProviderHandleRegistry
         size_t readers = 0;
         bool releasing = false;
         bool retired = false;
+        bool readsSuspended = false;
         explicit Entry(Value v) : value(std::move(v)) {}
     };
     using Pending = std::shared_ptr<Entry>;
@@ -46,6 +47,17 @@ template <typename Value> class ProviderHandleRegistry
                 keys.push_back(key);
         }
         return keys;
+    }
+
+    // Caller holds lifecycle admission. A partial drain must not resume Evaluate
+    // on resources whose teardown has begun; explicit Release retry is allowed.
+    void SuspendReads(const void* key)
+    {
+        if (auto entry = Find(key))
+        {
+            std::scoped_lock lock(entry->mutex);
+            entry->readsSuspended = true;
+        }
     }
 
     // Identity remains available after retirement. Retained tokens prevent their
@@ -77,7 +89,7 @@ template <typename Value> class ProviderHandleRegistry
             std::scoped_lock lock(entry->mutex);
             if (entry->retired)
                 return missing;
-            if (entry->releasing)
+            if (entry->releasing || entry->readsSuspended)
                 return busy;
             ++entry->readers;
         }

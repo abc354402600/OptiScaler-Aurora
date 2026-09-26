@@ -307,6 +307,9 @@ NVSDK_NGX_Result Nvngx_FG::DrainHandles(HandleApi api, const void* device)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
 
     for (const auto* key : keys)
+        _handles.SuspendReads(key);
+
+    for (const auto* key : keys)
     {
         const auto result = _handles.Release(
             key, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
