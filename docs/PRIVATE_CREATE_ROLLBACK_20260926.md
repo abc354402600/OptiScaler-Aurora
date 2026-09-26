@@ -131,3 +131,35 @@ in temporary header copies fails the new test at check 3. The new suite is part
 of Windows CI. This does not infer ownership from a failing third-party Create
 that writes an arbitrary non-null output; its pre-existing conservative contract
 is unchanged.
+
+## Windows validation: private rollback checkpoint
+
+Code `f2cd07b22c5c34135df158e1a35af76e1e35fee4`: Windows run `36249120011`,
+job `108423715871`, full DLL build, MSVC checks, packaging and upload succeeded.
+Format run `36249120005` succeeded. MSVC logs confirm 15 FFX Create, 56 Combo
+Create, 50 drain, 22 FFX Release, 44 Combo Release and 132 Combo Shutdown checks.
+
+Artifact `OptiScaler_Aurora_v1.0_20260926_compat_f2cd07b2.7z`, id `10908468079`,
+234784314 bytes, Actions digest
+`sha256:b249fef51c922f8827d5ffad5f618ca2bd93a11d9461d9e7d1a088b193b88911`.
+The following allocation-reservation checkpoint `11bf92ec` requires its own
+final build record; this earlier artifact does not contain that follow-up.
+
+## Final Windows validation: allocation-reservation follow-up
+
+Code `11bf92ec3067fd7ff1bc57cb5a9e8f416ae52755`: Windows run `36249544744`,
+job `108424880946`, full DLL build, MSVC tests, package and upload all succeeded.
+Format run `36249544709` succeeded. MSVC confirms 15 FFX Create, 56 Combo private
+rollback, 50 drain, 32 registry and 16 creation checks. The allocation-injection
+suite passes **33 checks with MSVC**, versus **34 with the local Zig/STL**: its
+eight allocation-budget trials branch according to each STL's node/bucket
+allocation count, so the number of assertion calls differs by implementation.
+Both exercised pre-callback allocation failures and allocation-free publication
+after native success; this is expected, not a missing Windows test.
+
+Artifact `OptiScaler_Aurora_v1.0_20260926_compat_11bf92ec.7z`, id `10907889573`,
+234789475 bytes, Actions digest
+`sha256:d6fdf0374dfeb65e5b1b876cbf0e34b24d6b3d5764da78592c5d7d9c3f230cc7`.
+Both code checkpoints are pushed to `Compatibility-fixes`. No Release, game
+tests, installed-game changes or aurora synchronization occurred. The concrete
+remaining Init/Evaluate boundaries above remain the next work.
