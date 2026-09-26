@@ -91,6 +91,8 @@ def main():
                              for n in ('WithDx12Shutdown', 'WithVulkanShutdown'))
     cls = r'''
 struct Nvngx_FG {
+ enum class HandleApi { D3D12, Vulkan };
+ static int DrainHandles(HandleApi,const void*) { return 0; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;

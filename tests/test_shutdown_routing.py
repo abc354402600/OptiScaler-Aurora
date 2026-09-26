@@ -4,6 +4,7 @@ This checks routing, not GPU shutdown or concurrency. No production function bod
 is duplicated here: changes to the exported routes are taken from the source tree.
 """
 import argparse
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def function(source, declaration):
-    start = source.index(declaration)
+    match = re.search(r'\s+'.join(re.escape(part) for part in declaration.split()), source)
+    if not match:
+        raise ValueError('Production declaration not found: '+declaration)
+    start = match.start()
     brace = source.index("{", start)
     depth = 1
     end = brace + 1
@@ -84,6 +88,9 @@ struct Provider {
  static int VULKAN_Shutdown1(VkDevice) { ++deviceVk; return result; }
 };
 struct Nvngx_FG : Provider {
+ enum class HandleApi { D3D12, Vulkan };
+ inline static int drainResult=0; inline static const void* drainDevice=nullptr;
+ static int DrainHandles(HandleApi,const void* d) { drainDevice=d;return drainResult; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
@@ -114,6 +121,10 @@ int main() {
  int before=initCalls;
  check(NVNGXProxy::InitDx12(&a) && NVNGXProxy::InitVulkan(nullptr,nullptr,&a,nullptr,nullptr) && initCalls==before);
  D3D12Device=&a; state.nvngxDx12Inited=true; state.currentFeature=&feature; state.api=API::DX12; fg.cleanups=0;
+ Nvngx_FG::drainResult=-8;
+ check(NVSDK_NGX_D3D12_Shutdown1(&a)==-8 && deviceDx==0 && Nvngx_FG::drainDevice==&a);
+ check(NVNGXProxy::IsDx12DeviceInited(&a) && state.currentFeature==&feature && fg.cleanups==0);
+ Nvngx_FG::drainResult=0;
  before=Nvngx_FG::deviceDx;
  check(NVSDK_NGX_D3D12_Shutdown1(&b)==0 && deviceDx==1 && globalDx==0 && lastDevice==&b);
  check(Nvngx_FG::deviceDx==before+1 && Nvngx_FG::globalDx==1);
@@ -144,6 +155,10 @@ int main() {
 
  check(NVNGXProxy::InitVulkan(nullptr,nullptr,&b,nullptr,nullptr));
  vkDevice=&a; vkInstance=&a; vkPD=&a; state.nvngxVkInited=true; state.currentFeature=&feature; state.api=API::Vulkan;
+ Nvngx_FG::drainResult=-8;
+ check(NVSDK_NGX_VULKAN_Shutdown1(&a)==-8 && deviceVk==0 && Nvngx_FG::drainDevice==&a);
+ check(NVNGXProxy::IsVulkanDeviceInited(&a) && state.currentFeature==&feature && state.nvngxVkInited);
+ Nvngx_FG::drainResult=0;
  check(NVSDK_NGX_VULKAN_Shutdown1(&b)==0 && deviceVk==1 && globalVk==0 && lastDevice==&b);
  check(vkDevice==&a && vkInstance==&a && vkPD==&a && state.nvngxVkInited && state.currentFeature==&feature);
  nativeResult=-4; before=Nvngx_FG::deviceVk;

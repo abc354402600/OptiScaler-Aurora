@@ -412,7 +412,8 @@ static NVSDK_NGX_Result ShutdownD3D12(ID3D12Device* device)
             State::Instance().nvngxDx12Inited = false;
             shutdown = false;
             return NVSDK_NGX_Result_Success;
-        });
+        },
+        device);
 }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(nullptr); }

@@ -283,6 +283,45 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
     return provider->D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
 }
 
+NVSDK_NGX_Result Nvngx_FG::DrainHandles(HandleApi api, const void* device)
+{
+    // The caller holds exclusive transition admission. Snapshot before any
+    // teardown, and never infer a legacy Vulkan command buffer's device from
+    // mutable process-wide state.
+    const auto keys =
+        _handles.LiveKeys([&](const Nvngx_FG_Handle& handle)
+                          { return handle.api == api && (!device || !handle.device || handle.device == device); });
+    if (device)
+        for (const auto* key : keys)
+            if (_handles.GetIdentity(key, [](const Nvngx_FG_Handle& handle) { return handle.device; }) == nullptr)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    if (keys.empty())
+        return NVSDK_NGX_Result_Success;
+    // DLL_PROCESS_DETACH may hold the loader lock. Do not start GPU/provider
+    // destruction there; retain ownership rather than claiming a clean drain.
+    if (State::Instance().isShuttingDown)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+    auto* provider = _provider.Peek();
+    if (!provider)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+    for (const auto* key : keys)
+    {
+        const auto result = _handles.Release(
+            key, NVSDK_NGX_Result_FAIL_FeatureNotFound, NVSDK_NGX_Result_FAIL_NotInitialized,
+            [&](const Nvngx_FG_Handle& handle)
+            {
+                return api == HandleApi::D3D12 ? provider->D3D12_ReleaseFeature(handle.nativeHandle)
+                                               : provider->VULKAN_ReleaseFeature(handle.nativeHandle);
+            },
+            [](NVSDK_NGX_Result result) { return result == NVSDK_NGX_Result_Success; });
+        if (result != NVSDK_NGX_Result_Success)
+            return result;
+    }
+    return NVSDK_NGX_Result_Success;
+}
+
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown()
 {
     return WithDx12Shutdown([&](auto closeProvider) { return closeProvider(nullptr); });
@@ -290,7 +329,7 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown()
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Shutdown1(ID3D12Device* InDevice)
 {
-    return WithDx12Shutdown([&](auto closeProvider) { return closeProvider(InDevice); });
+    return WithDx12Shutdown([&](auto closeProvider) { return closeProvider(InDevice); }, InDevice);
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
@@ -319,8 +358,13 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdL
     if (!lease)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
 
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    if (!InCmdList || FAILED(InCmdList->GetDevice(IID_PPV_ARGS(&device))) || !device)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     return CreateProviderHandle(
-        _handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::D3D12 },
+        _handles, OutHandle,
+        Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::D3D12, device.Get() },
         NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
         [&](Nvngx_FG_Handle& handle)
         {
@@ -548,7 +592,7 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown()
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown1(VkDevice InDevice)
 {
-    return WithVulkanShutdown([&](auto closeProvider) { return closeProvider(InDevice); });
+    return WithVulkanShutdown([&](auto closeProvider) { return closeProvider(InDevice); }, InDevice);
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_GetScratchBufferSize(NVSDK_NGX_Feature InFeatureId,
@@ -601,8 +645,12 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuf
     if (!lease)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
 
+    if (!InDevice)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     return CreateProviderHandle(
-        _handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::Vulkan },
+        _handles, OutHandle,
+        Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::Vulkan, InDevice },
         NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
         [&](Nvngx_FG_Handle& handle)
         {

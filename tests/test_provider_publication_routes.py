@@ -62,6 +62,8 @@ struct Provider {
  int VULKAN_Shutdown1(VkDevice d) { ++shutdowns; lastDevice=d; return 0; }
 };
 struct Nvngx_FG {
+ enum class HandleApi { D3D12, Vulkan };
+ static int DrainHandles(HandleApi,const void*) { return 0; }
  inline static ProviderPublication<Provider> _provider;
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;

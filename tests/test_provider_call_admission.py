@@ -89,6 +89,7 @@ def main():
     header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
     methods=[];bodies=[];checks=[]
     names=re.findall(r'NVSDK_NGX_Result Nvngx_FG::(\w+)\(',source)
+    names=[n for n in names if n!='DrainHandles']
     assert len(names)==22, 'Update admission coverage when provider SDK surface changes'
     for name in names:
         body=function(source,'NVSDK_NGX_Result Nvngx_FG::'+name+'(')
@@ -117,6 +118,8 @@ def main():
         expected=-7 if '_Init' in name or '_Shutdown' in name else 42
         checks.append('{ auto operation=Nvngx_FG::_calls.TryOperation(); '+f'check({call}=={expected});'+' }')
     cls='''struct Nvngx_FG {
+ enum class HandleApi { D3D12, Vulkan };
+ static int DrainHandles(HandleApi,const void*) { return 0; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;

@@ -1202,7 +1202,8 @@ static NVSDK_NGX_Result ShutdownVulkan(VkDevice device)
             State::Instance().nvngxVkInited = false;
             shutdown = false;
             return NVSDK_NGX_Result_Success;
-        });
+        },
+        device);
 }
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(nullptr); }

@@ -5,6 +5,7 @@
 #include <optional>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 // Lookup retains the token. Admission is checked under a short per-handle lock;
 // provider callbacks never run under that lock and busy releases never wait.
@@ -30,6 +31,21 @@ template <typename Value> class ProviderHandleRegistry
         auto* key = &entry->value;
         _entries.emplace(key, entry);
         return key;
+    }
+
+    // Only immutable identity fields may be inspected by the predicate. The
+    // caller must exclude new publication/operations for a lifecycle snapshot.
+    template <typename Predicate> std::vector<const void*> LiveKeys(Predicate&& predicate)
+    {
+        std::vector<const void*> keys;
+        std::scoped_lock lock(_mutex);
+        for (const auto& [key, entry] : _entries)
+        {
+            std::scoped_lock entryLock(entry->mutex);
+            if (!entry->retired && predicate(static_cast<const Value&>(entry->value)))
+                keys.push_back(key);
+        }
+        return keys;
     }
 
     // Identity remains available after retirement. Retained tokens prevent their

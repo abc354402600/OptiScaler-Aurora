@@ -102,8 +102,19 @@ NVSDK_NGX_Result Nvngx_FFX::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (!InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
+    InOurHandle->releaseStarted = true;
+    if (InOurHandle->fgContext && InOurHandle->fgContext->ctx)
+    {
+        const auto result = FfxApiProxy::D3D12_DestroyContext(&InOurHandle->fgContext->ctx, nullptr);
+        if (result != FFX_API_RETURN_OK)
+            return NVSDK_NGX_Result_Fail;
+        InOurHandle->fgContext->ctx = nullptr;
+    }
+    // Destroy the context before dropping our device reference. On failure the
+    // outer registry keeps this wrapper/device alive for an explicit retry.
+    InOurHandle->fgContext.reset();
     InOurHandle->device->Release();
-    delete InOurHandle; // destroys FFX context automatically
+    delete InOurHandle;
 
     return NVSDK_NGX_Result_Success;
 }
@@ -240,6 +251,9 @@ NVSDK_NGX_Result Nvngx_FFX::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InC
 
     if (!InParameters || !InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
+    if (InOurHandle->releaseStarted)
+        return NVSDK_NGX_Result_FAIL_FeatureNotFound;
 
     if (!Init())
         return NVSDK_NGX_Result_Fail;

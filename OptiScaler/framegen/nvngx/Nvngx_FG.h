@@ -27,6 +27,7 @@ class Nvngx_FG
         unsigned int id;
         NVSDK_NGX_Handle* nativeHandle = nullptr;
         HandleApi api = HandleApi::D3D12;
+        const void* device = nullptr; // Legacy Vulkan Create has no provable device identity.
     };
 
     static inline std::atomic_uint32_t lastIdCreated = 0;
@@ -42,15 +43,20 @@ class Nvngx_FG
     static std::unique_ptr<IFGNvngx> createProvider();
     static ProviderLookup<IFGNvngx> lookupProvider();
     static IFGNvngx* getProvider();
+    static NVSDK_NGX_Result DrainHandles(HandleApi api, const void* device);
 
   public:
     // The exported API holds this admission through native shutdown, provider
     // shutdown and local cleanup. A rejected transition changes none of them.
-    template <typename Callback> static NVSDK_NGX_Result WithDx12Shutdown(Callback&& callback)
+    template <typename Callback>
+    static NVSDK_NGX_Result WithDx12Shutdown(Callback&& callback, ID3D12Device* device = nullptr)
     {
         auto lease = _calls.TryTransition();
         if (!lease)
             return NVSDK_NGX_Result_FAIL_NotInitialized;
+        const auto drained = DrainHandles(HandleApi::D3D12, device);
+        if (drained != NVSDK_NGX_Result_Success)
+            return drained;
         return std::forward<Callback>(callback)(
             [](ID3D12Device* device)
             {
@@ -71,11 +77,15 @@ class Nvngx_FG
             });
     }
 
-    template <typename Callback> static NVSDK_NGX_Result WithVulkanShutdown(Callback&& callback)
+    template <typename Callback>
+    static NVSDK_NGX_Result WithVulkanShutdown(Callback&& callback, VkDevice device = nullptr)
     {
         auto lease = _calls.TryTransition();
         if (!lease)
             return NVSDK_NGX_Result_FAIL_NotInitialized;
+        const auto drained = DrainHandles(HandleApi::Vulkan, device);
+        if (drained != NVSDK_NGX_Result_Success)
+            return drained;
         return std::forward<Callback>(callback)(
             [](VkDevice device)
             {
