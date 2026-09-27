@@ -26,3 +26,15 @@ This gate serializes exported transitions only. Ordinary Evaluate, direct native
 Next: join the outer transaction to native/provider admission without thread-local bypass or locking across SDK callbacks, and publish an owned combined configuration only at the appropriate commit point. Preserve cleanup ownership after partial native success rather than pretending failure erased SDK state. Then address shared HUD/depth buffers and concurrent ordinary Evaluate. These are explicit outstanding items; this checkpoint does not meet the aurora synchronization gate or prove a Witcher/ZZZ crash fixed in-game.
 
 No installed game, runtime deployment, driver profile, SL1 protection, MFG multiplier policy or installer was modified. Real-game testing remains deferred as requested.
+
+## Additional transaction consumers reviewed
+
+`inputs/NVNGX.cpp::NVSDK_NGX_UpdateFeature` separately writes application/project identity. It is not covered by this Init/Shutdown gate. A later combined-configuration design must account for this writer instead of silently rolling back its newer update. `NVNGX_Proxy.h` direct InitDx11/InitDx12/InitVulkan and `dlssnr/DlssNr_Proxy.cpp` read paths and application metadata separately. Logger and other upscaler inputs also consume metadata; a global mutex held across SDK callbacks would therefore be inappropriate.
+
+The later failure matrix must distinguish rejected admission (no new side effects, fixed here for exported transitions) from an admitted operation that partially succeeds in native code (cleanup ownership must survive). Current D3D12 global early-success flags and Vulkan ProjectID publication after delegated failure remain within that second-stage review.
+
+## Windows checkpoint validation
+
+Code `c589c3b477afa7daea85dfd45778a42b2d76573c` is pushed. Full Windows build/test/package/upload run [36284675798](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36284675798), job 108523054982, and format run [36284675823](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36284675823) succeeded. The Windows log confirms 590 wrapper, 388 complete-chain, 32 path, 56 shutdown and 39 metadata checks. Public Init/Shutdown signatures were also compared against 0b96b32d: all three APIs retain their public signatures.
+
+Artifact `OptiScaler_Aurora_v1.0_20260927_compat_c589c3b4.7z`: id 10919943631, 234788713 bytes, GitHub artifact digest `sha256:ebd72e36136002bc730d410cc54614ba06771636499179fb66a6eac4b8691908`. This is compilation/CPU evidence, not a Release or in-game verification.
