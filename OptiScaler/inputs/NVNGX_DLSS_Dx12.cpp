@@ -175,18 +175,19 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationI
     if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
         State::Instance().NVNGX_Init.UpdateLogging(InFeatureInfo->LoggingInfo);
 
-    if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
-    {
-        LOG_WARN("NVNGX already inited");
-        return NVSDK_NGX_Result_Success;
-    }
-
     if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
     {
         const auto providerInit =
             Nvngx_FG::D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
         if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
             return providerInit;
+    }
+
+    // Local hook state is not proof that the selected provider is still ready.
+    if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
+    {
+        LOG_WARN("NVNGX already inited");
+        return NVSDK_NGX_Result_Success;
     }
 
     LOG_INFO("AppId: {0}", InApplicationId);
@@ -256,12 +257,6 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init(unsigned long long InApplicationId, c
             if (result == NVSDK_NGX_Result_FAIL_NotInitialized)
                 return result;
         }
-    }
-
-    if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
-    {
-        LOG_WARN("NVNGX already inited");
-        return NVSDK_NGX_Result_Success;
     }
 
     // if (State::Instance().activeFgInput == FGInput::NvngxFG)
@@ -338,12 +333,6 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_ProjectID(const char* InProjectId, NV
 
     State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
 
-    if (State::Instance().nvngxDx12Inited && InDevice == D3D12Device)
-    {
-        LOG_WARN("NVNGX already inited");
-        return NVSDK_NGX_Result_Success;
-    }
-
     auto result =
         NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo, true);
     return result;
@@ -379,12 +368,6 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_with_ProjectID(const char* InProjectI
     LOG_INFO("InEngineVersion: {0}", InEngineVersion);
 
     State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
-
-    if (State::Instance().nvngxDx12Inited)
-    {
-        LOG_WARN("NVNGX already inited");
-        return NVSDK_NGX_Result_Success;
-    }
 
     auto result =
         NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo, delegated);

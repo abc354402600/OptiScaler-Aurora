@@ -169,18 +169,19 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext2(unsigned long long InApplicatio
     if (InFeatureInfo != nullptr && InSDKVersion > 0x0000013)
         State::Instance().NVNGX_Init.UpdateLogging(InFeatureInfo->LoggingInfo);
 
-    if (State::Instance().nvngxVkInited && InInstance == vkInstance && InDevice == vkDevice && InPD == vkPD)
-    {
-        LOG_WARN("NVNGX already inited");
-        return NVSDK_NGX_Result_Success;
-    }
-
     if (State::Instance().activeFgInput == FGInput::NvngxFG)
     {
         const auto providerInit = Nvngx_FG::VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD,
                                                              InDevice, InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
         if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
             return providerInit;
+    }
+
+    // Revalidate provider readiness even when local device state already exists.
+    if (State::Instance().nvngxVkInited && InInstance == vkInstance && InDevice == vkDevice && InPD == vkPD)
+    {
+        LOG_WARN("NVNGX already inited");
+        return NVSDK_NGX_Result_Success;
     }
 
     LOG_INFO("AppId: {0}", InApplicationId);

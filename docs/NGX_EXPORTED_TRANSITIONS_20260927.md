@@ -50,3 +50,11 @@ The complete-chain suite now has **400** checks: 12 new assertions cover both Pr
 Final code `7efb6022da019e06fab8b9759d6d3b0d39cde852`: Windows [36302276941](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36302276941), job 108572025280, and format [36302276928](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36302276928) passed. Full DLL compilation, configured compatibility tests, package and upload completed successfully. MSVC confirms 590 exported admission, **400** complete Init-chain, 32 path, 56 shutdown and 39 metadata checks.
 
 Artifact `OptiScaler_Aurora_v1.0_20260927_compat_7efb6022.7z`: id 10925534199, 234787629 bytes, GitHub artifact digest `sha256:c50e187cbd17b28ed3f5c7c09b1f510e419a2b98ad7b408075f430e8ff02baaf`. No main-branch merge, Release or game test occurred.
+
+## Global success-flag follow-up
+
+The legacy D3D12/Vulkan global initialized flags could return success before checking replacement-provider readiness. D3D12's Init and ProjectID wrappers also bypassed the shared core; Init_with_ProjectID could skip a different device because it checked only the global flag.
+
+The final local-state fast path now follows provider Init admission in D3D12 Init_Ext and Vulkan Init_Ext2. D3D12 wrapper shortcuts are removed so the shared core makes the device-aware decision. Provider Init already handles successful repeats without a second SDK Init; native API/device admission continues to handle its own successful repeats. The existing optional-unavailable-provider fallback is retained, and disabling D3D12 replacement does not create a required provider dependency.
+
+The complete-chain suite adds **55** checks (400 -> 455): all nine D3D12/Vulkan variants with existing global state and a provider NotInitialized result, existing optional fallback, successful repeat, second-device initialization, selected local device identity and disabled D3D12 replacement. New checks failed at 402 before the fix and pass afterward. The 590 exported admission and 152 complete provider readiness checks also passed locally. These checks do not remove the remaining combined configuration/admission or shared Evaluate resource work.

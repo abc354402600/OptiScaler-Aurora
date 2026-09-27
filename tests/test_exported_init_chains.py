@@ -62,7 +62,7 @@ struct Nvngx_FG{
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');args=parser.parse_args()
-    cpp=PRELUDE;routes=[];failed_project_routes=[];allsource=''
+    cpp=PRELUDE;routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
         cpp+='\nnamespace '+api+'{\n'
@@ -78,14 +78,19 @@ def main():
                 elif '*' in param or re.search(r'\b(Vk\w+|PFN_\w+)\b',param):values.append('nullptr')
                 else:values.append('32')
             routes.append('[&]{return '+api+'::'+name+'('+','.join(values)+');}')
+            if api!='Dx11':
+                provider_routes.append(len(routes)-1)
+                second=[v.replace('&dx12','&otherDx12').replace('&vk','&otherVk') for v in values]
+                other_device_routes.append('[&]{return '+api+'::'+name+'('+','.join(second)+');}')
             if api=='Vk' and 'ProjectID' in name:failed_project_routes.append(len(routes)-1)
         cpp+='}\n'
     native=sorted(set(re.findall(r'NVNGXProxy::((?:D3D11|D3D12|VULKAN)_Init\w*)\(',allsource)))
     provider=sorted(set(re.findall(r'Nvngx_FG::((?:D3D12|VULKAN)_Init\w*)\(',allsource)))
     cpp=cpp.replace('// NATIVE_GETTERS','\n'.join('static NativeCall '+n+'(){return {};}' for n in native))
     cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){++providerCalls;if(onProvider)onProvider();return providerResult;}' for n in provider))
-    cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12;int vk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
+    cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
     cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
+    cpp+='std::vector<int> providerRoutes={'+','.join(map(str,provider_routes))+'};std::vector<std::function<int()>> otherDeviceRoutes={'+','.join(other_device_routes)+'};\n'
     cpp+=r'''
  auto reset=[] {State::Instance()=State{};Dx11::D3D11Device=nullptr;Dx12::D3D12Device=nullptr;Vk::vkInstance=nullptr;Vk::vkPD=nullptr;Vk::vkDevice=nullptr;};
  for(auto& route:routes){
@@ -113,6 +118,23 @@ def main():
    check(routes[index]()==0&&projectWrites==projects+1);
   }
  }
+
+ // Existing global flags do not establish selected provider readiness.
+ for(size_t i=0;i<providerRoutes.size();++i){
+  auto& route=routes[providerRoutes[i]];reset();providerResult=0;check(route()==0);
+  int before=providerCalls;providerResult=-7;
+  check(route()==-7&&providerCalls>before);
+  // An optional unavailable backend still follows the existing fallback policy.
+  providerResult=-1;check(route()==0);
+  providerResult=0;check(route()==0);
+  check(otherDeviceRoutes[i]()==0);
+  if(providerRoutes[i]<8)check(State::Instance().currentD3D12Device==&otherDx12&&Dx12::D3D12Device==&otherDx12);
+  else check(State::Instance().currentVkDevice==&otherVk&&Vk::vkDevice==&otherVk);
+ }
+ // Explicitly disabled D3D12 replacement must not become a required provider.
+ reset();State::Instance().activeFgNvngx=FGNvngxReplacement::None;providerResult=-7;
+ int before=providerCalls;check(routes[4]()==0&&routes[4]()==0&&providerCalls==before);
+ providerResult=0;
  std::cout<<"PASS: "<<checks<<" complete exported Init chain checks\n";
 }
 '''
