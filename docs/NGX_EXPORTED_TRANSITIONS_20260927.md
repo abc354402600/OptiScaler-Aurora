@@ -38,3 +38,9 @@ The later failure matrix must distinguish rejected admission (no new side effect
 Code `c589c3b477afa7daea85dfd45778a42b2d76573c` is pushed. Full Windows build/test/package/upload run [36284675798](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36284675798), job 108523054982, and format run [36284675823](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36284675823) succeeded. The Windows log confirms 590 wrapper, 388 complete-chain, 32 path, 56 shutdown and 39 metadata checks. Public Init/Shutdown signatures were also compared against 0b96b32d: all three APIs retain their public signatures.
 
 Artifact `OptiScaler_Aurora_v1.0_20260927_compat_c589c3b4.7z`: id 10919943631, 234788713 bytes, GitHub artifact digest `sha256:ebd72e36136002bc730d410cc54614ba06771636499179fb66a6eac4b8691908`. This is compilation/CPU evidence, not a Release or in-game verification.
+
+## Admitted failure follow-up
+
+Vulkan Init_ProjectID_Ext previously called UpdateProject even when its delegated Init_Ext2 returned failure. Init_ProjectID reaches the same path. Added a success check before project identity publication. This prevents a failed request from overwriting ProjectId/engine information; it does not roll back earlier application/path publication or undo partially initialized native state.
+
+The complete-chain suite now has **400** checks: 12 new assertions cover both ProjectID entry variants, native-busy and provider-busy failure, unchanged project metadata/no global Vulkan success flag, and a subsequent successful retry. The new fixture failed at check 390 against the preceding production code, then passed after this fix. This provides a direct before/after reproduction rather than a source-string-only assertion.

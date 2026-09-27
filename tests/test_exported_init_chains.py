@@ -23,7 +23,7 @@ struct ID3D11Device{};struct ID3D12Device{};struct NVSDK_NGX_FeatureCommonInfo{i
 constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0;
 constexpr int app_id_override=12;const char* project_id_override="override";
 void* vkGetInstanceProcAddr=nullptr;void* vkGetDeviceProcAddr=nullptr;
-int checks=0,nativeCalls=0,providerCalls=0,pathWrites=0,metadataWrites=0;
+int checks=0,nativeCalls=0,providerCalls=0,pathWrites=0,metadataWrites=0,projectWrites=0,nativeResult=0,providerResult=0;
 std::function<void()> onNative,onProvider;
 void check(bool b){if(!b){std::cerr<<"Init chain check "<<checks+1<<" failed\n";std::exit(2);}++checks;}
 struct NgxPathSnapshot{using Owner=std::shared_ptr<int>;};
@@ -31,7 +31,7 @@ NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo*){++pathWrite
 enum class FGNvngxReplacement{None,Yes};enum class FGInput{NvngxFG};
 struct Metadata{
  template<class...A>void UpdateApplication(A...){++metadataWrites;}
- template<class...A>void UpdateProject(A...){++metadataWrites;}
+ template<class...A>void UpdateProject(A...){++metadataWrites;++projectWrites;}
  template<class...A>void UpdateLogging(A...){++metadataWrites;}
 };
 struct State{
@@ -47,7 +47,7 @@ struct UpscalerInputsDx12{static void Init(ID3D12Device*){}};
 struct UpscalerTimeVk{static void Init(VkDevice,VkPhysicalDevice){}};
 struct NativeCall{
  bool operator!=(std::nullptr_t)const{return true;}
- template<class...A>int operator()(A...){++nativeCalls;if(onNative)onNative();return 0;}
+ template<class...A>int operator()(A...){++nativeCalls;if(onNative)onNative();return nativeResult;}
 };
 struct NVNGXProxy{
  static void* NVNGXModule(){return reinterpret_cast<void*>(1);}static void InitNVNGX(){}static void SetDx11Inited(bool){}
@@ -62,7 +62,7 @@ struct Nvngx_FG{
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');args=parser.parse_args()
-    cpp=PRELUDE;routes=[];allsource=''
+    cpp=PRELUDE;routes=[];failed_project_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
         cpp+='\nnamespace '+api+'{\n'
@@ -78,12 +78,14 @@ def main():
                 elif '*' in param or re.search(r'\b(Vk\w+|PFN_\w+)\b',param):values.append('nullptr')
                 else:values.append('32')
             routes.append('[&]{return '+api+'::'+name+'('+','.join(values)+');}')
+            if api=='Vk' and 'ProjectID' in name:failed_project_routes.append(len(routes)-1)
         cpp+='}\n'
     native=sorted(set(re.findall(r'NVNGXProxy::((?:D3D11|D3D12|VULKAN)_Init\w*)\(',allsource)))
     provider=sorted(set(re.findall(r'Nvngx_FG::((?:D3D12|VULKAN)_Init\w*)\(',allsource)))
     cpp=cpp.replace('// NATIVE_GETTERS','\n'.join('static NativeCall '+n+'(){return {};}' for n in native))
-    cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){++providerCalls;if(onProvider)onProvider();return 0;}' for n in provider))
+    cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){++providerCalls;if(onProvider)onProvider();return providerResult;}' for n in provider))
     cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12;int vk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
+    cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
     cpp+=r'''
  auto reset=[] {State::Instance()=State{};Dx11::D3D11Device=nullptr;Dx12::D3D12Device=nullptr;Vk::vkInstance=nullptr;Vk::vkPD=nullptr;Vk::vkDevice=nullptr;};
  for(auto& route:routes){
@@ -98,6 +100,18 @@ def main():
   check(route()==0&&nativeCalls==before+1&&pathWrites==paths+1);onNative={};onProvider={};
   reset();bool threw=false;onNative=[]{throw 17;};
   try{route();}catch(int){threw=true;}onNative={};check(threw);reset();check(route()==0);
+ }
+
+ // A rejected native/provider phase must not commit the ProjectID afterward.
+ for(int index:failedProjectRoutes){
+  for(bool failNative:{false,true}){
+   reset();int projects=projectWrites;
+   nativeResult=failNative?-7:0;providerResult=failNative?0:-7;
+   check(routes[index]()==-7);
+   check(projectWrites==projects&&!State::Instance().nvngxVkInited);
+   nativeResult=providerResult=0;reset();
+   check(routes[index]()==0&&projectWrites==projects+1);
+  }
  }
  std::cout<<"PASS: "<<checks<<" complete exported Init chain checks\n";
 }

@@ -357,6 +357,10 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID_Ext(
     auto result = NgxCore_VULKAN_Init_Ext2(0x1337, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
                                            InSDKVersion, &localFeatureInfo, true);
 
+    // A failed delegated Init must not publish this request's project identity.
+    if (result != NVSDK_NGX_Result_Success)
+        return result;
+
     LOG_DEBUG("InProjectId: {0}", InProjectId);
     LOG_DEBUG("InEngineType: {0}", (int) InEngineType);
     LOG_DEBUG("InEngineVersion: {0}", InEngineVersion);
