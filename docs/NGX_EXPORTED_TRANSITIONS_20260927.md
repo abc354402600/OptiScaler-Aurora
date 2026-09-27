@@ -44,3 +44,9 @@ Artifact `OptiScaler_Aurora_v1.0_20260927_compat_c589c3b4.7z`: id 10919943631, 2
 Vulkan Init_ProjectID_Ext previously called UpdateProject even when its delegated Init_Ext2 returned failure. Init_ProjectID reaches the same path. Added a success check before project identity publication. This prevents a failed request from overwriting ProjectId/engine information; it does not roll back earlier application/path publication or undo partially initialized native state.
 
 The complete-chain suite now has **400** checks: 12 new assertions cover both ProjectID entry variants, native-busy and provider-busy failure, unchanged project metadata/no global Vulkan success flag, and a subsequent successful retry. The new fixture failed at check 390 against the preceding production code, then passed after this fix. This provides a direct before/after reproduction rather than a source-string-only assertion.
+
+## Final follow-up validation
+
+Final code `7efb6022da019e06fab8b9759d6d3b0d39cde852`: Windows [36302276941](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36302276941), job 108572025280, and format [36302276928](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36302276928) passed. Full DLL compilation, configured compatibility tests, package and upload completed successfully. MSVC confirms 590 exported admission, **400** complete Init-chain, 32 path, 56 shutdown and 39 metadata checks.
+
+Artifact `OptiScaler_Aurora_v1.0_20260927_compat_7efb6022.7z`: id 10925534199, 234787629 bytes, GitHub artifact digest `sha256:c50e187cbd17b28ed3f5c7c09b1f510e419a2b98ad7b408075f430e8ff02baaf`. No main-branch merge, Release or game test occurred.
