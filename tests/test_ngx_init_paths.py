@@ -104,14 +104,13 @@ int main() {
      auto replacement=cache.Publish({L"different thread / nested call"});
      check(!active.expired() && strings(fc.PathListInfo)==retained);
      {
-       Dx12::ScopedInitDx12 delegated;
        Dx12::Invoke(&fc,[&](const NVSDK_NGX_FeatureCommonInfo& child) {
          check(child.PathListInfo.Path==fc.PathListInfo.Path && strings(child.PathListInfo)==retained);
          check(cache.Read()==replacement);
-       });
+       },true);
      }
      throw std::runtime_error("native Init failure");
-   }); } catch(const std::runtime_error&) { threw=true; }
+   },false); } catch(const std::runtime_error&) { threw=true; }
    check(threw && active.expired()); // No raw leaked pointer array keeps it alive.
  }
  // Repeat writers/readers on the production cache while keeping each call's view.
@@ -135,14 +134,13 @@ def main():
     args=parser.parse_args(); cpp=PRELUDE
     for api,entry in [('Dx11','D3D11_Init_Ext'),('Dx12','D3D12_Init_Ext'),('Vk','VULKAN_Init_Ext2')]:
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8')
-        flag=re.search(r'static thread_local bool _skipInit = false;',source).group(0)
-        body=function(source,'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_'+entry+'(')
+        body=function(source,'static NVSDK_NGX_Result NgxCore_'+entry+'(')
         prefix=body[body.index('{')+1:body.index('const auto initPaths =')]
         end=body.index(';',body.index('const auto initPaths ='))+1
         prefix+=body[body.index('const auto initPaths ='):end]
-        cpp+='\nnamespace '+api+' {\n'+flag+'\n'+function(source,'class ScopedInit'+api)+';\n'
+        cpp+='\nnamespace '+api+' {\n'
         cpp+=function(source,'[[nodiscard]] static NgxPathSnapshot::Owner UpdateInitPaths(')
-        cpp+='\nvoid Invoke(const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,std::function<void(const NVSDK_NGX_FeatureCommonInfo&)> callback) {\n'+prefix+'\ncallback(localFeatureInfo);\n}\n}\n'
+        cpp+='\nvoid Invoke(const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,std::function<void(const NVSDK_NGX_FeatureCommonInfo&)> callback,bool delegated=false) {\n'+prefix+'\ncallback(localFeatureInfo);\n}\n}\n'
     source=(ROOT/'OptiScaler/proxies/NVNGX_Proxy.h').read_text(encoding='utf-8')
     cpp+='struct NVNGXProxy { static void LogCallback() {}\n'+function(source,'[[nodiscard]] static NgxPathSnapshot::Owner GetFeatureCommonInfo(')+'\n};\n'+CHECKS
     with tempfile.TemporaryDirectory(prefix='aurora-ngx-paths-') as directory:

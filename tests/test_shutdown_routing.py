@@ -28,6 +28,7 @@ def function(source, declaration):
 
 PRELUDE = r'''
 #include "proxies/NativeDeviceLifecycle.h"
+#include "proxies/NgxExportLifecycle.h"
 #include "framegen/ProviderCallAdmission.h"
 #include <unordered_set>
 #include "proxies/NgxInitMetadata.h"
@@ -231,6 +232,8 @@ def main():
     for api,filename,cleanup in (('D3D12','Dx12','ShutdownD3D12'),('VULKAN','Vk','ShutdownVulkan')):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{filename}.cpp').read_text(encoding='utf-8')
         for declaration in (f'static NVSDK_NGX_Result {cleanup}(',
+                            f'static NVSDK_NGX_Result NgxCore_{api}_Shutdown(',
+                            f'static NVSDK_NGX_Result NgxCore_{api}_Shutdown1(',
                             f'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_{api}_Shutdown(',
                             f'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_{api}_Shutdown1('):
             bodies.append(function(source,declaration))

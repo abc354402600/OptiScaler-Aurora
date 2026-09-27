@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <proxies/NgxExportLifecycle.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -33,23 +34,6 @@ static std::unordered_map<unsigned int, NVSDK_NGX_Feature> HandleToFeature;
 static ID3D12Device* D3D12Device = nullptr;
 static int evalCounter = 0;
 static bool shutdown = false;
-static thread_local bool _skipInit = false;
-
-class ScopedInitDx12
-{
-  private:
-    bool previousState;
-
-  public:
-    ScopedInitDx12()
-    {
-        previousState = _skipInit;
-        _skipInit = true;
-    }
-
-    ~ScopedInitDx12() { _skipInit = previousState; }
-};
-
 [[nodiscard]] static NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
     std::vector<std::wstring> initPaths;
@@ -142,10 +126,9 @@ class ScopedInitDx12
 
 #pragma region DLSS Init Calls
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApplicationId,
-                                                        const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
-                                                        NVSDK_NGX_Version InSDKVersion,
-                                                        const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
+                                               ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
+                                               const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -155,11 +138,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     State::Instance().NVNGX_Init.UpdateApplication(InApplicationId, InApplicationDataPath, InSDKVersion);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InApplicationId = app_id_override;
@@ -221,10 +204,22 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplicationId,
-                                                    const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
-                                                    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
-                                                    NVSDK_NGX_Version InSDKVersion)
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApplicationId,
+                                                        const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
+                                                        NVSDK_NGX_Version InSDKVersion,
+                                                        const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice,
+                                                                     InSDKVersion, InFeatureInfo, false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_D3D12_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
+                                           ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+                                           NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
     LOG_FUNC();
 
@@ -234,9 +229,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplica
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InApplicationId = app_id_override;
@@ -274,20 +269,30 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplica
     //     Nvngx_FG::D3D12_Init(InApplicationId, InApplicationDataPath, InDevice, InFeatureInfo, InSDKVersion);
     // }
 
-    ScopedInitDx12 scopedInit {};
     auto result =
-        NVSDK_NGX_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+        NgxCore_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo, true);
 
     LOG_DEBUG("was called NVSDK_NGX_D3D12_Init_Ext");
     return result;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProjectId,
-                                                              NVSDK_NGX_EngineType InEngineType,
-                                                              const char* InEngineVersion,
-                                                              const wchar_t* InApplicationDataPath,
-                                                              ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
-                                                              const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplicationId,
+                                                    const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
+                                                    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+                                                    NVSDK_NGX_Version InSDKVersion)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init(InApplicationId, InApplicationDataPath, InDevice,
+                                                                 InFeatureInfo, InSDKVersion, false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_D3D12_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType,
+                                                     const char* InEngineVersion, const wchar_t* InApplicationDataPath,
+                                                     ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
+                                                     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -297,9 +302,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InProjectId = project_id_override;
@@ -339,16 +344,33 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
         return NVSDK_NGX_Result_Success;
     }
 
-    ScopedInitDx12 scopedInit {};
-    auto result = NVSDK_NGX_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+    auto result =
+        NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo, true);
     return result;
 }
 
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProjectId,
+                                                              NVSDK_NGX_EngineType InEngineType,
+                                                              const char* InEngineVersion,
+                                                              const wchar_t* InApplicationDataPath,
+                                                              ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
+                                                              const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_ProjectID(InProjectId, InEngineType, InEngineVersion,
+                                                                           InApplicationDataPath, InDevice,
+                                                                           InSDKVersion, InFeatureInfo, false);
+                                   });
+}
+
 // Not sure about this one, original nvngx does not export this method
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
-    const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
-    const wchar_t* InApplicationDataPath, ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
-    NVSDK_NGX_Version InSDKVersion)
+static NVSDK_NGX_Result NgxCore_D3D12_Init_with_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType,
+                                                          const char* InEngineVersion,
+                                                          const wchar_t* InApplicationDataPath, ID3D12Device* InDevice,
+                                                          const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+                                                          NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
     LOG_FUNC();
 
@@ -364,9 +386,24 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
         return NVSDK_NGX_Result_Success;
     }
 
-    auto result = NVSDK_NGX_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
+    auto result =
+        NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo, delegated);
 
     return result;
+}
+
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
+    const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
+    const wchar_t* InApplicationDataPath, ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+    NVSDK_NGX_Version InSDKVersion)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_with_ProjectID(
+                                           InProjectId, InEngineType, InEngineVersion, InApplicationDataPath, InDevice,
+                                           InFeatureInfo, InSDKVersion, false);
+                                   });
 }
 
 #pragma endregion
@@ -416,9 +453,20 @@ static NVSDK_NGX_Result ShutdownD3D12(ID3D12Device* device)
         device);
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void) { return ShutdownD3D12(nullptr); }
+static NVSDK_NGX_Result NgxCore_D3D12_Shutdown() { return ShutdownD3D12(nullptr); }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice) { return ShutdownD3D12(InDevice); }
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown(void)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized, [&] { return NgxCore_D3D12_Shutdown(); });
+}
+
+static NVSDK_NGX_Result NgxCore_D3D12_Shutdown1(ID3D12Device* InDevice) { return ShutdownD3D12(InDevice); }
+
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Shutdown1(ID3D12Device* InDevice)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&] { return NgxCore_D3D12_Shutdown1(InDevice); });
+}
 
 #pragma endregion
 

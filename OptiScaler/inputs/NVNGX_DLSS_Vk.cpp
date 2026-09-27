@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <proxies/NgxExportLifecycle.h>
 #include <dlssnr/DlssNrFeature_Vk.h>
 #include "Util.h"
 #include "Config.h"
@@ -27,23 +28,6 @@ PFN_vkGetDeviceProcAddr vkGDPA;
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Vk>> VkContexts;
 static int evalCounter = 0;
 static bool shutdown = false;
-static thread_local bool _skipInit = false;
-
-class ScopedInitVk
-{
-  private:
-    bool previousState;
-
-  public:
-    ScopedInitVk()
-    {
-        previousState = _skipInit;
-        _skipInit = true;
-    }
-
-    ~ScopedInitVk() { _skipInit = previousState; }
-};
-
 [[nodiscard]] static NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
     std::vector<std::wstring> initPaths;
@@ -138,10 +122,12 @@ class ScopedInitVk
     return {};
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
-    unsigned long long InApplicationId, const wchar_t* InApplicationDataPath, VkInstance InInstance,
-    VkPhysicalDevice InPD, VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
-    NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext2(unsigned long long InApplicationId,
+                                                 const wchar_t* InApplicationDataPath, VkInstance InInstance,
+                                                 VkPhysicalDevice InPD, VkDevice InDevice,
+                                                 PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                                                 NVSDK_NGX_Version InSDKVersion,
+                                                 const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -151,11 +137,11 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
     State::Instance().NVNGX_Init.UpdateApplication(InApplicationId, InApplicationDataPath, InSDKVersion);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InApplicationId = app_id_override;
@@ -250,11 +236,25 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     return NVSDK_NGX_Result_Success;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InApplicationId,
-                                                         const wchar_t* InApplicationDataPath, VkInstance InInstance,
-                                                         VkPhysicalDevice InPD, VkDevice InDevice,
-                                                         NVSDK_NGX_Version InSDKVersion,
-                                                         const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
+    unsigned long long InApplicationId, const wchar_t* InApplicationDataPath, VkInstance InInstance,
+    VkPhysicalDevice InPD, VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+    NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath,
+                                                                       InInstance, InPD, InDevice, InGIPA, InGDPA,
+                                                                       InSDKVersion, InFeatureInfo, false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext(unsigned long long InApplicationId,
+                                                const wchar_t* InApplicationDataPath, VkInstance InInstance,
+                                                VkPhysicalDevice InPD, VkDevice InDevice,
+                                                NVSDK_NGX_Version InSDKVersion,
+                                                const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -264,9 +264,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InApplicationId = app_id_override;
@@ -296,16 +296,30 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
     if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
         return providerInit;
 
-    ScopedInitVk scopedInit {};
-    return NVSDK_NGX_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
-                                      vkGetInstanceProcAddr, vkGetDeviceProcAddr, InSDKVersion, InFeatureInfo);
+    return NgxCore_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
+                                    vkGetInstanceProcAddr, vkGetDeviceProcAddr, InSDKVersion, InFeatureInfo, true);
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InApplicationId,
+                                                         const wchar_t* InApplicationDataPath, VkInstance InInstance,
+                                                         VkPhysicalDevice InPD, VkDevice InDevice,
+                                                         NVSDK_NGX_Version InSDKVersion,
+                                                         const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_VULKAN_Init_Ext(InApplicationId, InApplicationDataPath,
+                                                                      InInstance, InPD, InDevice, InSDKVersion,
+                                                                      InFeatureInfo, false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID_Ext(
     const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
     const wchar_t* InApplicationDataPath, VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
     PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA, NVSDK_NGX_Version InSDKVersion,
-    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -315,9 +329,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (NVNGXProxy::NVNGXModule() == nullptr)
             NVNGXProxy::InitNVNGX();
@@ -340,9 +354,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
         }
     }
 
-    ScopedInitVk scopedInit {};
-    auto result = NVSDK_NGX_VULKAN_Init_Ext2(0x1337, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
-                                             InSDKVersion, &localFeatureInfo);
+    auto result = NgxCore_VULKAN_Init_Ext2(0x1337, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
+                                           InSDKVersion, &localFeatureInfo, true);
 
     LOG_DEBUG("InProjectId: {0}", InProjectId);
     LOG_DEBUG("InEngineType: {0}", (int) InEngineType);
@@ -353,12 +366,27 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
     return result;
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplicationId,
-                                                     const wchar_t* InApplicationDataPath, VkInstance InInstance,
-                                                     VkPhysicalDevice InPD, VkDevice InDevice,
-                                                     PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
-                                                     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
-                                                     NVSDK_NGX_Version InSDKVersion)
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
+    const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
+    const wchar_t* InApplicationDataPath, VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
+    PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA, NVSDK_NGX_Version InSDKVersion,
+    const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_VULKAN_Init_ProjectID_Ext(
+                                           InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
+                                           InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion, InFeatureInfo,
+                                           false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_VULKAN_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
+                                            VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
+                                            PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                                            const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+                                            NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
     LOG_FUNC();
 
@@ -368,9 +396,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InApplicationId = app_id_override;
@@ -400,16 +428,32 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
     if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
         return providerInit;
 
-    ScopedInitVk scopedInit {};
-    return NVSDK_NGX_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
-                                      InGDPA, InSDKVersion, InFeatureInfo);
+    return NgxCore_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
+                                    InSDKVersion, InFeatureInfo, true);
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result
-NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
-                                const wchar_t* InApplicationDataPath, VkInstance InInstance, VkPhysicalDevice InPD,
-                                VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
-                                NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplicationId,
+                                                     const wchar_t* InApplicationDataPath, VkInstance InInstance,
+                                                     VkPhysicalDevice InPD, VkDevice InDevice,
+                                                     PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                                                     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
+                                                     NVSDK_NGX_Version InSDKVersion)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance,
+                                                                  InPD, InDevice, InGIPA, InGDPA, InFeatureInfo,
+                                                                  InSDKVersion, false);
+                                   });
+}
+
+static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType,
+                                                      const char* InEngineVersion, const wchar_t* InApplicationDataPath,
+                                                      VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
+                                                      PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                                                      NVSDK_NGX_Version InSDKVersion,
+                                                      const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
     LOG_FUNC();
 
@@ -419,9 +463,9 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
         std::memcpy(&localFeatureInfo, InFeatureInfo, sizeof(NVSDK_NGX_FeatureCommonInfo));
 
     // A delegated call borrows its outer call's still-live snapshot.
-    const auto initPaths = _skipInit ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
+    const auto initPaths = delegated ? NgxPathSnapshot::Owner {} : UpdateInitPaths(&localFeatureInfo);
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && !_skipInit)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && !delegated)
     {
         if (Config::Instance()->UseGenericAppIdWithDlss.value_or_default())
             InProjectId = project_id_override;
@@ -447,10 +491,25 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
         }
     }
 
-    ScopedInitVk scopedInit {};
-    return NVSDK_NGX_VULKAN_Init_ProjectID_Ext(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
-                                               InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion,
-                                               &localFeatureInfo);
+    return NgxCore_VULKAN_Init_ProjectID_Ext(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
+                                             InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion,
+                                             &localFeatureInfo, true);
+}
+
+NVSDK_NGX_API NVSDK_NGX_Result
+NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType, const char* InEngineVersion,
+                                const wchar_t* InApplicationDataPath, VkInstance InInstance, VkPhysicalDevice InPD,
+                                VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                                NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_VULKAN_Init_ProjectID(InProjectId, InEngineType, InEngineVersion,
+                                                                            InApplicationDataPath, InInstance, InPD,
+                                                                            InDevice, InGIPA, InGDPA, InSDKVersion,
+                                                                            InFeatureInfo, false);
+                                   });
 }
 
 /**
@@ -1206,6 +1265,17 @@ static NVSDK_NGX_Result ShutdownVulkan(VkDevice device)
         device);
 }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void) { return ShutdownVulkan(nullptr); }
+static NVSDK_NGX_Result NgxCore_VULKAN_Shutdown() { return ShutdownVulkan(nullptr); }
 
-NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice) { return ShutdownVulkan(InDevice); }
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized, [&] { return NgxCore_VULKAN_Shutdown(); });
+}
+
+static NVSDK_NGX_Result NgxCore_VULKAN_Shutdown1(VkDevice InDevice) { return ShutdownVulkan(InDevice); }
+
+NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
+{
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&] { return NgxCore_VULKAN_Shutdown1(InDevice); });
+}
