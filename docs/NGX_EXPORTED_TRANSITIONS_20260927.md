@@ -58,3 +58,9 @@ The legacy D3D12/Vulkan global initialized flags could return success before che
 The final local-state fast path now follows provider Init admission in D3D12 Init_Ext and Vulkan Init_Ext2. D3D12 wrapper shortcuts are removed so the shared core makes the device-aware decision. Provider Init already handles successful repeats without a second SDK Init; native API/device admission continues to handle its own successful repeats. The existing optional-unavailable-provider fallback is retained, and disabling D3D12 replacement does not create a required provider dependency.
 
 The complete-chain suite adds **55** checks (400 -> 455): all nine D3D12/Vulkan variants with existing global state and a provider NotInitialized result, existing optional fallback, successful repeat, second-device initialization, selected local device identity and disabled D3D12 replacement. New checks failed at 402 before the fix and pass afterward. The 590 exported admission and 152 complete provider readiness checks also passed locally. These checks do not remove the remaining combined configuration/admission or shared Evaluate resource work.
+
+## Readiness fast-path validation
+
+Final code `087078d32c481ab247908c85181844c458a42a8d` passed Windows run [36310007830](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36310007830), job 108593988482, including full DLL build, compatibility checks, packaging and upload. Format run 36310007829 passed. The MSVC log confirms 590 exported admission checks, **455** complete exported Init-chain checks and 152 provider Init readiness checks.
+
+Artifact `OptiScaler_Aurora_v1.0_20260927_compat_087078d3.7z`: id 10929510178, 234792050 bytes, GitHub artifact digest `sha256:31c7421e4d505b1dcfa9189e3d01004a45220bd4d8d05d110fe2078b4cc8bcb2`. This remains a Compatibility-fixes build artifact. The user now authorizes a formal Release after the remaining code-validation gate; no Release was created in this checkpoint.
