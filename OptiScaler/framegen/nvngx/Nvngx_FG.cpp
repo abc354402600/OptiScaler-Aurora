@@ -256,8 +256,12 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init(unsigned long long InApplicationId, const 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
-    _dx12InitAttempts.insert(InDevice);
-    return provider->D3D12_Init(InApplicationId, InApplicationDataPath, InDevice, InFeatureInfo, InSDKVersion);
+    return InitializeProvider(_dx12InitAttempts, _dx12InitReady, InDevice,
+                              [&]
+                              {
+                                  return provider->D3D12_Init(InApplicationId, InApplicationDataPath, InDevice,
+                                                              InFeatureInfo, InSDKVersion);
+                              });
 }
 
 NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
@@ -279,8 +283,12 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
-    _dx12InitAttempts.insert(InDevice);
-    return provider->D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo);
+    return InitializeProvider(_dx12InitAttempts, _dx12InitReady, InDevice,
+                              [&]
+                              {
+                                  return provider->D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice,
+                                                                  InSDKVersion, InFeatureInfo);
+                              });
 }
 
 NVSDK_NGX_Result Nvngx_FG::DrainHandles(HandleApi api, const void* device)
@@ -539,9 +547,12 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init(unsigned long long InApplicationId, const
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
-    _vulkanInitAttempts.insert(InDevice);
-    return provider->VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA, InGDPA,
-                                 InFeatureInfo, InSDKVersion);
+    return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,
+                              [&]
+                              {
+                                  return provider->VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD,
+                                                               InDevice, InGIPA, InGDPA, InFeatureInfo, InSDKVersion);
+                              });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
@@ -564,9 +575,12 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext(unsigned long long InApplicationId, c
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
-    _vulkanInitAttempts.insert(InDevice);
-    return provider->VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InSDKVersion,
-                                     InFeatureInfo);
+    return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,
+                              [&]
+                              {
+                                  return provider->VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance,
+                                                                   InPD, InDevice, InSDKVersion, InFeatureInfo);
+                              });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
@@ -590,9 +604,13 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
-    _vulkanInitAttempts.insert(InDevice);
-    return provider->VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
-                                      InGDPA, InSDKVersion, InFeatureInfo);
+    return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,
+                              [&]
+                              {
+                                  return provider->VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance,
+                                                                    InPD, InDevice, InGIPA, InGDPA, InSDKVersion,
+                                                                    InFeatureInfo);
+                              });
 }
 
 NVSDK_NGX_Result Nvngx_FG::VULKAN_Shutdown()

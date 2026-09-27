@@ -122,7 +122,9 @@ def main():
  static int DrainHandles(HandleApi,const void*) { return 0; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitReady;
  struct Publication { bool present; Provider* Peek() { return present?&provider:nullptr; } };
  inline static Publication _provider{true};
 '''+ '\n'.join(methods)+'\n'+'\n'.join(function(header,'template <typename Callback> static NVSDK_NGX_Result '+name+'(') for name in ('WithDx12Shutdown','WithVulkanShutdown'))+'\n};\n'

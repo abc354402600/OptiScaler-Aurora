@@ -38,7 +38,35 @@ class Nvngx_FG
     // partially initialized a provider even when it reports failure.
     static inline std::unordered_set<ID3D12Device*> _dx12InitAttempts;
     static inline std::unordered_set<VkDevice> _vulkanInitAttempts;
+    static inline std::unordered_set<ID3D12Device*> _dx12InitReady;
+    static inline std::unordered_set<VkDevice> _vulkanInitReady;
     static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
+
+    // Caller holds transition admission. Allocate both records before entering
+    // the SDK; only a completed successful callback commits readiness.
+    template <typename Device, typename Callback>
+    static NVSDK_NGX_Result InitializeProvider(std::unordered_set<Device>& attempts, std::unordered_set<Device>& ready,
+                                               Device device, Callback&& callback)
+    {
+        if (attempts.contains(device))
+            return ready.contains(device) ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_FAIL_NotInitialized;
+        ready.insert(device);
+        struct Completion
+        {
+            std::unordered_set<Device>& ready;
+            Device device;
+            bool succeeded = false;
+            ~Completion()
+            {
+                if (!succeeded)
+                    ready.erase(device);
+            }
+        } completion { ready, device };
+        attempts.insert(device);
+        const auto result = std::forward<Callback>(callback)();
+        completion.succeeded = result == NVSDK_NGX_Result_Success;
+        return result;
+    }
 
     static std::unique_ptr<IFGNvngx> createProvider();
     static ProviderLookup<IFGNvngx> lookupProvider();
@@ -54,6 +82,12 @@ class Nvngx_FG
         auto lease = _calls.TryTransition();
         if (!lease)
             return NVSDK_NGX_Result_FAIL_NotInitialized;
+        // Even a failed/partial drain starts teardown. Repeated Init must not
+        // report this device ready or reenter the SDK before close completes.
+        if (device)
+            _dx12InitReady.erase(device);
+        else
+            _dx12InitReady.clear();
         const auto drained = DrainHandles(HandleApi::D3D12, device);
         if (drained != NVSDK_NGX_Result_Success)
             return drained;
@@ -83,6 +117,10 @@ class Nvngx_FG
         auto lease = _calls.TryTransition();
         if (!lease)
             return NVSDK_NGX_Result_FAIL_NotInitialized;
+        if (device)
+            _vulkanInitReady.erase(device);
+        else
+            _vulkanInitReady.clear();
         const auto drained = DrainHandles(HandleApi::Vulkan, device);
         if (drained != NVSDK_NGX_Result_Success)
             return drained;

@@ -93,7 +93,9 @@ struct Nvngx_FG : Provider {
  static int DrainHandles(HandleApi,const void* d) { drainDevice=d;return drainResult; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitReady;
  struct Publication { Provider* Peek() { static Provider p; return &p; } };
  inline static Publication _provider;
  // ACTUAL_SHUTDOWN_COORDINATORS

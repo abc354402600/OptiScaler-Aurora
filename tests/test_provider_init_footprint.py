@@ -1,7 +1,7 @@
 """Run complete provider Init/Shutdown bodies with a deterministic fake SDK.
 
 The SDK can fail or throw after entering Init/Shutdown. This tests cleanup
-ownership, not readiness, native resource allocation or GPU behavior.
+ownership and repeated-Init readiness, not native resource allocation or GPU behavior.
 """
 import argparse
 from pathlib import Path
@@ -19,6 +19,7 @@ SCENARIO = r'''
    auto close=[&](auto* device) { return Nvngx_FG::API_Shutdown1(device); };
    auto all=[] { return Nvngx_FG::API_Shutdown(); };
    auto& attempts=Nvngx_FG::ATTEMPTS;
+   auto& ready=Nvngx_FG::READY;
    check(attempts.empty());
    int before=provider.calls;
    check(all()==0 && close(&a)==0 && provider.calls==before);
@@ -38,11 +39,16 @@ SCENARIO = r'''
      return 0;
    };
    check(init(&a)==0 && attempts.contains(&a) && provider.inits==before+1);
+   check(ready.contains(&a));
+   check(init(&a)==0 && provider.inits==before+1); // Idempotent, no second SDK Init.
    provider.initCallback={};
    before=provider.calls;
    check(close(&b)==0 && provider.calls==before && attempts.contains(&a));
+   check(ready.contains(&a)); // Unrelated device close leaves readiness intact.
    provider.callback=[] { return -8; };
    check(close(&a)==-8 && attempts.contains(&a));
+   before=provider.inits;
+   check(!ready.contains(&a) && init(&a)==-7 && provider.inits==before);
    provider.callback=[] { return 0; };
    check(close(&a)==0 && attempts.empty());
    before=provider.calls;
@@ -50,22 +56,30 @@ SCENARIO = r'''
    // Failed Init is still a cleanup obligation, not proof of readiness.
    provider.initCallback=[] { return -8; };
    check(init(&a)==-8 && attempts.contains(&a));
+   before=provider.inits;
+   check(!ready.contains(&a) && init(&a)==-7 && provider.inits==before);
    check(close(&a)==0 && attempts.empty());
    provider.initCallback=[]()->int { throw std::runtime_error("partial init"); };
    bool threw=false;
    try { init(&a); } catch(const std::runtime_error&) { threw=true; }
    check(threw && attempts.contains(&a) && bool(Nvngx_FG::_calls.TryTransition()));
+   before=provider.inits;
+   check(!ready.contains(&a) && init(&a)==-7 && provider.inits==before);
    check(close(&a)==0 && attempts.empty());
    provider.initCallback={};
    check(init(&a)==0 && init(&b)==0 && attempts.size()==2);
+   check(ready.size()==2);
    provider.callback=[]()->int { throw std::runtime_error("partial close"); };
    threw=false;
    try { all(); } catch(const std::runtime_error&) { threw=true; }
    check(threw && attempts.size()==2 && bool(Nvngx_FG::_calls.TryTransition()));
+   before=provider.inits;
+   check(ready.empty() && init(&a)==-7 && init(&b)==-7 && provider.inits==before);
    provider.callback=[] { return -8; };
    check(all()==-8 && attempts.size()==2);
    provider.callback=[] { return 0; };
    check(all()==0 && attempts.empty());
+   check(ready.empty());
  }
 '''
 
@@ -95,12 +109,14 @@ struct Nvngx_FG {
  static int DrainHandles(HandleApi,const void*) { return 0; }
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitReady;
  inline static ProviderStatus status=ProviderStatus::Available;
  struct Publication { Provider* Peek() { return &provider; } };
  inline static Publication _provider;
  static ProviderLookup<Provider> lookupProvider() { return {status==ProviderStatus::Available?&provider:nullptr,status}; }
-'''+ '\n'.join('static '+s+';' for s in signatures)+'\n'+coordinators+'\n};\n'
+'''+function(header,'template <typename Device, typename Callback>')+'\n'+ '\n'.join('static '+s+';' for s in signatures)+'\n'+coordinators+'\n};\n'
     scenarios = []
     for name, sig in zip(names, signatures):
         arguments = []
@@ -114,12 +130,17 @@ struct Nvngx_FG {
         call = 'Nvngx_FG::'+name+'('+','.join(arguments)+')'
         api = 'D3D12' if name.startswith('D3D12') else 'VULKAN'
         attempts = '_dx12InitAttempts' if api == 'D3D12' else '_vulkanInitAttempts'
-        scenarios.append(SCENARIO.replace('INIT_CALL', call).replace('API', api).replace('ATTEMPTS', attempts))
+        scenarios.append(SCENARIO.replace('INIT_CALL', call).replace('API', api).replace('ATTEMPTS', attempts).replace('READY', attempts.replace('Attempts','Ready')))
     tail = r'''
  // The same pointer value in the two APIs does not share a cleanup footprint.
  check(Nvngx_FG::D3D12_Init(0,nullptr,&a,nullptr,0)==0);
+ int before=provider.inits;
+ check(Nvngx_FG::D3D12_Init_Ext(0,nullptr,&a,0,nullptr)==0&&provider.inits==before);
  check(Nvngx_FG::VULKAN_Init_Ext(0,nullptr,nullptr,nullptr,&a,0,nullptr)==0);
+ before=provider.inits;
+ check(Nvngx_FG::VULKAN_Init_Ext2(0,nullptr,nullptr,nullptr,&a,nullptr,nullptr,0,nullptr)==0&&provider.inits==before);
  check(Nvngx_FG::D3D12_Shutdown()==0 && Nvngx_FG::_dx12InitAttempts.empty() && Nvngx_FG::_vulkanInitAttempts.contains(&a));
+ check(Nvngx_FG::_dx12InitReady.empty()&&Nvngx_FG::_vulkanInitReady.contains(&a));
  check(Nvngx_FG::VULKAN_Shutdown()==0 && Nvngx_FG::_vulkanInitAttempts.empty());
  std::cout<<"PASS: "<<checks<<" complete provider Init footprint checks\n";
 }

@@ -67,7 +67,9 @@ struct Nvngx_FG {
  inline static ProviderPublication<Provider> _provider;
  inline static ProviderCallAdmission _calls;
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitReady;
  // ACTUAL_SHUTDOWN_COORDINATORS
  inline static ProviderStatus status=ProviderStatus::Pending;
  inline static int queries=0, creates=0, lazyLoads=0;

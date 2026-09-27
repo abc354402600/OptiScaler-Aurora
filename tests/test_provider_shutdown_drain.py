@@ -30,13 +30,17 @@ int main() {
  check(Nvngx_FG::_handles.GetIdentity(ha,[](const auto& h){return h.device;})==&a);
  check(Nvngx_FG::_handles.GetIdentity(hb,[](const auto& h){return h.device;})==&b);
  Nvngx_FG::_dx12InitAttempts={&a,&b};
+ Nvngx_FG::_dx12InitReady={&a,&b};
  int native=0;before=provider.releases;
  auto closeA=[&]{return Nvngx_FG::WithDx12Shutdown([&](auto close){++native;return close(&a);},&a);};
+ {auto busy=Nvngx_FG::_calls.TryOperation();check(closeA()==-7&&Nvngx_FG::_dx12InitReady.size()==2);}
  State::Instance().isShuttingDown=true;
  check(closeA()==-7&&native==0&&provider.releases==before);State::Instance().isShuttingDown=false;
+ check(!Nvngx_FG::_dx12InitReady.contains(&a)&&Nvngx_FG::_dx12InitReady.contains(&b));
  {auto busy=Nvngx_FG::_calls.TryOperation();check(closeA()==-7&&native==0&&provider.releases==before);}
  provider.releaseCallback=[] {return -8;};
  check(closeA()==-8&&native==0&&Nvngx_FG::_dx12InitAttempts.size()==2&&read(ha)==-7&&read(hb)==0);
+ check(!Nvngx_FG::_dx12InitReady.contains(&a)&&Nvngx_FG::_dx12InitReady.contains(&b));
  provider.releaseCallback=[&] {
    auto work=std::async(std::launch::async,[&]{
      return Nvngx_FG::D3D12_ReleaseFeature(ha)==-7&&Nvngx_FG::D3D12_Shutdown()==-7;
@@ -54,6 +58,7 @@ int main() {
  check(threw&&bool(Nvngx_FG::_calls.TryOperation())&&read(newer)==-7);provider.releaseCallback={};
  check(closeA()==0&&read(newer)==-3&&read(hb)==0);
  check(Nvngx_FG::D3D12_Shutdown()==0&&read(hb)==-3);
+ check(Nvngx_FG::_dx12InitReady.empty());
  // Partial drain: one success, then failure; completed work is not repeated.
  auto* one=create(&a);auto* two=create(&a);Nvngx_FG::_dx12InitAttempts.insert(&a);
  int releases=0;provider.releaseCallback=[&]{return ++releases==1?0:-8;};native=0;
@@ -94,7 +99,9 @@ int main() {
  // Private failed-Create ownership must block the native callback even when
  // there are zero published handles, and must respect API/device routing.
  native=0;provider.pendingResult=-8;before=provider.calls;
+ Nvngx_FG::_dx12InitReady.insert(&a);
  check(closeA()==-8&&native==0&&provider.calls==before&&provider.pendingDevice==&a);
+ check(!Nvngx_FG::_dx12InitReady.contains(&a));
  int drains=provider.pendingCalls;
  check(Nvngx_FG::VULKAN_Shutdown()==0&&provider.pendingCalls==drains);
  State::Instance().isShuttingDown=true;
@@ -120,7 +127,9 @@ def main():
     cpp='struct State { bool isShuttingDown=false; static State& Instance(){static State s;return s;} };\n'+cpp
     cpp=cpp.replace('struct Nvngx_FG {','''struct Nvngx_FG {
  inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
+ inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
  inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
+ inline static std::unordered_set<VkDevice> _vulkanInitReady;
  struct Publication {Provider* Peek(){return &provider;}};
  inline static Publication _provider;
 ''')
