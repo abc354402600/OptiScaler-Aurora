@@ -109,3 +109,17 @@ This closes one invalid-request publication hole. It does not close partial nati
 The two D3D12 ProjectID variants published project metadata before their delegated Init_Ext result, unlike the previously fixed Vulkan variants. When the provider returned NotInitialized (or native/provider callback threw in Init_with_ProjectID), the failed request had already replaced project metadata. Move UpdateProject after a successful delegated result in both D3D12 variants. Preserve native argument forwarding, optional provider fallback and the existing result returned by Init_Ext.
 
 Extended actual-body checks first reproduce failure at check 533. Complete-chain suite now has 626 checks (28 beyond the null-device checkpoint, 171 beyond the prior 455 baseline). D3D12 joins Vulkan for native/provider rejection and later successful retry; all four ProjectID variants are also tested against native/provider exceptions and retry. Metadata storage checks remain 123 passing. Other application/path fields and valid-device partial native/provider state are still a separate transaction boundary; this is not a claim of full rollback.
+
+
+### Remaining transaction issue: reproduced with native admission
+
+A separate local reproduction on 2545abee extracts the real D3D12 Init cores and wrappers, substitutes the production NativeDeviceLifecycle for the complete-chain harness's native admission stand-in, and holds RunOperation on device A. Init_Ext on new device B returns NotInitialized without a native callback, yet pathWrites and metadataWrites both advance; A remains ready, B remains uninitialized and currentD3D12Device stays A. This proves the remaining pre-publication/admission mismatch; it is NOT a passing correctness test or a claim of a repair. Provider calls and metadata/path publication counters remain stand-ins in this diagnostic harness.
+
+Reproduction source/output retained in the task workspace under `work/ngx-init-transaction-repro/test.cpp` and `result.txt` (2026-09-28). Next implementation must prevent that rejected B request from changing active configuration, and also cover the distinct native-success/provider-failure case without discarding cleanup ownership or treating a native retry as a fresh SDK initialization. Avoid adding a racy CanInitialize precheck: admission and configuration commit need an owned transaction boundary.
+
+
+### Combined Windows validation: 2545abee
+
+Final code `2545abee6254452be381b165caa5528725a55c2a` includes null-device checkpoint `325e9aab` and the D3D12 ProjectID fix. Windows run `36373142939`, job `108773423640`, completed full DLL build, configured compatibility tests, packaging and artifact upload successfully; format `36373142954` passed. MSVC confirms 626 complete-chain / 590 exported admission / 32 path / 123 metadata checks. The 171 additional complete-chain checks pass both locally and on Windows.
+
+Artifact `OptiScaler_Aurora_v1.0_20260928_compat_2545abee.7z`, id `10949499712`, 234786717 bytes, Actions artifact digest `sha256:0a8ccade6fca41116082d8ada2d2b132df672b8e0ba5a9f9af074de9fd101d82` (not an independently calculated inner-archive digest). Both source checkpoints are pushed. No game test, main merge or Release was performed. Remaining transaction reproduction above and ordinary Evaluate resource ownership remain release gates.
