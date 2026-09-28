@@ -85,3 +85,6 @@ Validation on **087078d3** is complete: Windows run `36310007830`, job `10859398
 
 
 Configuration admission checkpoint **7874959a** is pushed and fully validated: Windows `36371933325` / job `108769925846`, format `36371933427`, full DLL/tests/package/upload success. MSVC confirms 123 metadata, 56 routing, 590 admission and 455 complete-chain checks. Artifact details and concrete next acceptance boundaries are in the exported transition audit. Release draft includes this bounded fix. Continue admitted-failure configuration/native/provider consistency, then ordinary Evaluate HUD/depth device ownership and GPU retirement. Do not redo the read/write gate or ask for game validation; do not claim this checkpoint completes the remaining release gate. Documentation-only follow-up does not alter the built source.
+
+
+2026-09-28 continuation adds pre-publication null-device rejection across all 13 Init cores. Complete-chain checks 455 -> 598 (143 added) first fail at 389 before the fix, then pass; affected 590 admission and 32 path ownership checks pass. Outer adapters previously could publish configuration and local state despite lower native null-device rejection. This is an invalid-request preflight fix, not rollback of valid-device partial initialization. See exported transition audit; Windows evidence follows below.

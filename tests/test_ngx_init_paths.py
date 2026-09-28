@@ -135,7 +135,9 @@ def main():
     for api,entry in [('Dx11','D3D11_Init_Ext'),('Dx12','D3D12_Init_Ext'),('Vk','VULKAN_Init_Ext2')]:
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8')
         body=function(source,'static NVSDK_NGX_Result NgxCore_'+entry+'(')
-        prefix=body[body.index('{')+1:body.index('const auto initPaths =')]
+        # Device rejection is exercised by the complete-chain suite; this harness
+        # extracts only the path-owning portion and has no device or SDK result.
+        prefix=body[body.index('NVSDK_NGX_FeatureCommonInfo localFeatureInfo'):body.index('const auto initPaths =')]
         end=body.index(';',body.index('const auto initPaths ='))+1
         prefix+=body[body.index('const auto initPaths ='):end]
         cpp+='\nnamespace '+api+' {\n'

@@ -20,7 +20,7 @@ using NVSDK_NGX_Result=int;using NVSDK_NGX_Version=int;using NVSDK_NGX_EngineTyp
 using VkInstance=void*;using VkPhysicalDevice=void*;using VkDevice=void*;
 using PFN_vkGetInstanceProcAddr=void*;using PFN_vkGetDeviceProcAddr=void*;
 struct ID3D11Device{};struct ID3D12Device{};struct NVSDK_NGX_FeatureCommonInfo{int LoggingInfo=0;};
-constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0;
+constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0,NVSDK_NGX_Result_FAIL_InvalidParameter=-2;
 constexpr int app_id_override=12;const char* project_id_override="override";
 void* vkGetInstanceProcAddr=nullptr;void* vkGetDeviceProcAddr=nullptr;
 int checks=0,nativeCalls=0,providerCalls=0,pathWrites=0,metadataWrites=0,projectWrites=0,nativeResult=0,providerResult=0;
@@ -62,7 +62,7 @@ struct Nvngx_FG{
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');args=parser.parse_args()
-    cpp=PRELUDE;routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
+    cpp=PRELUDE;routes=[];invalid_routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
         cpp+='\nnamespace '+api+'{\n'
@@ -78,6 +78,8 @@ def main():
                 elif '*' in param or re.search(r'\b(Vk\w+|PFN_\w+)\b',param):values.append('nullptr')
                 else:values.append('32')
             routes.append('[&]{return '+api+'::'+name+'('+','.join(values)+');}')
+            invalid=[('nullptr' if v in ('&dx11','&dx12','&vk') else v) for v in values]
+            invalid_routes.append('[&]{return '+api+'::'+name+'('+','.join(invalid)+');}')
             if api!='Dx11':
                 provider_routes.append(len(routes)-1)
                 second=[v.replace('&dx12','&otherDx12').replace('&vk','&otherVk') for v in values]
@@ -89,6 +91,7 @@ def main():
     cpp=cpp.replace('// NATIVE_GETTERS','\n'.join('static NativeCall '+n+'(){return {};}' for n in native))
     cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){++providerCalls;if(onProvider)onProvider();return providerResult;}' for n in provider))
     cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
+    cpp+='std::vector<std::function<int()>> invalidRoutes={'+','.join(invalid_routes)+'};\n'
     cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
     cpp+='std::vector<int> providerRoutes={'+','.join(map(str,provider_routes))+'};std::vector<std::function<int()>> otherDeviceRoutes={'+','.join(other_device_routes)+'};\n'
     cpp+=r'''
@@ -105,6 +108,20 @@ def main():
   check(route()==0&&nativeCalls==before+1&&pathWrites==paths+1);onNative={};onProvider={};
   reset();bool threw=false;onNative=[]{throw 17;};
   try{route();}catch(int){threw=true;}onNative={};check(threw);reset();check(route()==0);
+ }
+
+ // Reject null devices before path/metadata publication, SDK calls or local state changes.
+ for(size_t i=0;i<routes.size();++i) {
+  for(bool alreadyReady:{false,true}) {
+   reset(); if(alreadyReady)check(routes[i]()==0);
+   auto previous=State::Instance();
+   int native=nativeCalls,provider=providerCalls,paths=pathWrites,metadata=metadataWrites;
+   check(invalidRoutes[i]()==-2);
+   check(nativeCalls==native&&providerCalls==provider&&pathWrites==paths&&metadataWrites==metadata);
+   check(State::Instance().nvngxDx11Inited==previous.nvngxDx11Inited&&State::Instance().nvngxDx12Inited==previous.nvngxDx12Inited&&State::Instance().nvngxVkInited==previous.nvngxVkInited);
+   check(State::Instance().currentD3D11Device==previous.currentD3D11Device&&State::Instance().currentD3D12Device==previous.currentD3D12Device&&State::Instance().currentVkDevice==previous.currentVkDevice);
+   check(routes[i]()==0);
+  }
  }
 
  // A rejected native/provider phase must not commit the ProjectID afterward.

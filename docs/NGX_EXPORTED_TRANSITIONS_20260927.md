@@ -91,3 +91,14 @@ Scope limits: this prevents writer/read interleaving, not rollback after an admi
 Code `7874959a3501c634ee7c71833408aae4ad5cc2c5` is pushed to Compatibility-fixes. Windows run `36371933325`, job `108769925846`, completed successfully: full DLL build, configured compatibility checks, package and upload. MSVC logs confirm 123 metadata / 56 native routing / 590 exported admission / 455 complete-chain checks. Format run `36371933427` succeeded; local changed-line formatter reported 4 files, 0 violations.
 
 Artifact: `OptiScaler_Aurora_v1.0_20260928_compat_7874959a.7z`, Actions artifact ID `10949214531`, 234793969 bytes, API artifact digest `sha256:674eeecabdf57036e2bdb5afdc9f5d725617350ef3d6c8f8ced4ee6f6c88d12a`. The digest is the Actions artifact digest, not a separately computed inner 7z checksum. No Release/tag/main merge performed. This is a validated compatibility-branch checkpoint, not the finished release candidate.
+
+
+## 2026-09-28: reject invalid device before publication
+
+The next pre-admission failure case exposed missing null-device validation in the outer Init cores. NativeDeviceLifecycle rejects null, but outer D3D12/Vulkan adapters historically propagate NotInitialized specifically and preserve other optional-backend fallbacks; thus that lower validation is not an outer preflight. D3D11 also allowed a null request to reach native work and local initialization state. Path/application publication preceded these calls.
+
+All 13 private Init variants now reject a null InDevice with InvalidParameter before copying feature info, publishing paths/metadata, calling native/provider code or updating local device/ready state. The shared public admission remains unchanged and delegated calls retain the same valid-device behavior. No blanket propagation of optional backend failures, validation of optional Vulkan loader callbacks, or change to the accepted non-null Init sequence is introduced.
+
+Complete actual Init-chain checks increase 455 -> 598 (143 new): each of 13 null routes before and after a valid Init; unchanged path/metadata writes, SDK call counts, local ready flags and device identities; valid retry afterward. Before the fix the new test fails at check 389. Affected 590 exported admission and 32 path ownership checks pass. The path-only extraction harness starts at localFeatureInfo because it does not model device/result types; full entry validation belongs to the complete-chain suite.
+
+This closes one invalid-request publication hole. It does not close partial native/provider success with a valid device, per-device configuration ownership or shared Evaluate/GPU-resource retirement. Full Windows validation follows after checkpoint publication.

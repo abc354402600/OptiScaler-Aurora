@@ -118,6 +118,9 @@ static NVSDK_NGX_Result NgxCore_D3D11_Init_Ext(unsigned long long InApplicationI
                                                ID3D11Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
+    if (InDevice == nullptr)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
 
     if (InFeatureInfo != nullptr)
@@ -193,6 +196,9 @@ static NVSDK_NGX_Result NgxCore_D3D11_Init(unsigned long long InApplicationId, c
                                            ID3D11Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                            NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
+    if (InDevice == nullptr)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
 
     if (InFeatureInfo != nullptr)
@@ -247,6 +253,9 @@ static NVSDK_NGX_Result NgxCore_D3D11_Init_ProjectID(const char* InProjectId, NV
                                                      ID3D11Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                      const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
+    if (InDevice == nullptr)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     NVSDK_NGX_FeatureCommonInfo localFeatureInfo = {};
 
     if (InFeatureInfo != nullptr)
@@ -313,6 +322,9 @@ static NVSDK_NGX_Result NgxCore_D3D11_Init_with_ProjectID(const char* InProjectI
                                                           const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                                           NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
+    if (InDevice == nullptr)
+        return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
     auto result =
         NgxCore_D3D11_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo, delegated);
 
