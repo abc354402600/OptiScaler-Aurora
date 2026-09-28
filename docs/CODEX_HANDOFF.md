@@ -88,3 +88,6 @@ Configuration admission checkpoint **7874959a** is pushed and fully validated: W
 
 
 2026-09-28 continuation adds pre-publication null-device rejection across all 13 Init cores. Complete-chain checks 455 -> 598 (143 added) first fail at 389 before the fix, then pass; affected 590 admission and 32 path ownership checks pass. Outer adapters previously could publish configuration and local state despite lower native null-device rejection. This is an invalid-request preflight fix, not rollback of valid-device partial initialization. See exported transition audit; Windows evidence follows below.
+
+
+Same-turn D3D12 follow-through: both D3D12 ProjectID variants now publish project identity only after delegated Init_Ext success, matching prior Vulkan behavior. New failure cases reproduced at check 533 before repair. Complete-chain checks now 626 (171 added over 455 across both checkpoints); all four D3D12/Vulkan ProjectID variants cover native/provider failure, exceptions and retry. The broader application/path and native/provider partial-success transaction remains open. Await final combined-code Windows build evidence below.

@@ -102,3 +102,10 @@ All 13 private Init variants now reject a null InDevice with InvalidParameter be
 Complete actual Init-chain checks increase 455 -> 598 (143 new): each of 13 null routes before and after a valid Init; unchanged path/metadata writes, SDK call counts, local ready flags and device identities; valid retry afterward. Before the fix the new test fails at check 389. Affected 590 exported admission and 32 path ownership checks pass. The path-only extraction harness starts at localFeatureInfo because it does not model device/result types; full entry validation belongs to the complete-chain suite.
 
 This closes one invalid-request publication hole. It does not close partial native/provider success with a valid device, per-device configuration ownership or shared Evaluate/GPU-resource retirement. Full Windows validation follows after checkpoint publication.
+
+
+## D3D12 ProjectID follow-through
+
+The two D3D12 ProjectID variants published project metadata before their delegated Init_Ext result, unlike the previously fixed Vulkan variants. When the provider returned NotInitialized (or native/provider callback threw in Init_with_ProjectID), the failed request had already replaced project metadata. Move UpdateProject after a successful delegated result in both D3D12 variants. Preserve native argument forwarding, optional provider fallback and the existing result returned by Init_Ext.
+
+Extended actual-body checks first reproduce failure at check 533. Complete-chain suite now has 626 checks (28 beyond the null-device checkpoint, 171 beyond the prior 455 baseline). D3D12 joins Vulkan for native/provider rejection and later successful retry; all four ProjectID variants are also tested against native/provider exceptions and retry. Metadata storage checks remain 123 passing. Other application/path fields and valid-device partial native/provider state are still a separate transaction boundary; this is not a claim of full rollback.

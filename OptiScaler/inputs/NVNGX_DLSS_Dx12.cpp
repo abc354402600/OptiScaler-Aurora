@@ -340,10 +340,12 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_ProjectID(const char* InProjectId, NV
     LOG_INFO("InEngineType: {0}", (int) InEngineType);
     LOG_INFO("InEngineVersion: {0}", InEngineVersion);
 
-    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
-
     auto result =
         NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo, true);
+    if (result != NVSDK_NGX_Result_Success)
+        return result;
+
+    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
     return result;
 }
 
@@ -379,11 +381,12 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_with_ProjectID(const char* InProjectI
     LOG_INFO("InEngineType: {0}", (int) InEngineType);
     LOG_INFO("InEngineVersion: {0}", InEngineVersion);
 
-    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
-
     auto result =
         NgxCore_D3D12_Init_Ext(0x1337, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo, delegated);
+    if (result != NVSDK_NGX_Result_Success)
+        return result;
 
+    State::Instance().NVNGX_Init.UpdateProject(InProjectId, InEngineType, InEngineVersion);
     return result;
 }
 

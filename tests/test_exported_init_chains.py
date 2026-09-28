@@ -84,7 +84,7 @@ def main():
                 provider_routes.append(len(routes)-1)
                 second=[v.replace('&dx12','&otherDx12').replace('&vk','&otherVk') for v in values]
                 other_device_routes.append('[&]{return '+api+'::'+name+'('+','.join(second)+');}')
-            if api=='Vk' and 'ProjectID' in name:failed_project_routes.append(len(routes)-1)
+            if api!='Dx11' and 'ProjectID' in name:failed_project_routes.append(len(routes)-1)
         cpp+='}\n'
     native=sorted(set(re.findall(r'NVNGXProxy::((?:D3D11|D3D12|VULKAN)_Init\w*)\(',allsource)))
     provider=sorted(set(re.findall(r'Nvngx_FG::((?:D3D12|VULKAN)_Init\w*)\(',allsource)))
@@ -130,8 +130,20 @@ def main():
    reset();int projects=projectWrites;
    nativeResult=failNative?-7:0;providerResult=failNative?0:-7;
    check(routes[index]()==-7);
-   check(projectWrites==projects&&!State::Instance().nvngxVkInited);
+   check(projectWrites==projects&&!State::Instance().nvngxVkInited&&!State::Instance().nvngxDx12Inited);
    nativeResult=providerResult=0;reset();
+   check(routes[index]()==0&&projectWrites==projects+1);
+  }
+ }
+
+ // Native/provider exceptions must not commit the requested project either.
+ for(int index:failedProjectRoutes){
+  for(bool throwNative:{false,true}){
+   reset();int projects=projectWrites;bool threw=false;
+   if(throwNative)onNative=[]{throw 73;};else onProvider=[]{throw 73;};
+   try{routes[index]();}catch(int e){threw=e==73;}
+   onNative={};onProvider={};
+   check(threw&&projectWrites==projects);
    check(routes[index]()==0&&projectWrites==projects+1);
   }
  }
