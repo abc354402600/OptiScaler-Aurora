@@ -14,6 +14,7 @@
 
 #include <filesystem>
 #include <proxies/NativeDeviceLifecycle.h>
+#include <proxies/NgxExportLifecycle.h>
 #include <proxies/NgxPathSnapshot.h>
 #include <framegen/ProviderPublication.h>
 #include <vulkan/vulkan.hpp>
@@ -662,6 +663,10 @@ class NVNGXProxy
     // DirectX11
     static bool InitDx11(ID3D11Device* InDevice)
     {
+        auto configuration = NgxExportLifecycle::TryRead();
+        if (!configuration)
+            return false;
+
         if (_dx11Inited)
             return true;
 
@@ -771,6 +776,10 @@ class NVNGXProxy
     // DirectX12
     static bool InitDx12(ID3D12Device* InDevice)
     {
+        auto configuration = NgxExportLifecycle::TryRead();
+        if (!configuration)
+            return false;
+
         return RunDx12Init(InDevice,
                            [&]() -> NVSDK_NGX_Result
                            {
@@ -913,6 +922,10 @@ class NVNGXProxy
     static bool InitVulkan(VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
                            PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA)
     {
+        auto configuration = NgxExportLifecycle::TryRead();
+        if (!configuration)
+            return false;
+
         return RunVulkanInit(InDevice,
                              [&]() -> NVSDK_NGX_Result
                              {

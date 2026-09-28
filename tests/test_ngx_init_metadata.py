@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = r'''
 #include "proxies/NgxInitMetadata.h"
 #include "proxies/NativeDeviceLifecycle.h"
+#include "proxies/NgxExportLifecycle.h"
 #include <atomic>
 #include <future>
 #include <functional>
@@ -21,6 +22,8 @@ PRELUDE = r'''
 #include <vector>
 #define LOG_DEBUG(...)
 #define LOG_INFO(...)
+#define LOG_ERROR(...)
+#define NVSDK_NGX_API
 using NVSDK_NGX_Result=int; using UINT=unsigned;
 constexpr int NVSDK_NGX_Result_Success=0, NVSDK_NGX_Result_Fail=-1,
  NVSDK_NGX_Result_FAIL_InvalidParameter=-2, NVSDK_NGX_Result_FAIL_NotInitialized=-7;
@@ -33,7 +36,7 @@ struct State {
  static State& Instance() { static State value; return value; }
 };
 struct Option { bool value=true; bool value_or_default() const { return value; } };
-struct Config { Option LogToNGX; static Config* Instance() { static Config c; return &c; } };
+struct Config { Option LogToNGX; Option UseGenericAppIdWithDlss{false}; static Config* Instance() { static Config c; return &c; } };
 namespace spdlog { namespace level { constexpr int info=2; }
  namespace details { struct log_msg { std::string_view payload; int level=2; }; } }
 struct ID3D11Device {}; struct ID3D12Device {};
@@ -42,7 +45,14 @@ using PFN_vkGetInstanceProcAddr=void*; using PFN_vkGetDeviceProcAddr=void*;
 struct NVSDK_NGX_FeatureCommonInfo {};
 int checks=0;
 void check(bool ok) { if(!ok) { std::cerr << "metadata check " << checks+1 << " failed\n"; std::exit(2); } ++checks; }
-std::function<void()> duringNative;
+using NVSDK_NGX_Feature=int;
+constexpr int NVSDK_NGX_Application_Identifier_Type_Application_Id=1, NVSDK_NGX_Application_Identifier_Type_Project_Id=2;
+constexpr uint64_t app_id_override=1337; const char* project_id_override="generic";
+struct NVSDK_NGX_Application_Identifier {
+ int IdentifierType=1;
+ struct { uint64_t ApplicationId=456; struct { const char* ProjectId="updated"; int EngineType=3; const char* EngineVersion="engine"; } ProjectDesc; } v;
+};
+std::function<void()> duringNative, duringPaths;
 std::string seenProject,seenEngine;
 std::wstring seenPath;
 uint64_t seenId=0; int seenVersion=0,seenEngineType=0;
@@ -124,6 +134,33 @@ int main() {
    }
  }
  duringNative={};
+ // Actual public writer is excluded during path capture and SDK callbacks.
+ NVSDK_NGX_Application_Identifier identifier;
+ for(int api=0;api<3;++api) {
+   auto reset=[&] { NVNGXProxy::_dx11Inited=false; NVNGXProxy::_dx12Devices.Shutdown(nullptr,0,-1,[]{return 0;}); NVNGXProxy::_vulkanDevices.Shutdown(nullptr,0,-1,[]{return 0;}); };
+   auto init=[&] { return api==0?NVNGXProxy::InitDx11(&d11):api==1?NVNGXProxy::InitDx12(&d12):NVNGXProxy::InitVulkan(nullptr,nullptr,&vkDevice,nullptr,nullptr); };
+   reset(); cache.UpdateApplication(123,L"original",29); cache.UpdateProject("",0,"");
+   auto rejected=[&] {
+     auto before=cache.Read();
+     for(int type:{1,2}) { identifier.IdentifierType=type; check(NVSDK_NGX_UpdateFeature(&identifier,1)==-7); check(cache.Read()==before); }
+     check(NgxExportLifecycle::Run(-7,[]{return 0;})==-7);
+   };
+   duringPaths=rejected; duringNative=[&] { rejected(); auto worker=std::async(std::launch::async,rejected); worker.get(); };
+   check(init() && seenId==123 && seenPath==L"original");
+   duringPaths={}; duringNative={};
+   identifier.IdentifierType=1; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0 && cache.Read()->ApplicationId==456);
+   identifier.IdentifierType=2; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0 && cache.Read()->ProjectId=="updated");
+   // A writer rejects direct Init before path/SDK callbacks, including cached Init.
+   int entered=0; duringPaths=[&]{++entered;}; duringNative=duringPaths;
+   check(NgxExportLifecycle::Run(-7,[&]{ check(!init()); auto worker=std::async(std::launch::async,init); check(!worker.get()); return 0; })==0);
+   check(entered==0);
+   reset(); duringPaths=[] { throw 42; }; duringNative={};
+   try { init(); check(false); } catch(int e) { check(e==42); }
+   duringPaths={}; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0); check(init());
+   reset(); duringNative=[] { throw 43; };
+   try { init(); check(false); } catch(int e) { check(e==43); }
+   duringNative={}; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0); check(init());
+ }
  // The log payload is a view, not a C string. Never send its trailing bytes.
  const char raw[]={'o','k','X','Y',0};
  cache.UpdateLogging({receive,1,false}); logCallback({std::string_view(raw,2),2});
@@ -174,8 +211,9 @@ def main():
  inline static Module module;
  static const Module& GetModule() { return module; }
  static void InitNVNGX() {}
- static std::nullptr_t GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo*) { return nullptr; }
+ static std::nullptr_t GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo*) { if(duringPaths) duringPaths(); return nullptr; }
 '''+ '\n'.join(methods)+'\n};\n'
+    cpp+=function((ROOT/'OptiScaler/inputs/NVNGX.cpp').read_text(encoding='utf-8'),'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_UpdateFeature(')+'\n'
     source=(ROOT/'OptiScaler/Logger.cpp').read_text(encoding='utf-8')
     cpp+='auto logCallback='+function(source,'[](const spdlog::details::log_msg& msg)')+';\n'+CHECKS
     with tempfile.TemporaryDirectory(prefix='aurora-ngx-metadata-') as directory:

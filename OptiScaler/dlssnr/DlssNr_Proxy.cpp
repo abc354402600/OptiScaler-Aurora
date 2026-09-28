@@ -199,7 +199,8 @@ unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D1
         // every frame.
         static bool reinitialised = false;
 
-        if (!reinitialised && NVNGXProxy::D3D12_Init_Ext() != nullptr && device != nullptr)
+        if (auto configuration = NgxExportLifecycle::TryRead();
+            configuration && !reinitialised && NVNGXProxy::D3D12_Init_Ext() != nullptr && device != nullptr)
         {
             reinitialised = true;
 

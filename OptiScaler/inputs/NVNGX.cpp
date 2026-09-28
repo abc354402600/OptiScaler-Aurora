@@ -87,6 +87,10 @@
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_UpdateFeature(const NVSDK_NGX_Application_Identifier* ApplicationId,
                                                        const NVSDK_NGX_Feature FeatureID)
 {
+    auto configuration = NgxExportLifecycle::TryWrite();
+    if (!configuration)
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     LOG_DEBUG("FeatureId: {0}", (UINT) FeatureID);
 
     // To test with puredark mods

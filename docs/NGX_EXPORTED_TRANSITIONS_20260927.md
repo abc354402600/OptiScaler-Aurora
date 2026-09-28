@@ -64,3 +64,14 @@ The complete-chain suite adds **55** checks (400 -> 455): all nine D3D12/Vulkan 
 Final code `087078d32c481ab247908c85181844c458a42a8d` passed Windows run [36310007830](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/36310007830), job 108593988482, including full DLL build, compatibility checks, packaging and upload. Format run 36310007829 passed. The MSVC log confirms 590 exported admission checks, **455** complete exported Init-chain checks and 152 provider Init readiness checks.
 
 Artifact `OptiScaler_Aurora_v1.0_20260927_compat_087078d3.7z`: id 10929510178, 234792050 bytes, GitHub artifact digest `sha256:31c7421e4d505b1dcfa9189e3d01004a45220bd4d8d05d110fe2078b4cc8bcb2`. This remains a Compatibility-fixes build artifact. The user now authorizes a formal Release after the remaining code-validation gate; no Release was created in this checkpoint.
+
+
+## 2026-09-28: configuration readers and UpdateFeature admission
+
+Found an uncovered writer: public `NVSDK_NGX_UpdateFeature` changed application/project metadata without the exported transition gate. Direct native Init captured path and metadata separately and could interleave with exported configuration publication. Immutable storage preserved pointer lifetime but did not exclude these writers.
+
+The shared admission now exposes read/write leases. UpdateFeature acquires a nonwaiting writer before configuration access; direct D3D11/D3D12/Vulkan proxy Init holds a reader before the cached-success check through path capture and the SDK callback. Busy UpdateFeature returns NotInitialized; busy direct Init returns false. Exported delegated native calls retain their existing admission, avoiding nested exclusive entry. The optional DLSS-NR raw re-init holds a reader before consuming its one-time retry flag. No metadata mutex spans SDK callbacks.
+
+Local actual-production-body checks: metadata suite 39 -> 123 (84 added), including application/project updates during path capture and native callbacks, a separate writer thread, exported transition rejection, cached Init under a writer, and retry after path/native exceptions across all three APIs. Negative controls removing either the UpdateFeature writer or the direct Init readers both fail at check 33. Affected routing 56, exported admission 590 and complete Init-chain 455 checks pass. Changed-line formatting only.
+
+Scope limits: this prevents writer/read interleaving, not rollback after an admitted partially successful Init, per-device configuration storage, concurrent D3D11 direct Init, ordinary Evaluate shared-buffer ownership, or the optional DLSS-NR raw re-init bypass of native device lifecycle. The legacy metadata storage tests deliberately update the storage directly to verify retained pointer ownership; production public writers are tested separately. No game/GPU test, main merge or Release is claimed. Full Windows evidence follows after the code checkpoint.
