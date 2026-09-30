@@ -29,6 +29,36 @@ function Get-FileVersionSafe([string]$Path) {
     } catch { return "" }
 }
 
+# Compare four numeric components; display labels and string order are not versions.
+function Get-RuntimeVersion([string]$Path) {
+    $raw = Get-FileVersionSafe $Path
+    if ($raw -notmatch '^\s*(\d+)[.,]\s*(\d+)[.,]\s*(\d+)(?:[.,]\s*(\d+))?\s*$') { return $null }
+    try {
+        $revision = if ($Matches[4]) { [int]$Matches[4] } else { 0 }
+        $version = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3], $revision)
+        if ($version.Major -eq 0) { return $null }
+        return $version
+    } catch { return $null }
+}
+
+function Get-RuntimePreserveReason([string]$TargetPath) {
+    $name = [IO.Path]::GetFileName($TargetPath).ToLowerInvariant()
+    $targets = @($TargetPath)
+    if ($name.StartsWith('sl.')) {
+        # Keep the whole local Streamline set together if any member is newer/unknown.
+        $targets = @(Get-ChildItem -LiteralPath ([IO.Path]::GetDirectoryName($TargetPath)) -Filter 'sl.*.dll' -File | ForEach-Object { $_.FullName })
+    }
+    foreach ($target in $targets) {
+        $key = [IO.Path]::GetFileName($target).ToLowerInvariant()
+        if (-not $Sources.ContainsKey($key)) { return 'Unknown' }
+        $current = Get-RuntimeVersion $target
+        $bundled = Get-RuntimeVersion $Sources[$key]
+        if ($null -eq $current -or $null -eq $bundled) { return 'Unknown' }
+        if ($current -gt $bundled) { return 'Newer' }
+    }
+    return ''
+}
+
 function Get-StreamlineMajorVersion([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return 0 }
 
@@ -438,6 +468,11 @@ function Sync-One($Entries, [string]$TargetPath, [bool]$AllowBackup) {
 
     $currentHash = Get-FileHashSafe $TargetPath
     $currentVer = Get-FileVersionSafe $TargetPath
+    $preserve = Get-RuntimePreserveReason $TargetPath
+    if ($preserve) {
+        Write-Warn2 "保留游戏原有 Runtime（版本较新或无法安全比较），不降级、不混换 Streamline 组件：$TargetPath"
+        return [pscustomobject]@{ Entries=$Entries; Status='Preserved' }
+    }
     $entry = Find-Entry $Entries $TargetPath
 
     if ($null -eq $entry) {
@@ -622,6 +657,7 @@ $failed = 0
 $missing = 0
 $legacySL1 = 0
 $unknownSL = 0
+$preserved = 0
 
 foreach ($target in $targets) {
     $r = Sync-One $entries $target $true
@@ -633,6 +669,7 @@ foreach ($target in $targets) {
     "Missing"   { $missing++ }
     "LegacySL1" { $legacySL1++ }
     "UnknownSL" { $unknownSL++ }
+    "Preserved" { $preserved++ }
 	}
 }
 
@@ -647,7 +684,9 @@ if ($legacySL1 -gt 0) {
 if ($unknownSL -gt 0) {
     Write-Warn2 "Protected Streamline files with unknown generation: $unknownSL"
 }
-if ($failed -eq 0) {
+if ($failed -eq 0 -and $preserved -gt 0) {
+    Write-Warn2 "已保留 $preserved 个游戏 Runtime；未降级，保留版本的 Aurora 兼容性尚待确认。"
+} elseif ($failed -eq 0) {
     Write-Ok "Runtime set is ready."
     Write-Host "        If this game uses a launcher, you can now click Start Game." -ForegroundColor Green
 } else {

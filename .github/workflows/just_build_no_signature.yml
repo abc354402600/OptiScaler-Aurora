@@ -122,6 +122,10 @@ jobs:
         Copy-Item "${{ github.workspace }}\dist\runtime_sync\runtime_sync.ps1" "${{ github.workspace }}\x64\Release\a\runtime_sync.ps1"
         Copy-Item "${{ github.workspace }}\dist\runtime_sync\Check_DLSS_Runtime.bat" "${{ github.workspace }}\x64\Release\a\Check_DLSS_Runtime.bat"
 
+    - name: Test runtime version preservation
+      shell: powershell
+      run: .\tests\test_runtime_no_downgrade.ps1
+
     - name: Test compatibility lifecycle guards
       shell: powershell
       run: |
