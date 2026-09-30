@@ -1,3 +1,5 @@
+> **兼容性分支更新（2026-09-30）**：构建包已升级至 DLSS SR/RR/FG 310.9.1、Streamline 2.14.1 及配套文件，并防止 Runtime Sync 降级游戏内较新版本。用户已反馈巫师3 RTX 4080 Laptop / 6X 实测正常；这不代表所有游戏或全部切换场景均已验证。可选 Neural Rendering 组件保持原版本。既有 v1.0 Release 资产尚未更新。
+
 <div align="center">
 
 # OptiScaler Aurora / OptiScaler 极光版

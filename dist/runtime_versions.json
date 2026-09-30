@@ -1,0 +1,105 @@
+{
+  "Source": "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip",
+  "ArchiveSHA256": "92c4d954631a1710da86ca3fa8d5034f2b9503838c95fc4ae977ae149319781b",
+  "Files": [
+    {
+      "Path": "dist/streamline/NvLowLatencyVk.dll",
+      "SHA256": "2a77dc3e1c724b7eea5755be0ae7423752e79a2459fae72181a9f00e3507e5d6",
+      "FileVersion": null,
+      "Bytes": 57840
+    },
+    {
+      "Path": "dist/nvngx/nvngx_deepdvc.dll",
+      "SHA256": "dc9562c67594fa06b763fe5d78f4aa53452c5344f8b43e6e2b81264320588500",
+      "FileVersion": "310,9,1,0",
+      "Bytes": 3104880
+    },
+    {
+      "Path": "dist/nvngx/nvngx_dlss.dll",
+      "SHA256": "3975567b8943c53acce397f2b72380092f84f162d00b0d2c7d08a1025c563983",
+      "FileVersion": "310,9,1,0",
+      "Bytes": 58956912
+    },
+    {
+      "Path": "dist/nvngx/nvngx_dlssd.dll",
+      "SHA256": "4bc7ea5fcb2f32cf86bc2cb072e8d2860914a0be511cbdcb2fc206c1d9d83b80",
+      "FileVersion": "310,9,1,0",
+      "Bytes": 48343664
+    },
+    {
+      "Path": "dist/nvngx/nvngx_dlssg.dll",
+      "SHA256": "ff6e90eb78b827927dff5b4ecc6b1c870c2e9bca29ed9f48c7d348cc9e170b82",
+      "FileVersion": "310,9,1,0",
+      "Bytes": 7460976
+    },
+    {
+      "Path": "dist/streamline/sl.common.dll",
+      "SHA256": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 843392
+    },
+    {
+      "Path": "dist/streamline/sl.deepdvc.dll",
+      "SHA256": "e4b7e83c9e67eab7023222af13de239241e8a09bdb63faf26f803e9fd0f3e9c9",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 376448
+    },
+    {
+      "Path": "dist/streamline/sl.directsr.dll",
+      "SHA256": "4b2c0c90195c3a9991b4e0b59004113511a90802c85d81fc7faa7c7c75f53927",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 369792
+    },
+    {
+      "Path": "dist/streamline/sl.dlss_d.dll",
+      "SHA256": "026b9f4f9ea848f2f5aa0e2024fc6b1c885f57eea5d41078124dba14f873b86b",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 437376
+    },
+    {
+      "Path": "dist/streamline/sl.dlss_g.dll",
+      "SHA256": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 636032
+    },
+    {
+      "Path": "dist/streamline/sl.dlss.dll",
+      "SHA256": "73bf52c0cfaa5900a8f3f4a91306e4625e7cca696dfb305aae44c9f97b582e1f",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 422016
+    },
+    {
+      "Path": "dist/streamline/sl.interposer.dll",
+      "SHA256": "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 652928
+    },
+    {
+      "Path": "dist/streamline/sl.nis.dll",
+      "SHA256": "556870e456d268601188919927b3b122f76b25f9b221cc4b15d3ef649f0ad27b",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 1155712
+    },
+    {
+      "Path": "dist/streamline/sl.nvperf.dll",
+      "SHA256": "b4ca8f8eeba653446f27d20e8b394cdaae5d518c1292b440a4b97652e0f0376b",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 761472
+    },
+    {
+      "Path": "dist/streamline/sl.pcl.dll",
+      "SHA256": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 360064
+    },
+    {
+      "Path": "dist/streamline/sl.reflex.dll",
+      "SHA256": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
+      "FileVersion": "2,14,1,0",
+      "Bytes": 388736
+    }
+  ],
+  "RetainedLegacyComponents": [
+    "dist/streamline/sl.dlss_nr.dll: existing optional NR plugin, not part of official 2.14.1 SDK; unchanged"
+  ]
+}

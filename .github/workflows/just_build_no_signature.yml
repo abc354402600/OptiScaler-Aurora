@@ -80,21 +80,27 @@ jobs:
     - name: Add README / 添加说明文档
       run: Copy-Item ${{ github.workspace }}\README.md ${{ github.workspace }}\x64\Release\a\README.md
 
-    # Streamline 2.14 is included in every Aurora package.
-    - name: Add Streamline 2.14 / 添加 Streamline 2.14
+    - name: Verify official runtime inventory
+      shell: powershell
+      run: .\scripts\verify_runtime_inventory.ps1
+
+    # Streamline 2.14.1 is included in every Aurora package.
+    - name: Add Streamline 2.14.1 / 添加 Streamline 2.14.1
       shell: powershell
       run: |
         $target = "${{ github.workspace }}\x64\Release\a\OptiScaler\streamline"
         New-Item -ItemType Directory -Force -Path $target | Out-Null
         Copy-Item ${{ github.workspace }}\dist\streamline\* $target
 
-    # DLSS 310.9 snippets already tracked in dist/nvngx are included in every Aurora package.
-    - name: Add DLSS 310.9 snippets / 添加 DLSS 310.9 运行库
+    # Official production DLSS 310.9.1 runtimes are included in every Aurora package.
+    - name: Add DLSS 310.9.1 / 添加 DLSS 310.9.1 运行库
       shell: powershell
       run: |
         $target = "${{ github.workspace }}\x64\Release\a\OptiScaler"
         New-Item -ItemType Directory -Force -Path $target | Out-Null
         Copy-Item ${{ github.workspace }}\dist\nvngx\* $target
+        Copy-Item "${{ github.workspace }}\dist\runtime_versions.json" "$target\runtime_versions.json"
+        .\scripts\verify_runtime_inventory.ps1 -PackageRoot "${{ github.workspace }}\x64\Release\a"
 
     # nvngx_dlssnr.dll is too large for normal Git and public forks cannot upload new LFS objects.
     # Keep it as a dedicated Release asset, download it at build time, and verify the exact tested file.

@@ -46,3 +46,7 @@
 ## 当前发布链路核对
 
 2026-09-27：`just_build_no_signature.yml` 是当前 Aurora 完整构建、兼容性检查、打包及 Actions 产物上传链路；它尚未创建正式 Release。`build.yml` / `test.yml` 中已有的是 nightly 发布逻辑，不能把下一版 Aurora 正式包上传到 nightly 来代替正式发布。正式发布前补齐或使用面向 Aurora 标签的发布路径，确保它消费最终通过检查的 Aurora 产物和独立版本说明，不覆盖旧正式版。当前本机未发现 gh CLI，已连接 GitHub 工具未暴露 Release 写入/资产上传方法；可以利用受仓库授权的 GitHub Actions 发布阶段，不应为此读取或展示本机凭据。
+
+## 2026-09-30 运行库更新
+
+> **兼容性分支更新（2026-09-30）**：构建包已升级至 DLSS SR/RR/FG 310.9.1、Streamline 2.14.1 及配套文件，并防止 Runtime Sync 降级游戏内较新版本。用户已反馈巫师3 RTX 4080 Laptop / 6X 实测正常；这不代表所有游戏或全部切换场景均已验证。可选 Neural Rendering 组件保持原版本。既有 v1.0 Release 资产尚未更新。
