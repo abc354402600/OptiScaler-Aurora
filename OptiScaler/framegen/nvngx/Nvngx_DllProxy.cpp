@@ -157,10 +157,10 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
             const size_t index = count % 2;
 
             // Nukem's is expecting D3D12_RESOURCE_STATE_COPY_DEST
-            CreateBufferResource(State::Instance().currentD3D12Device, dlssgDepth, D3D12_RESOURCE_STATE_COPY_DEST,
-                                 &depthCopy[index]);
+            const bool copyReady = CreateBufferResource(State::Instance().currentD3D12Device, dlssgDepth,
+                                                        D3D12_RESOURCE_STATE_COPY_DEST, &depthCopy[index]);
 
-            if (depthCopy[index])
+            if (copyReady && depthCopy[index])
             {
                 ResourceBarrier(InCmdList, dlssgDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                                 D3D12_RESOURCE_STATE_COPY_SOURCE);

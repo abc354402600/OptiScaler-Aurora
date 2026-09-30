@@ -28,12 +28,15 @@ struct NVSDK_NGX_FeatureDiscoveryInfo {};
 struct NVSDK_NGX_FeatureRequirement {};
 struct NVSDK_NGX_Handle {};
 struct IDXGIAdapter {}; struct ID3D12Device {}; struct ID3D12Resource {};
-struct ID3D12GraphicsCommandList { void CopyResource(ID3D12Resource*,ID3D12Resource*) {} };
+int copies=0, barriers=0, depthWrites=0;
+bool supplyDepth=false, bufferSuccess=false;
+struct ID3D12GraphicsCommandList { void CopyResource(ID3D12Resource*,ID3D12Resource*) { ++copies; } };
 int nativeCalls=0, parameterWrites=0, releases=0, invalidReleases=0;
 ID3D12Resource resource;
 struct NVSDK_NGX_Parameter {
+ void Get(const char*,ID3D12Resource** out) { *out=supplyDepth?&resource:nullptr; }
  template<class T> int Get(const char*,T*) { return 0; }
- template<class T> int Set(const char*,T) { ++parameterWrites; return 0; }
+ template<class T> int Set(const char* name,T) { if(std::strcmp(name,"DLSSG.Depth")==0)++depthWrites; ++parameterWrites; return 0; }
 };
 using HMODULE=void*;
 void FreeLibrary(HMODULE) {}
@@ -48,8 +51,8 @@ struct Config {
 };
 struct State { ID3D12Device* currentD3D12Device=nullptr; static State& Instance() { static State s; return s; } };
 constexpr int D3D12_RESOURCE_STATE_COPY_DEST=1, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE=2, D3D12_RESOURCE_STATE_COPY_SOURCE=3;
-bool CreateBufferResource(ID3D12Device*,ID3D12Resource*,int,ID3D12Resource**) { return false; }
-void ResourceBarrier(ID3D12GraphicsCommandList*,ID3D12Resource*,int,int) {}
+bool CreateBufferResource(ID3D12Device*,ID3D12Resource*,int,ID3D12Resource**) { return bufferSuccess; }
+void ResourceBarrier(ID3D12GraphicsCommandList*,ID3D12Resource*,int,int) { ++barriers; }
 '''
 
 def generate():
@@ -106,6 +109,21 @@ int main() {
  NVSDK_NGX_Parameter parameters; NVSDK_NGX_Handle* handle=nullptr;
  int before=0;
 '''+''.join(checks)+'''
+ proxy.available=true;
+ Config::Instance()->NvngxFGMakeDepthCopy.value=1;
+ supplyDepth=true;
+ ID3D12GraphicsCommandList command;
+ for(bool success:{false,true}) {
+  for(bool stale:{false,true}) {
+   bufferSuccess=success;
+   proxy.depthCopy[0]=proxy.depthCopy[1]=stale?&resource:nullptr;
+   copies=barriers=depthWrites=0;
+   int native=nativeCalls;
+   check(proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123 && nativeCalls==native+1);
+   bool shouldCopy=success && stale;
+   check(copies==(shouldCopy?1:0) && barriers==(shouldCopy?2:0) && depthWrites==(shouldCopy?1:0));
+  }
+ }
  std::cout << "PASS: " << checks << " DLL provider boundary checks\\n";
 }
 '''
