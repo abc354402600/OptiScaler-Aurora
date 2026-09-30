@@ -107,6 +107,12 @@ def main():
 
               {'check(cached('+actual.replace('&output','nullptr')+')==-2);' if is_create else ''}
               {('output=&handle; check(cached('+actual.replace('&device','&unknown')+')==-7 && !output);') if op=='CreateFeature1' else ''}
+              check(NVNGXProxy::{life}.Shutdown(&device,0,-7,[] {{ return -4; }})==-4);
+              check(!NVNGXProxy::{life}.IsReady(&device));
+              check(NVNGXProxy::{life}.Initialize(&device,0,-2,-7,[] {{ check(false); return 0; }})==-7);
+              output=&handle;
+              check(cached({actual})==-7 && calls==before+1);
+              {'check(!output);' if is_create else ''}
               check(NVNGXProxy::{life}.Shutdown(nullptr,0,-7,[&] {{
                 output=&handle; int count=calls;
                 check(cached({actual})==-7 && calls==count);

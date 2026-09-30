@@ -34,12 +34,16 @@ int main()
     check(initialize(vk, &first) == 0 && calls == 3);
     check(dx.Shutdown(&absent, 0, -7, success) == 0 && calls == 3);
     check(dx.Shutdown(&first, 0, -7, [] { return -4; }) == -4);
-    check(dx.IsReady(&first) && dx.IsReady(&second) && vk.IsReady(&first));
+    check(!dx.IsReady(&first) && dx.IsReady(&second) && vk.IsReady(&first));
+    check(dx.RunOperation(-7, [] { return 19; }, &second) == 19);
+    check(dx.RunOperation(-7, [] { return 19; }, &first) == -7);
+    check(dx.RunOperation(-7, [] { return 19; }) == -7);
+    check(initialize(dx, &first) == -7 && calls == 3);
     check(dx.Shutdown(&first, 0, -7, success) == 0 && calls == 4);
     check(!dx.IsReady(&first) && dx.IsReady(&second) && dx.AnyReady() && vk.IsReady(&first));
     check(dx.Shutdown(&first, 0, -7, success) == 0 && calls == 4);
     check(initialize(dx, &first) == 0 && calls == 5);
-    check(dx.Shutdown(nullptr, 0, -7, [] { return -4; }) == -4 && dx.IsReady(&first) && dx.IsReady(&second));
+    check(dx.Shutdown(nullptr, 0, -7, [] { return -4; }) == -4 && !dx.IsReady(&first) && !dx.IsReady(&second));
     check(dx.Shutdown(nullptr, 0, -7, success) == 0 && calls == 6 && !dx.AnyReady());
     check(!dx.IsReady(&first) && !dx.IsReady(&second) && vk.IsReady(&first));
     check(dx.Initialize(&first, 0, -2, -7, [] { return -4; }) == -4 && !dx.AnyReady());
@@ -63,7 +67,7 @@ int main()
     {
         threw = true;
     }
-    check(threw && dx.IsReady(&first));
+    check(threw && !dx.IsReady(&first));
 
     // Same-thread native callbacks cannot wait on their own transition.
     check(dx.Shutdown(&first, 0, -7,
@@ -75,7 +79,12 @@ int main()
                           check(vk.IsReady(&first));
                           return -4;
                       }) == -4);
-    check(dx.IsReady(&first));
+    check(!dx.IsReady(&first));
+
+    int beforeRetry = calls;
+    check(initialize(dx, &first) == -7 && calls == beforeRetry);
+    check(dx.RunOperation(-7, success, &first) == -7 && calls == beforeRetry);
+    check(dx.RunOperation(-7, success) == -7 && calls == beforeRetry);
 
     // Another thread can query unaffected devices while one shutdown is inside
     // foreign code. Conflicting transitions return promptly, not after a wait.

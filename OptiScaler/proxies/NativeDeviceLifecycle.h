@@ -66,6 +66,12 @@ class NativeDeviceLifecycle
             std::scoped_lock lock(_mutex);
             if (_transition || _devices.empty() || (device && !_devices.contains(device)))
                 return unavailable;
+            // Failed teardown retains cleanup ownership, not permission to use
+            // potentially partially destroyed native state. Legacy operations
+            // without a device cannot distinguish a quarantined handle.
+            for (const auto& [owned, ready] : _devices)
+                if (!ready && (!device || owned == device))
+                    return unavailable;
             ++_operations;
         }
         // Native code runs without the metadata mutex, including callbacks.
@@ -91,7 +97,7 @@ class NativeDeviceLifecycle
             if (_transition)
                 return busy;
             if (_devices.contains(device))
-                return success;
+                return _devices.at(device) ? success : busy;
             if (_operations)
                 return busy;
             // Allocate bookkeeping before the native callback succeeds.
@@ -126,6 +132,11 @@ class NativeDeviceLifecycle
                 return busy; // No waiting or deferred native teardown.
             _transition = true;
             _target = device; // nullptr means all devices in this API.
+            // Invalidate before entering foreign code; failure/exception cannot
+            // prove that the native implementation left the device intact.
+            for (auto& [owned, ready] : _devices)
+                if (!device || owned == device)
+                    ready = false;
             UpdateUsable();
         }
         try

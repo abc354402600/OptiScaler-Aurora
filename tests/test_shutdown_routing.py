@@ -136,11 +136,11 @@ int main() {
  check(NVNGXProxy::IsVulkanDeviceInited(&a));
  nativeResult=-4; before=Nvngx_FG::deviceDx;
  check(NVSDK_NGX_D3D12_Shutdown1(&a)==-4);
- check(NVNGXProxy::IsDx12DeviceInited(&a) && D3D12Device==&a && state.nvngxDx12Inited);
+ check(!NVNGXProxy::IsDx12DeviceInited(&a) && D3D12Device==&a && state.nvngxDx12Inited);
  check(state.currentFeature==&feature && fg.cleanups==0 && Nvngx_FG::deviceDx==before && !shutdown);
  nativeResult=0; NVNGXProxy::_module.D3D12_Shutdown1=nullptr;
  check(NVSDK_NGX_D3D12_Shutdown1(&a)==-1 && globalDx==0);
- check(NVNGXProxy::IsDx12DeviceInited(&a) && state.currentFeature==&feature);
+ check(!NVNGXProxy::IsDx12DeviceInited(&a) && state.currentFeature==&feature);
  NVNGXProxy::_module.D3D12_Shutdown1=&closeDx1;
  check(NVSDK_NGX_D3D12_Shutdown1(&a)==0 && lastDevice==&a && globalDx==0);
  check(!NVNGXProxy::IsDx12Inited() && !D3D12Device && !state.nvngxDx12Inited && !state.currentFeature);
@@ -166,9 +166,9 @@ int main() {
  check(vkDevice==&a && vkInstance==&a && vkPD==&a && state.nvngxVkInited && state.currentFeature==&feature);
  nativeResult=-4; before=Nvngx_FG::deviceVk;
  check(NVSDK_NGX_VULKAN_Shutdown1(&a)==-4);
- check(NVNGXProxy::IsVulkanDeviceInited(&a) && Nvngx_FG::deviceVk==before && vkDevice==&a);
+ check(!NVNGXProxy::IsVulkanDeviceInited(&a) && Nvngx_FG::deviceVk==before && vkDevice==&a);
  nativeResult=0; NVNGXProxy::_module.VULKAN_Shutdown1=nullptr;
- check(NVSDK_NGX_VULKAN_Shutdown1(&a)==-1 && globalVk==0 && NVNGXProxy::IsVulkanDeviceInited(&a));
+ check(NVSDK_NGX_VULKAN_Shutdown1(&a)==-1 && globalVk==0 && !NVNGXProxy::IsVulkanDeviceInited(&a));
  NVNGXProxy::_module.VULKAN_Shutdown1=&closeVk1;
  state.api=API::DX12;
  check(NVSDK_NGX_VULKAN_Shutdown1(&a)==0 && lastDevice==&a && globalVk==0);
