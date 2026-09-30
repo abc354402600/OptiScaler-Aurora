@@ -866,6 +866,10 @@ class NVNGXProxy
         // This also protects pointers cached before a concurrent shutdown.
         return GetModule().D3D12_DestroyParameters ? +[](NVSDK_NGX_Parameter* InParameters) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().D3D12_DestroyParameters(InParameters); });
         } : nullptr;
@@ -881,6 +885,10 @@ class NVNGXProxy
             if (!OutHandle)
                 return NVSDK_NGX_Result_FAIL_InvalidParameter;
             *OutHandle = nullptr;
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().D3D12_CreateFeature(InCmdList, InFeatureID, InParameters, OutHandle); });
         } : nullptr;
@@ -895,6 +903,10 @@ class NVNGXProxy
                                                       const NVSDK_NGX_Parameter* InParameters,
                                                       PFN_NVSDK_NGX_ProgressCallback InCallback) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().D3D12_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback); });
         } : nullptr;
@@ -906,6 +918,10 @@ class NVNGXProxy
         // This also protects pointers cached before a concurrent shutdown.
         return GetModule().D3D12_ReleaseFeature ? +[](NVSDK_NGX_Handle* InHandle) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _dx12Devices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().D3D12_ReleaseFeature(InHandle); });
         } : nullptr;
@@ -1025,6 +1041,10 @@ class NVNGXProxy
         // This also protects pointers cached before a concurrent shutdown.
         return GetModule().VULKAN_DestroyParameters ? +[](NVSDK_NGX_Parameter* InParameters) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().VULKAN_DestroyParameters(InParameters); });
         } : nullptr;
@@ -1040,6 +1060,10 @@ class NVNGXProxy
             if (!OutHandle)
                 return NVSDK_NGX_Result_FAIL_InvalidParameter;
             *OutHandle = nullptr;
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle); });
         } : nullptr;
@@ -1056,6 +1080,10 @@ class NVNGXProxy
             if (!OutHandle)
                 return NVSDK_NGX_Result_FAIL_InvalidParameter;
             *OutHandle = nullptr;
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle); }, InDevice);
         } : nullptr;
@@ -1070,6 +1098,10 @@ class NVNGXProxy
                                                        const NVSDK_NGX_Parameter* InParameters,
                                                        PFN_NVSDK_NGX_ProgressCallback InCallback) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().VULKAN_EvaluateFeature(InCmdList, InFeatureHandle, InParameters, InCallback); });
         } : nullptr;
@@ -1081,6 +1113,10 @@ class NVNGXProxy
         // This also protects pointers cached before a concurrent shutdown.
         return GetModule().VULKAN_ReleaseFeature ? +[](NVSDK_NGX_Handle* InHandle) -> NVSDK_NGX_Result
         {
+            auto configuration = NgxExportLifecycle::TryRead();
+            if (!configuration)
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
+
             return _vulkanDevices.RunOperation(NVSDK_NGX_Result_FAIL_NotInitialized,
                 [&] { return GetModule().VULKAN_ReleaseFeature(InHandle); });
         } : nullptr;

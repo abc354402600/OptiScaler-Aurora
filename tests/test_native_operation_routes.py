@@ -9,6 +9,9 @@ from test_shutdown_routing import function
 ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = r'''
 #include "proxies/NativeDeviceLifecycle.h"
+#include "proxies/NgxExportLifecycle.h"
+#include <future>
+#include <stdexcept>
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -32,6 +35,7 @@ using VkCommandBuffer=ID3D12GraphicsCommandList*;
 using NVSDK_NGX_Feature=int;
 using PFN_NVSDK_NGX_ProgressCallback=void(*)();
 int checks=0, calls=0, closes=0;
+bool throwInNative=false;
 void check(bool ok) { if(!ok) { std::cerr << "native operation check " << checks+1 << " failed\n"; std::exit(2); } ++checks; }
 ID3D12Device device, unknown;
 ID3D12GraphicsCommandList command;
@@ -67,6 +71,11 @@ def main():
             validate=' '.join(f'check({p}=={values[p]});' for p in parameters if p!='OutHandle')
             is_create=op.startswith('CreateFeature')
             body=validate+f'''
+                int writes=0;
+                check(NgxExportLifecycle::Run(-7,[&] {{ ++writes; return 0; }})==-7 && writes==0);
+                auto writer=std::async(std::launch::async,[&] {{ return NgxExportLifecycle::Run(-7,[&] {{ ++writes; return 0; }}); }});
+                check(writer.get()==-7 && writes==0);
+                if(throwInNative) throw std::runtime_error("native operation");
                 ++calls;
                 check(NVNGXProxy::{close}(nullptr)==-7);
                 check(NVNGXProxy::{close}(&device)==-7);
@@ -83,7 +92,20 @@ def main():
               {'check(output==nullptr);' if is_create else ''}
               check(NVNGXProxy::{life}.Initialize(&device,0,-2,-7,[] {{ return 0; }})==0);
               check(cached({actual})==17 && calls==before+1);
-              {'check(output==&handle); check(cached('+actual.replace('&output','nullptr')+')==-2);' if is_create else ''}
+              {"check(output==&handle);" if is_create else ""}
+              check(NgxExportLifecycle::Run(-7,[&] {{
+                int entered=calls;
+                check(cached({actual})==-7 && calls==entered);
+                auto worker=std::async(std::launch::async,[&] {{ return cached({actual}); }});
+                check(worker.get()==-7 && calls==entered);
+                return 0;
+              }})==0);
+              throwInNative=true; bool threw=false;
+              try {{ cached({actual}); }} catch(const std::runtime_error&) {{ threw=true; }}
+              throwInNative=false;
+              check(threw && NgxExportLifecycle::Run(-7,[] {{ return 0; }})==0);
+
+              {'check(cached('+actual.replace('&output','nullptr')+')==-2);' if is_create else ''}
               {('output=&handle; check(cached('+actual.replace('&device','&unknown')+')==-7 && !output);') if op=='CreateFeature1' else ''}
               check(NVNGXProxy::{life}.Shutdown(nullptr,0,-7,[&] {{
                 output=&handle; int count=calls;
