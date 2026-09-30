@@ -102,3 +102,5 @@ User steering: Witcher 3 Remastered (2026-09-29) reportedly ships DLSS 310.9.1 a
 
 
 Runtime checkpoint 0b369be1 passes Windows build 36675222234, format 36675222209, 17 no-downgrade and 348 native-operation checks. Official DLSS310.9.1/SL2.14.1 production binaries are now upgraded with SHA256 inventory and packaging verification. User reports Witcher3 RTX4080 Laptop/6X working and supplied screenshot; record this bounded user evidence, not universal compatibility. See RUNTIME_31091_AUDIT_20260930.md. Optional legacy NR remains unchanged. Remaining Init/Evaluate lifecycle boundaries still apply; no main merge or Release in this runtime checkpoint.
+
+Final runtime upgrade 5ef78b6f passed Windows 36677471263 / job 109765455452 and format 36677471279; source/staged inventory and full DLL/tests/package/upload all succeeded. Artifact 11080434631 is recorded in runtime audit. Documentation follow-up does not change built code. Continue outstanding lifecycle work from existing audits; do not repeat runtime upgrade or claim broad game validation from the user's Witcher screenshot.
