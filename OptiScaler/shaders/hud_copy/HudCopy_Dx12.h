@@ -7,12 +7,15 @@
 #include <dxgi1_6.h>
 #include <shaders/Shader_Dx12Utils.h>
 #include <shaders/Shader_Dx12.h>
+#include <framegen/ProviderCallAdmission.h>
 
 #define HudCopy_NUM_OF_HEAPS 2
 
 class HudCopy_Dx12 : public Shader_Dx12
 {
   private:
+    ProviderCallAdmission _dispatchCalls;
+
     struct alignas(256) InternalCompareParams
     {
         float DiffThreshold = 0.02f;

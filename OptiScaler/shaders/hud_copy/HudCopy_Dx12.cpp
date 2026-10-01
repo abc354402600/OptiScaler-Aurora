@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "HudCopy_Dx12.h"
 #include "HudCopy_Common.h"
+#include <wrl/client.h>
 
 #include <Config.h>
 #include <State.h>
@@ -25,7 +26,24 @@ bool HudCopy_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* 
                             D3D12_RESOURCE_STATES hudlessState, D3D12_RESOURCE_STATES presentState,
                             float hudDetectionThreshold)
 {
+    // Protect mutable CPU heap/buffer bookkeeping without waiting inside a
+    // callback. This is not a fence for previously submitted GPU commands.
+    auto dispatchLease = _dispatchCalls.TryTransition();
+    if (!dispatchLease)
+        return false;
+
     if (!_init || _device == nullptr || hudless == nullptr || present == nullptr || cmdList == nullptr)
+        return false;
+
+    // A cached shader/context must not submit resources from another device.
+    // Unknown ownership skips this optional pass before recording commands.
+    const auto belongsToDevice = [&](auto* child)
+    {
+        Microsoft::WRL::ComPtr<ID3D12Device> owner;
+        return SUCCEEDED(child->GetDevice(IID_PPV_ARGS(&owner))) && owner.Get() == _device;
+    };
+    if (!belongsToDevice(cmdList) || !belongsToDevice(present) || !belongsToDevice(hudless) ||
+        (_buffer && !belongsToDevice(_buffer)))
         return false;
 
     ScopedGpuTime_Dx12 scopedGpuTime(GpuTime.get(), cmdList);
