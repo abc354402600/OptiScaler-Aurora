@@ -50,6 +50,18 @@ bool HudCopy_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* 
         return result;
     }
 
+    // CopyResource requires matching geometry/subresources. Keep the old buffer
+    // alive on resize: earlier command lists may still reference it. Rebuilding
+    // it here without queue-completion ownership would create a use-after-free.
+    const auto sourceDesc = present->GetDesc();
+    const auto bufferDesc = _buffer->GetDesc();
+    if (sourceDesc.Dimension != bufferDesc.Dimension || sourceDesc.Width != bufferDesc.Width ||
+        sourceDesc.Height != bufferDesc.Height || sourceDesc.DepthOrArraySize != bufferDesc.DepthOrArraySize ||
+        sourceDesc.MipLevels != bufferDesc.MipLevels || sourceDesc.Format != bufferDesc.Format ||
+        sourceDesc.SampleDesc.Count != bufferDesc.SampleDesc.Count ||
+        sourceDesc.SampleDesc.Quality != bufferDesc.SampleDesc.Quality)
+        return false;
+
     ResourceBarrier(cmdList, present, presentState, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
     cmdList->CopyResource(_buffer, present);

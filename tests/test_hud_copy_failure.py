@@ -12,6 +12,8 @@ PRELUDE = r'''
 #include <iostream>
 #include <memory>
 #include <string>
+#include <functional>
+#include <vector>
 using UINT=unsigned;
 using D3D12_RESOURCE_STATES=int;
 constexpr int D3D12_RESOURCE_STATE_COPY_DEST=1, D3D12_RESOURCE_STATE_COPY_SOURCE=2,
@@ -26,8 +28,9 @@ constexpr int D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET=1,D3D12_RESOURCE_FLAG_ALLO
 int checks=0,barriers=0,copies=0,dispatches=0;
 bool constantsReady=true;
 void check(bool ok){if(!ok){std::cerr<<"HUD failure check "<<checks+1<<" failed\n";std::exit(2);}++checks;}
-struct Desc {uint64_t Width=128; unsigned Height=64;};
-struct ID3D12Resource {int state=1; Desc GetDesc(){return {};} void SetName(const wchar_t*){}};
+struct Desc {uint64_t Width=128; unsigned Height=64,Dimension=3,DepthOrArraySize=1,MipLevels=1,Format=28;
+ struct Sample {unsigned Count=1,Quality=0;} SampleDesc;};
+struct ID3D12Resource {int state=1; Desc desc; Desc GetDesc(){return desc;} void SetName(const wchar_t*){}};
 struct ID3D12DescriptorHeap {};
 struct ID3D12GraphicsCommandList {
  void CopyResource(ID3D12Resource* target,ID3D12Resource* source){check(target->state==1&&source->state==2);++copies;}
@@ -70,6 +73,22 @@ int main(){
   check(copy.Dispatch(&commands,&hudless,&present,hudlessState,presentState,0.03f));
   check(present.state==presentState&&hudless.state==hudlessState&&buffer.state==1);
   check(dispatches==1);
+ }
+ std::vector<std::function<void(Desc&)>> changes={
+  [](Desc& d){++d.Width;},[](Desc& d){++d.Height;},[](Desc& d){++d.Dimension;},
+  [](Desc& d){++d.DepthOrArraySize;},[](Desc& d){++d.MipLevels;},[](Desc& d){++d.Format;},
+  [](Desc& d){++d.SampleDesc.Count;},[](Desc& d){++d.SampleDesc.Quality;}
+ };
+ for(auto& change:changes){
+  present.desc={};change(present.desc);
+  buffer.state=1;present.state=3;hudless.state=1;
+  barriers=copies=dispatches=0;
+  auto* retained=copy._buffer;
+  check(!copy.Dispatch(&commands,&hudless,&present,1,3,0.03f));
+  check(barriers==0&&copies==0&&dispatches==0&&copy._buffer==retained);
+  check(buffer.state==1&&present.state==3&&hudless.state==1);
+  present.desc={};
+  check(copy.Dispatch(&commands,&hudless,&present,1,3,0.03f));
  }
  std::cout<<"PASS: "<<checks<<" HUD Dispatch failure-state checks\n";
 }
