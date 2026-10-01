@@ -474,14 +474,12 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
                 InParameters->Get("DLSSG.HUDLess", &hudlessResource);
                 auto hudlessState = D3D12_RESOURCE_STATE_COPY_DEST;
 
-                auto device = State::Instance().currentD3D12Device;
+                Microsoft::WRL::ComPtr<ID3D12Device> device;
+                const bool deviceAvailable = InCmdList && SUCCEEDED(InCmdList->GetDevice(IID_PPV_ARGS(&device)));
 
-                if (presentWithHud && hudlessResource && device)
+                if (presentWithHud && hudlessResource && deviceAvailable && device)
                 {
-                    if (_hudCopy.get() == nullptr)
-                        _hudCopy = std::make_unique<HudCopy_Dx12>("HudCopy", device);
-
-                    if (auto hudCopy = _hudCopy.get(); hudCopy && hudCopy->IsInit())
+                    if (auto hudCopy = GetHudCopy(device.Get()); hudCopy && hudCopy->IsInit())
                     {
                         // In Cyberprank - DLSSG has noise issues, FSR FG has noise + vignetting
                         // In Death Stranding 2 - DLSSG has wrong colormapping it seems, FSR FG is fine

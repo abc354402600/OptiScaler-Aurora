@@ -40,7 +40,14 @@ class Nvngx_FG
     static inline std::unordered_set<VkDevice> _vulkanInitAttempts;
     static inline std::unordered_set<ID3D12Device*> _dx12InitReady;
     static inline std::unordered_set<VkDevice> _vulkanInitReady;
-    static inline std::unique_ptr<HudCopy_Dx12> _hudCopy;
+    static inline ProviderPublication<HudCopy_Dx12> _hudCopy;
+
+    static HudCopy_Dx12* GetHudCopy(ID3D12Device* device)
+    {
+        if (!device)
+            return nullptr;
+        return _hudCopy.GetOrCreate([&] { return std::make_unique<HudCopy_Dx12>("HudCopy", device); }).provider;
+    }
 
     // Caller holds transition admission. Allocate both records before entering
     // the SDK; only a completed successful callback commits readiness.
