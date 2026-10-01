@@ -72,3 +72,4 @@ HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不�
 - NGX 共享 HUD 对象改为完整构造后一次发布，防止首次调用时重复创建／替换；从当前命令列表查询设备，不再依赖全局当前设备。
 
 这是 CPU 调用与发布保护，不表示 GPU 已完成此前提交的工作。跨设备自动重建、GPU 常量／描述符复用和资源退役仍需单独完善。
+- HUD initialization failures no longer permanently disable the optional HUD pass through a cached unready context; early-return partial shader allocations are reclaimed before retry. CPU ownership checks cover failed/ready context teardown and later retry; real GPU allocation-failure recovery remains unverified.

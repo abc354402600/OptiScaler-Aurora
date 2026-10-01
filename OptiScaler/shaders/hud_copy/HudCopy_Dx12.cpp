@@ -176,8 +176,18 @@ HudCopy_Dx12::HudCopy_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_
 
 HudCopy_Dx12::~HudCopy_Dx12()
 {
-    if (!_init || State::Instance().isShuttingDown)
+    if (State::Instance().isShuttingDown)
         return;
+
+    if (!_init)
+    {
+        // Construction can return after allocating only part of the shader.
+        // No Dispatch was possible; the base destructor skips these resources
+        // when initialization failed, so retire them here before a later retry.
+        SAFE_RELEASE(_pipelineState);
+        SAFE_RELEASE(_rootSignature);
+        SAFE_RELEASE(_constantBuffer);
+    }
 
     for (int i = 0; i < HudCopy_NUM_OF_HEAPS; i++)
     {

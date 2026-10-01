@@ -46,7 +46,16 @@ class Nvngx_FG
     {
         if (!device)
             return nullptr;
-        return _hudCopy.GetOrCreate([&] { return std::make_unique<HudCopy_Dx12>("HudCopy", device); }).provider;
+        return _hudCopy
+            .GetOrCreate(
+                [&]
+                {
+                    auto candidate = std::make_unique<HudCopy_Dx12>("HudCopy", device);
+                    if (!candidate->IsInit())
+                        candidate.reset(); // Do not permanently publish a failed optional pass.
+                    return candidate;
+                })
+            .provider;
     }
 
     // Caller holds transition admission. Allocate both records before entering
