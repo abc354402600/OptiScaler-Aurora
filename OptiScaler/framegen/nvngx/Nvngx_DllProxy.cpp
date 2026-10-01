@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Nvngx_DllProxy.h"
+#include <wrl/client.h>
 
 NVSDK_NGX_Result Nvngx_DllProxy::D3D12_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
                                             ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
@@ -76,7 +77,17 @@ Nvngx_DllProxy::D3D12_GetFeatureRequirements(IDXGIAdapter* Adapter,
 static bool CreateBufferResource(ID3D12Device* device, ID3D12Resource* source, D3D12_RESOURCE_STATES initialState,
                                  ID3D12Resource** target)
 {
-    if (device == nullptr || source == nullptr)
+    if (device == nullptr || source == nullptr || target == nullptr)
+        return false;
+    if (source == *target)
+        return false; // CopyResource cannot copy a resource onto itself.
+
+    const auto belongsToDevice = [&](ID3D12Resource* resource)
+    {
+        Microsoft::WRL::ComPtr<ID3D12Device> owner;
+        return SUCCEEDED(resource->GetDevice(IID_PPV_ARGS(&owner))) && owner.Get() == device;
+    };
+    if (!belongsToDevice(source) || (*target && !belongsToDevice(*target)))
         return false;
 
     auto inDesc = source->GetDesc();
@@ -85,16 +96,13 @@ static bool CreateBufferResource(ID3D12Device* device, ID3D12Resource* source, D
     {
         auto bufDesc = (*target)->GetDesc();
 
-        if (bufDesc.Width != inDesc.Width || bufDesc.Height != inDesc.Height || bufDesc.Format != inDesc.Format ||
-            bufDesc.Flags != inDesc.Flags)
-        {
-            (*target)->Release();
-            (*target) = nullptr;
-        }
-        else
-        {
-            return true;
-        }
+        // No submitting queue/fence is owned here. Retain an incompatible old
+        // allocation rather than releasing a resource the GPU may still use.
+        return bufDesc.Dimension == inDesc.Dimension && bufDesc.Width == inDesc.Width &&
+               bufDesc.Height == inDesc.Height && bufDesc.DepthOrArraySize == inDesc.DepthOrArraySize &&
+               bufDesc.MipLevels == inDesc.MipLevels && bufDesc.Format == inDesc.Format &&
+               bufDesc.SampleDesc.Count == inDesc.SampleDesc.Count &&
+               bufDesc.SampleDesc.Quality == inDesc.SampleDesc.Quality && bufDesc.Flags == inDesc.Flags;
     }
 
     D3D12_HEAP_PROPERTIES heapProperties;
@@ -144,6 +152,9 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
 {
     if (isDx12Available() && _DLSSG_D3D12_EvaluateFeature)
     {
+        if (!InParameters)
+            return NVSDK_NGX_Result_Fail;
+
         // Make a copy of the depth going to the frame generator
         // Fixes an issue with the depth being corrupted on AMD under Windows
         ID3D12Resource* dlssgDepth = nullptr;
@@ -151,14 +162,23 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
         if (Config::Instance()->NvngxFGMakeDepthCopy.value_or_default())
             InParameters->Get("DLSSG.Depth", &dlssgDepth);
 
-        if (dlssgDepth)
+        // Serialize this provider's optional copy through SDK consumption. This
+        // prevents CPU reentry/races, but does not assert GPU queue completion.
+        auto copyLease = dlssgDepth ? _depthCopyCalls.TryTransition() : ProviderCallAdmission::Lease {};
+        if (dlssgDepth && !copyLease)
+            return NVSDK_NGX_Result_FAIL_NotInitialized;
+
+        if (dlssgDepth && InCmdList)
         {
-            static size_t count = 0;
-            const size_t index = count % 2;
+            const size_t index = _depthCopyIndex;
+            _depthCopyIndex = (_depthCopyIndex + 1) % 2;
+            Microsoft::WRL::ComPtr<ID3D12Device> device;
+            const bool deviceAvailable = SUCCEEDED(InCmdList->GetDevice(IID_PPV_ARGS(&device))) && device;
 
             // Nukem's is expecting D3D12_RESOURCE_STATE_COPY_DEST
-            const bool copyReady = CreateBufferResource(State::Instance().currentD3D12Device, dlssgDepth,
-                                                        D3D12_RESOURCE_STATE_COPY_DEST, &depthCopy[index]);
+            const bool copyReady =
+                deviceAvailable &&
+                CreateBufferResource(device.Get(), dlssgDepth, D3D12_RESOURCE_STATE_COPY_DEST, &depthCopy[index]);
 
             if (copyReady && depthCopy[index])
             {
@@ -173,8 +193,6 @@ NVSDK_NGX_Result Nvngx_DllProxy::D3D12_EvaluateFeature(ID3D12GraphicsCommandList
                 // cast to make sure it's void*, otherwise dlssg cries
                 InParameters->Set("DLSSG.Depth", (void*) depthCopy[index]);
             }
-
-            count++;
         }
 
         bool showDebug = Config::Instance()->NvngxFGShowDebug.value_or_default();

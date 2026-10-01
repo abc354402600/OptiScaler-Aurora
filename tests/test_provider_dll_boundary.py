@@ -17,8 +17,13 @@ PRELUDE=r'''
 #include <cstring>
 #include <iostream>
 #include <new>
+#include <functional>
+#include <future>
+#include <stdexcept>
+#include "framegen/ProviderCallAdmission.h"
 using NVSDK_NGX_Result=int;
 constexpr int NVSDK_NGX_Result_Success=0, NVSDK_NGX_Result_Fail=-1;
+constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-2;
 using NVSDK_NGX_Feature=int; using NVSDK_NGX_Version=int;
 using VkInstance=void*; using VkPhysicalDevice=void*; using VkDevice=void*; using VkCommandBuffer=void*;
 using PFN_vkGetInstanceProcAddr=void*; using PFN_vkGetDeviceProcAddr=void*;
@@ -28,9 +33,20 @@ struct NVSDK_NGX_FeatureDiscoveryInfo {};
 struct NVSDK_NGX_FeatureRequirement {};
 struct NVSDK_NGX_Handle {};
 struct IDXGIAdapter {}; struct ID3D12Device {}; struct ID3D12Resource {};
+ID3D12Device commandDevice,globalDevice;
+namespace Microsoft::WRL {template<class T>struct ComPtr {
+ T* p=nullptr;T** operator&(){return &p;}T* Get(){return p;}explicit operator bool(){return p!=nullptr;}
+};}
+#define IID_PPV_ARGS(p) (p)
+#define SUCCEEDED(r) ((r)>=0)
 int copies=0, barriers=0, depthWrites=0;
 bool supplyDepth=false, bufferSuccess=false;
-struct ID3D12GraphicsCommandList { void CopyResource(ID3D12Resource*,ID3D12Resource*) { ++copies; } };
+struct ID3D12GraphicsCommandList {
+ int queryResult=0;ID3D12Device* owner=&commandDevice;
+ int GetDevice(ID3D12Device** out){*out=owner;return queryResult;}
+ void CopyResource(ID3D12Resource*,ID3D12Resource*) { ++copies; }
+};
+std::function<void()> onEvaluate;
 int nativeCalls=0, parameterWrites=0, releases=0, invalidReleases=0;
 ID3D12Resource resource;
 struct NVSDK_NGX_Parameter {
@@ -51,21 +67,27 @@ struct Config {
 };
 struct State { ID3D12Device* currentD3D12Device=nullptr; static State& Instance() { static State s; return s; } };
 constexpr int D3D12_RESOURCE_STATE_COPY_DEST=1, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE=2, D3D12_RESOURCE_STATE_COPY_SOURCE=3;
-bool CreateBufferResource(ID3D12Device*,ID3D12Resource*,int,ID3D12Resource**) { return bufferSuccess; }
+int bufferCalls=0;ID3D12Device* lastDevice=nullptr;ID3D12Resource** lastTarget=nullptr;
+bool CreateBufferResource(ID3D12Device* device,ID3D12Resource*,int,ID3D12Resource** target) { ++bufferCalls;lastDevice=device;lastTarget=target;return bufferSuccess; }
 void ResourceBarrier(ID3D12GraphicsCommandList*,ID3D12Resource*,int,int) { ++barriers; }
 '''
 
-def generate():
+def generate(negative_control=None):
     source=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_DllProxy.cpp').read_text(encoding='utf-8')
     header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_DllProxy.h').read_text(encoding='utf-8')
     field=re.search(r'ID3D12Resource\* depthCopy\[2\][^;]*;',header).group()
+    field+='\n'+re.search(r'size_t _depthCopyIndex[^;]*;',header).group()
+    field+='\n'+re.search(r'ProviderCallAdmission _depthCopyCalls;',header).group()
     destructor=function(header,'~Nvngx_DllProxy()')
     declarations=[]; callbacks=[]; bodies=[]; checks=[]
     for match in re.finditer(r'NVSDK_NGX_Result\s+Nvngx_DllProxy::(\w+)\(([^{}]*?)\)\s*\{',source):
         name,params=match.group(1,2)
         body=function(source,match.group(0)[:-1].rstrip())
+        if name=='D3D12_EvaluateFeature' and negative_control=='no-admission':
+            body=body.replace('if (dlssgDepth && !copyLease)','if (false)')
         declarations.append(f'NVSDK_NGX_Result {name}({params});\nNVSDK_NGX_Result (*_DLSSG_{name})({params})=nullptr;')
-        callbacks.append(f'NVSDK_NGX_Result native_{name}({params}) {{ ++nativeCalls; return 123; }}')
+        hook='if(onEvaluate)onEvaluate();' if name=='D3D12_EvaluateFeature' else ''
+        callbacks.append(f'NVSDK_NGX_Result native_{name}({params}) {{ ++nativeCalls; {hook} return 123; }}')
         bodies.append(body)
         args=[]
         for parameter in params.split(',') if params.strip() else []:
@@ -124,6 +146,37 @@ int main() {
    check(copies==(shouldCopy?1:0) && barriers==(shouldCopy?2:0) && depthWrites==(shouldCopy?1:0));
   }
  }
+ State::Instance().currentD3D12Device=&globalDevice;
+ bufferSuccess=true;proxy.depthCopy[0]=proxy.depthCopy[1]=&resource;
+ check(proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123&&lastDevice==&commandDevice);
+ for(int mode=0;mode<3;++mode){
+  command.queryResult=mode==0?-1:0;command.owner=mode==1?nullptr:&commandDevice;
+  copies=barriers=depthWrites=bufferCalls=0;
+  check(proxy.D3D12_EvaluateFeature(mode==2?nullptr:&command,nullptr,&parameters,nullptr)==123);
+  check(copies==0&&barriers==0&&depthWrites==0&&bufferCalls==0);
+ }
+ command.queryResult=0;command.owner=&commandDevice;
+ before=nativeCalls;
+ check(proxy.D3D12_EvaluateFeature(&command,nullptr,nullptr,nullptr)==-1&&nativeCalls==before);
+ bool inside=false;
+ onEvaluate=[&]{
+  if(inside)return;inside=true;
+  int copyBefore=copies, nativeBefore=nativeCalls;
+  check(proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==-2);
+  auto worker=std::async(std::launch::async,[&]{return proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr);});
+  check(worker.get()==-2&&copies==copyBefore&&nativeCalls==nativeBefore);
+  inside=false;
+ };
+ check(proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123);
+ onEvaluate=[] {throw std::runtime_error("SDK exception");};
+ bool threw=false;try{proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr);}catch(const std::runtime_error&){threw=true;}
+ check(threw);
+ onEvaluate={};check(proxy.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123);
+ Derived independent;
+ check(independent._depthCopyIndex==0&&independent._depthCopyCalls.TryTransition());
+ independent._DLSSG_D3D12_EvaluateFeature=&native_D3D12_EvaluateFeature;
+ check(independent.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123&&lastTarget==&independent.depthCopy[0]);
+ check(independent.D3D12_EvaluateFeature(&command,nullptr,&parameters,nullptr)==123&&lastTarget==&independent.depthCopy[1]);
  std::cout << "PASS: " << checks << " DLL provider boundary checks\\n";
 }
 '''
@@ -132,14 +185,15 @@ int main() {
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--compiler',required=True); parser.add_argument('--driver')
+    parser.add_argument('--negative-control',choices=['no-admission'])
     args=parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='aurora-dll-boundary-') as folder:
         path=Path(folder); cpp=path/'test.cpp'; exe=path/'test.exe'
-        cpp.write_text(generate(),encoding='utf-8')
+        cpp.write_text(generate(args.negative_control),encoding='utf-8')
         cmd=[args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower()=='cl':
-            cmd+=['/nologo','/EHsc','/std:c++20',str(cpp),'/Fe:'+str(exe)]
-        else: cmd+=['-std=c++20',str(cpp),'-o',str(exe)]
+            cmd+=['/nologo','/EHsc','/std:c++20','/I'+str(ROOT/'OptiScaler'),str(cpp),'/Fe:'+str(exe)]
+        else: cmd+=['-std=c++20','-I'+str(ROOT/'OptiScaler'),str(cpp),'-o',str(exe)]
         subprocess.run(cmd,cwd=path,check=True)
         subprocess.run([str(exe)],cwd=path,check=True,timeout=30)
 

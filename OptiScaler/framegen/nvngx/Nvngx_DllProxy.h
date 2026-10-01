@@ -1,11 +1,14 @@
 #pragma once
 #include "IFGNvngx.h"
 #include <proxies/NVNGX_Proxy.h>
+#include <framegen/ProviderCallAdmission.h>
 
 class Nvngx_DllProxy : public IFGNvngx
 {
   private:
     ID3D12Resource* depthCopy[2] {};
+    size_t _depthCopyIndex = 0;
+    ProviderCallAdmission _depthCopyCalls;
 
   protected:
     HMODULE dll = nullptr;
