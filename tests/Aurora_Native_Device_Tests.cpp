@@ -47,6 +47,10 @@ int main()
     check(dx.Shutdown(nullptr, 0, -7, success) == 0 && calls == 6 && !dx.AnyReady());
     check(!dx.IsReady(&first) && !dx.IsReady(&second) && vk.IsReady(&first));
     check(dx.Initialize(&first, 0, -2, -7, [] { return -4; }) == -4 && !dx.AnyReady());
+    int failedCalls = calls;
+    check(initialize(dx, &first) == -7 && calls == failedCalls);
+    check(dx.RunOperation(-7, success, &first) == -7 && calls == failedCalls);
+    check(dx.Shutdown(&first, 0, -7, success) == 0 && calls == failedCalls + 1);
     bool threw = false;
     try
     {
@@ -57,6 +61,10 @@ int main()
         threw = true;
     }
     check(threw && !dx.AnyReady());
+    check(initialize(dx, &first) == -7);
+    check(dx.Shutdown(&first, 0, -7, [] { return -4; }) == -4);
+    check(initialize(dx, &first) == -7);
+    check(dx.Shutdown(&first, 0, -7, success) == 0);
     check(initialize(dx, &first) == 0);
     threw = false;
     try
@@ -175,5 +183,57 @@ int main()
     check(dx.RunOperation(-7, success) == -7);
     check(initialize(dx, &first) == 0);
     check(dx.RunOperation(-7, [] { return 31; }, &first) == 31);
+    // Missing module/export and preparation exceptions never entered the SDK.
+    for (bool throws : { false, true })
+    {
+        bool caught = false;
+        try
+        {
+            check(dx.Initialize(&absent, 0, -2, -7,
+                                [&](bool& entered)
+                                {
+                                    check(!entered);
+                                    if (throws)
+                                        throw std::runtime_error("prepare");
+                                    return -4;
+                                }) == -4);
+        }
+        catch (const std::runtime_error&)
+        {
+            caught = true;
+        }
+        check(caught == throws);
+        int before = calls;
+        check(dx.Shutdown(&absent, 0, -7, success) == 0 && calls == before);
+        check(initialize(dx, &absent) == 0);
+        check(dx.Shutdown(&absent, 0, -7, success) == 0);
+    }
+    for (bool throws : { false, true })
+    {
+        bool caught = false;
+        try
+        {
+            check(dx.Initialize(&absent, 0, -2, -7,
+                                [&](bool& entered)
+                                {
+                                    entered = true;
+                                    if (throws)
+                                        throw std::runtime_error("native Init");
+                                    return -4;
+                                }) == -4);
+        }
+        catch (const std::runtime_error&)
+        {
+            caught = true;
+        }
+        check(caught == throws && !dx.IsReady(&absent) && dx.IsReady(&first));
+        check(initialize(dx, &absent) == -7);
+        check(dx.RunOperation(-7, success, &absent) == -7);
+        check(dx.RunOperation(-7, success) == -7);
+        check(dx.RunOperation(-7, [] { return 31; }, &first) == 31);
+        check(dx.Shutdown(&absent, 0, -7, success) == 0);
+        check(initialize(dx, &absent) == 0);
+        check(dx.Shutdown(&absent, 0, -7, success) == 0);
+    }
     std::cout << "PASS: " << checks << " native device lifecycle checks\n";
 }

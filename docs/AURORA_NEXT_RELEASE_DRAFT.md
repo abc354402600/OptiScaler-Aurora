@@ -75,3 +75,5 @@ HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不�
 - HUD initialization failures no longer permanently disable the optional HUD pass through a cached unready context; early-return partial shader allocations are reclaimed before retry. CPU ownership checks cover failed/ready context teardown and later retry; real GPU allocation-failure recovery remains unverified.
 
 - Local depth-copy batch: validate the actual command-list device and resource descriptors before copying; retain incompatible allocations instead of releasing potentially active GPU resources, reject self-copy, and protect optional copy state from CPU reentry/concurrency. This is bounded protection, not automatic resize recovery or proven GPU retirement. Pending grouped Windows build before publication.
+
+- Native D3D12/Vulkan initialization failures retain cleanup ownership once the SDK was entered; retry/use is blocked until successful cleanup. Missing optional DLLs/exports and preparation failures remain retryable. Local focused checks pass; grouped full Windows validation is pending. This does not claim complete multi-backend configuration rollback.

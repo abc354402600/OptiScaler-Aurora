@@ -119,6 +119,12 @@ int main() {
  check(!NVNGXProxy::IsVulkanInited());
  check(!NVNGXProxy::InitDx12(&a) && !NVNGXProxy::IsDx12Inited());
  initResult=0;
+ int failedInitCalls=initCalls;
+ check(!NVNGXProxy::InitDx12(&a) && !NVNGXProxy::InitVulkan(nullptr,nullptr,&a,nullptr,nullptr) && initCalls==failedInitCalls);
+ check(NVSDK_NGX_D3D12_Shutdown1(&a)==0 && deviceDx==1 && lastDevice==&a);
+ check(NVSDK_NGX_VULKAN_Shutdown1(&a)==0 && deviceVk==1 && lastDevice==&a);
+ // Start independent teardown scenarios with fresh counters after failed-Init cleanup.
+ deviceDx=deviceVk=Nvngx_FG::deviceDx=Nvngx_FG::deviceVk=0;
  check(NVNGXProxy::InitDx12(&a) && NVNGXProxy::InitDx12(&b));
  check(NVNGXProxy::InitVulkan(nullptr,nullptr,&a,nullptr,nullptr));
  int before=initCalls;

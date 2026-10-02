@@ -57,9 +57,12 @@ std::string seenProject,seenEngine;
 std::wstring seenPath;
 uint64_t seenId=0; int seenVersion=0,seenEngineType=0;
 bool nativePointersStable=true;
+int nativeReturn=0,sdkCalls=0;
 struct InitExport {
- bool operator!=(std::nullptr_t) const { return true; }
+ bool enabled=true;
+ bool operator!=(std::nullptr_t) const { return enabled; }
  template<class... Args> int operator()(Args... args) const {
+   ++sdkCalls;
    auto values=std::tuple{args...};
    constexpr auto count=sizeof...(Args);
    constexpr bool project=std::is_convertible_v<decltype(std::get<0>(values)),const char*>;
@@ -73,7 +76,7 @@ struct InitExport {
      if(duringNative) duringNative();
      nativePointersStable &= seenPath==d;
    }
-   return 0;
+   return nativeReturn;
  }
 };
 struct Module {
@@ -159,7 +162,29 @@ int main() {
    duringPaths={}; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0); check(init());
    reset(); duringNative=[] { throw 43; };
    try { init(); check(false); } catch(int e) { check(e==43); }
-   duringNative={}; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0); check(init());
+   duringNative={}; check(NVSDK_NGX_UpdateFeature(&identifier,1)==0);
+   if(api!=0) { check(!init()); reset(); }
+   check(init());
+ }
+ // Actual D3D12/Vulkan direct helpers distinguish missing backends from SDK failures.
+ for(int api=1;api<3;++api)for(bool projectMode:{false,true})for(int failure=0;failure<3;++failure){
+  auto& lifecycle=api==1?NVNGXProxy::_dx12Devices:NVNGXProxy::_vulkanDevices;
+  lifecycle.Shutdown(nullptr,0,-7,[]{return 0;});
+  cache.UpdateProject(projectMode?"project":"",1,"engine");
+  NVNGXProxy::module=Module{};
+  auto init=[&]{return api==1?NVNGXProxy::InitDx12(&d12):NVNGXProxy::InitVulkan(nullptr,nullptr,&vkDevice,nullptr,nullptr);};
+  if(failure==0)NVNGXProxy::module.dll=nullptr;
+  if(failure==1){
+   NVNGXProxy::module.D3D12_Init_ProjectID.enabled=false;NVNGXProxy::module.D3D12_Init_Ext.enabled=false;
+   NVNGXProxy::module.VULKAN_Init_ProjectID.enabled=false;NVNGXProxy::module.VULKAN_Init_Ext.enabled=false;
+  }
+  nativeReturn=failure==2?-4:0;int before=sdkCalls;
+  check(!init()&&sdkCalls==before+(failure==2?1:0)&&!lifecycle.AnyReady());
+  NVNGXProxy::module=Module{};nativeReturn=0;
+  if(failure==2)check(!init()&&sdkCalls==before+1);
+  int closes=0;
+  check(lifecycle.Shutdown(nullptr,0,-7,[&]{++closes;return 0;})==0&&closes==(failure==2?1:0));
+  check(init()&&lifecycle.AnyReady());
  }
  // The log payload is a view, not a C string. Never send its trailing bytes.
  const char raw[]={'o','k','X','Y',0};

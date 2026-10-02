@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -27,14 +28,14 @@ class NativeDeviceLifecycle
         _usable.store(count, std::memory_order_release);
     }
 
-    void Finish(const void* device, bool initializing, bool succeeded)
+    void Finish(const void* device, bool initializing, bool succeeded, bool entered = true)
     {
         std::scoped_lock lock(_mutex);
         if (initializing)
         {
             if (succeeded)
                 _devices.at(device) = true;
-            else
+            else if (!entered)
                 _devices.erase(device);
         }
         else if (succeeded)
@@ -106,15 +107,28 @@ class NativeDeviceLifecycle
             _target = device;
             UpdateUsable();
         }
+        bool entered = false;
         try
         {
-            const auto result = callback();
-            Finish(device, true, result == success);
+            const auto result = [&]
+            {
+                if constexpr (std::is_invocable_v<Callback, bool&>)
+                    return callback(entered);
+                else
+                {
+                    // Callbacks without preparation enter the SDK directly.
+                    entered = true;
+                    return callback();
+                }
+            }();
+            // A failed/throwing SDK attempt remains cleanup-owned but unusable.
+            // Only preparation failures before SDK entry can forget the record.
+            Finish(device, true, result == success, entered);
             return result;
         }
         catch (...)
         {
-            Finish(device, true, false);
+            Finish(device, true, false, entered);
             throw;
         }
     }

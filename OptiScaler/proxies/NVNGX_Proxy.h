@@ -781,7 +781,7 @@ class NVNGXProxy
             return false;
 
         return RunDx12Init(InDevice,
-                           [&]() -> NVSDK_NGX_Result
+                           [&](bool& entered) -> NVSDK_NGX_Result
                            {
                                InitNVNGX();
 
@@ -797,6 +797,7 @@ class NVNGXProxy
                                {
                                    LOG_INFO("GetModule().D3D12_Init_ProjectID!");
 
+                                   entered = true;
                                    nvResult = GetModule().D3D12_Init_ProjectID(
                                        metadata->ProjectId.c_str(), metadata->EngineType,
                                        metadata->EngineVersion.c_str(), metadata->ApplicationDataPath.c_str(), InDevice,
@@ -805,6 +806,7 @@ class NVNGXProxy
                                else if (GetModule().D3D12_Init_Ext != nullptr)
                                {
                                    LOG_INFO("GetModule().D3D12_Init_Ext!");
+                                   entered = true;
                                    nvResult = GetModule().D3D12_Init_Ext(metadata->ApplicationId,
                                                                          metadata->ApplicationDataPath.c_str(),
                                                                          InDevice, metadata->SdkVersion, &fcInfo);
@@ -943,7 +945,7 @@ class NVNGXProxy
             return false;
 
         return RunVulkanInit(InDevice,
-                             [&]() -> NVSDK_NGX_Result
+                             [&](bool& entered) -> NVSDK_NGX_Result
                              {
                                  InitNVNGX();
 
@@ -958,6 +960,7 @@ class NVNGXProxy
                                  if (metadata->ProjectId != "" && GetModule().VULKAN_Init_ProjectID != nullptr)
                                  {
                                      LOG_DEBUG("GetModule().VULKAN_Init_ProjectID!");
+                                     entered = true;
                                      nvResult = GetModule().VULKAN_Init_ProjectID(
                                          metadata->ProjectId.c_str(), metadata->EngineType,
                                          metadata->EngineVersion.c_str(), metadata->ApplicationDataPath.c_str(),
@@ -966,6 +969,7 @@ class NVNGXProxy
                                  else if (GetModule().VULKAN_Init_Ext != nullptr)
                                  {
                                      LOG_DEBUG("GetModule().VULKAN_Init_Ext!");
+                                     entered = true;
                                      nvResult = GetModule().VULKAN_Init_Ext(
                                          metadata->ApplicationId, metadata->ApplicationDataPath.c_str(), InInstance,
                                          InPD, InDevice, metadata->SdkVersion, &fcInfo);
