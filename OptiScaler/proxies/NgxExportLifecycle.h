@@ -23,4 +23,36 @@ class NgxExportLifecycle
             return busy;
         return std::forward<Callback>(callback)();
     }
+
+    // Roll back global configuration only. SDK attempt/cleanup ownership is separate.
+    // Delegated private Init calls remain inside this single outer transaction.
+    template <typename Result, typename Metadata, typename Paths, typename Callback>
+    static Result RunInitialization(Result busy, Result success, Metadata& metadata, Paths& paths, Callback&& callback)
+    {
+        return Run(busy,
+                   [&]
+                   {
+                       auto oldMetadata = metadata.Read();
+                       auto oldPaths = paths.Read();
+                       struct Rollback
+                       {
+                           Metadata& metadata;
+                           Paths& paths;
+                           decltype(oldMetadata) previousMetadata;
+                           decltype(oldPaths) previousPaths;
+                           bool committed = false;
+                           ~Rollback()
+                           {
+                               if (!committed)
+                               {
+                                   metadata.Restore(std::move(previousMetadata));
+                                   paths.Restore(std::move(previousPaths));
+                               }
+                           }
+                       } rollback { metadata, paths, std::move(oldMetadata), std::move(oldPaths) };
+                       auto result = std::forward<Callback>(callback)();
+                       rollback.committed = result == success;
+                       return result;
+                   });
+    }
 };

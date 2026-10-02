@@ -7,7 +7,10 @@ PRELUDE=r'''
 #include "proxies/NgxExportLifecycle.h"
 #include "proxies/NativeDeviceLifecycle.h"
 #include "proxies/NgxInitValidation.h"
+#include "proxies/NgxInitMetadata.h"
+#include "proxies/NgxPathSnapshot.h"
 #include <functional>
+#include <source_location>
 #include <cstring>
 #include <memory>
 #include <cstdlib>
@@ -27,22 +30,25 @@ constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0
 constexpr int app_id_override=12;const char* project_id_override="override";
 void* vkGetInstanceProcAddr=nullptr;void* vkGetDeviceProcAddr=nullptr;
 int checks=0,nativeCalls=0,providerCalls=0,pathWrites=0,metadataWrites=0,projectWrites=0,nativeResult=0,providerResult=0;
-std::function<void()> onNative,onProvider;
-void check(bool b){if(!b){std::cerr<<"Init chain check "<<checks+1<<" failed\n";std::exit(2);}++checks;}
-struct NgxPathSnapshot{using Owner=std::shared_ptr<int>;};
-NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo*){++pathWrites;return std::make_shared<int>(1);}
+std::function<void()> onNative,onProvider;int throwStage=0;
+void check(bool b,std::source_location loc=std::source_location::current()){if(!b){std::cerr<<"Init chain check "<<checks+1<<" failed at generated line "<<loc.line()<<"\n";std::exit(2);}++checks;}
+NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo*);
 enum class FGNvngxReplacement{None,Yes};enum class FGInput{NvngxFG};
-struct Metadata{
- template<class...A>void UpdateApplication(A...){++metadataWrites;}
- template<class...A>void UpdateProject(A...){++metadataWrites;++projectWrites;}
- template<class...A>void UpdateLogging(A...){++metadataWrites;}
+struct Metadata : NgxInitMetadata<int,int,int>{
+ Metadata():NgxInitMetadata(0,0){}
+ template<class...A>void UpdateApplication(A...a){++metadataWrites;NgxInitMetadata::UpdateApplication(a...);if(throwStage==2)throw 88;}
+ template<class...A>void UpdateProject(A...a){++metadataWrites;++projectWrites;NgxInitMetadata::UpdateProject(a...);if(throwStage==4)throw 88;}
+ template<class...A>void UpdateLogging(A...a){++metadataWrites;NgxInitMetadata::UpdateLogging(a...);if(throwStage==3)throw 88;}
 };
 struct State{
- Metadata NVNGX_Init;bool nvngxDx11Inited=false,nvngxDx12Inited=false,nvngxVkInited=false;
+ NgxPathCache NVNGX_FeatureInfo_Paths;Metadata NVNGX_Init;bool nvngxDx11Inited=false,nvngxDx12Inited=false,nvngxVkInited=false;
  ID3D11Device* currentD3D11Device=nullptr;ID3D12Device* currentD3D12Device=nullptr;VkDevice currentVkDevice=nullptr;
  FGNvngxReplacement activeFgNvngx=FGNvngxReplacement::Yes;FGInput activeFgInput=FGInput::NvngxFG;
  static State& Instance(){static State s;return s;}
 };
+NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo*){++pathWrites;auto result=State::Instance().NVNGX_FeatureInfo_Paths.Publish({L"new path"});if(throwStage==1)throw 88;return result;}
+struct StateView {bool nvngxDx11Inited,nvngxDx12Inited,nvngxVkInited;ID3D11Device* currentD3D11Device;ID3D12Device* currentD3D12Device;VkDevice currentVkDevice;};
+StateView ReadState(){auto& s=State::Instance();return {s.nvngxDx11Inited,s.nvngxDx12Inited,s.nvngxVkInited,s.currentD3D11Device,s.currentD3D12Device,s.currentVkDevice};}
 struct Option{bool v;bool value_or_default(){return v;}};
 struct Config{Option DLSSEnabled{true},UseGenericAppIdWithDlss{false};static Config* Instance(){static Config c;return &c;}};
 struct D3D12Hooks{static void HookDevice(ID3D12Device*){}};
@@ -71,7 +77,7 @@ struct Nvngx_FG{
 '''
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');parser.add_argument('--negative-control',choices=['no-path-validation']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');parser.add_argument('--negative-control',choices=['no-path-validation','no-configuration-rollback']);args=parser.parse_args()
     cpp=PRELUDE;routes=[];path_routes=[];invalid_routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
@@ -79,6 +85,9 @@ def main():
         cpp+=('ID3D11Device* D3D11Device=nullptr;\n' if api=='Dx11' else 'ID3D12Device* D3D12Device=nullptr;\n' if api=='Dx12' else 'VkInstance vkInstance=nullptr;VkPhysicalDevice vkPD=nullptr;VkDevice vkDevice=nullptr;PFN_vkGetInstanceProcAddr vkGIPA=nullptr;PFN_vkGetDeviceProcAddr vkGDPA=nullptr;\n')
         for m in re.finditer(r'NVSDK_NGX_API NVSDK_NGX_Result\s+(NVSDK_NGX_\w+_Init\w*)\(',source):
             name=m.group(1);wrapper=function(source,m.group(0));core=function(source,'static NVSDK_NGX_Result NgxCore_'+name.removeprefix('NVSDK_NGX_')+'(')
+            if args.negative_control=='no-configuration-rollback':
+                wrapper,count=re.subn(r'NgxExportLifecycle::RunInitialization\(\s*NVSDK_NGX_Result_FAIL_NotInitialized,\s*NVSDK_NGX_Result_Success,\s*State::Instance\(\).NVNGX_Init,\s*State::Instance\(\).NVNGX_FeatureInfo_Paths,', 'NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,',wrapper)
+                assert count==1, 'negative control must change every Init wrapper'
             if args.negative_control=='no-path-validation':core=core.replace(' || !ValidNgxInitPaths(InFeatureInfo)','')
             cpp+=core+'\n'+wrapper+'\n'
             signature=wrapper[:wrapper.index('{')];params=signature[signature.index('(')+1:signature.rfind(')')].split(',');values=[]
@@ -113,14 +122,16 @@ def main():
     cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
     cpp+='std::vector<int> providerRoutes={'+','.join(map(str,provider_routes))+'};std::vector<std::function<int()>> otherDeviceRoutes={'+','.join(other_device_routes)+'};\n'
     cpp+=r'''
- auto reset=[] {State::Instance()=State{};Dx11::D3D11Device=nullptr;Dx12::D3D12Device=nullptr;Vk::vkInstance=nullptr;Vk::vkPD=nullptr;Vk::vkDevice=nullptr;};
+ auto reset=[] {auto& s=State::Instance();s.nvngxDx11Inited=s.nvngxDx12Inited=s.nvngxVkInited=false;s.currentD3D11Device=nullptr;s.currentD3D12Device=nullptr;s.currentVkDevice=nullptr;s.activeFgNvngx=FGNvngxReplacement::Yes;s.activeFgInput=FGInput::NvngxFG;Dx11::D3D11Device=nullptr;Dx12::D3D12Device=nullptr;Vk::vkInstance=nullptr;Vk::vkPD=nullptr;Vk::vkDevice=nullptr;};
  for(auto& route:routes){
   reset();int before=nativeCalls,paths=pathWrites;
   check(route()==0&&nativeCalls==before+1&&pathWrites==paths+1);
   // Exercise nested exports from both actual native-call and delegated provider phases.
   auto nested=[&]{int native=nativeCalls,provider=providerCalls,path=pathWrites,meta=metadataWrites;
+    auto snapshot=State::Instance().NVNGX_Init.Read();auto paths=State::Instance().NVNGX_FeatureInfo_Paths.Read();
     for(auto& other:routes)check(other()==-7);
     check(native==nativeCalls&&provider==providerCalls&&path==pathWrites&&meta==metadataWrites);
+    check(State::Instance().NVNGX_Init.Read()==snapshot&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
   };
   reset();onNative=nested;onProvider=nested;before=nativeCalls;paths=pathWrites;
   check(route()==0&&nativeCalls==before+1&&pathWrites==paths+1);onNative={};onProvider={};
@@ -137,7 +148,7 @@ def main():
   for(bool alreadyReady:{false,true}) {
    for(int malformed=0;malformed<3;++malformed) {
     reset();if(alreadyReady)check(routes[i]()==0);
-    auto previous=State::Instance();
+    auto previous=ReadState();
     auto d11=Dx11::D3D11Device;auto d12=Dx12::D3D12Device;auto vd=Vk::vkDevice;
     int native=nativeCalls,provider=providerCalls,paths=pathWrites,metadata=metadataWrites;
     featureInfo.PathListInfo={malformed==0?nullptr:malformed==1?nullFirst:nullLast,2};
@@ -157,7 +168,7 @@ def main():
  for(size_t i=0;i<routes.size();++i) {
   for(bool alreadyReady:{false,true}) {
    reset(); if(alreadyReady)check(routes[i]()==0);
-   auto previous=State::Instance();
+   auto previous=ReadState();
    int native=nativeCalls,provider=providerCalls,paths=pathWrites,metadata=metadataWrites;
    check(invalidRoutes[i]()==-2);
    check(nativeCalls==native&&providerCalls==provider&&pathWrites==paths&&metadataWrites==metadata);
@@ -222,8 +233,45 @@ def main():
   check(routes[index]()==0&&Nvngx_FG::ready.size()==1);
  }
  // Complete cores + native lifecycle + provider ledger in one executable.
+
+ Nvngx_FG::useLedger=false;
+ // Actual storage + outer transaction: restore owner identity on failure/throw,
+ // retain candidate storage on success, and preserve readers of either generation.
+ for(size_t i=0;i<routes.size();++i) {
+  for(bool hadPaths:{false,true}) {
+   reset();auto& state=State::Instance();
+   state.NVNGX_Init.UpdateApplication(987,L"previous",123);
+   auto beforeMeta=state.NVNGX_Init.Read();
+   auto beforePaths=hadPaths?state.NVNGX_FeatureInfo_Paths.Publish({L"previous path"}):NgxPathSnapshot::Owner{};
+   state.NVNGX_FeatureInfo_Paths.Restore(beforePaths);
+   NgxPathSnapshot::Owner candidate;
+   onNative=[&]{candidate=state.NVNGX_FeatureInfo_Paths.Read();check(candidate&&candidate!=beforePaths);throw 88;};
+   bool threw=false;try{routes[i]();}catch(int e){threw=e==88;}onNative={};
+   check(threw&&state.NVNGX_Init.Read()==beforeMeta&&state.NVNGX_FeatureInfo_Paths.Read()==beforePaths);
+   check(candidate->Strings()[0]==L"new path"&&beforeMeta->ApplicationId==987);
+   check(routes[i]()==0&&state.NVNGX_Init.Read()!=beforeMeta&&state.NVNGX_FeatureInfo_Paths.Read()!=beforePaths);
+  }
+  for(int stage:{1,2,3,4}) {
+   // Logging requires feature info; not every route publishes a project.
+   if(stage==4&&(i<2||i==4||i==5||i==8||i==9||i==11))continue;
+   reset();featureInfo.PathListInfo={};
+   auto meta=State::Instance().NVNGX_Init.Read();auto paths=State::Instance().NVNGX_FeatureInfo_Paths.Read();
+   throwStage=stage;bool threw=false;try{pathRoutes[i]();}catch(int e){threw=e==88;}throwStage=0;
+   if(!threw)std::cerr<<"Missing injected failure route "<<i<<" stage "<<stage<<"\n";
+   check(threw&&State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
+   check(pathRoutes[i]()==0);
+  }
+ }
+ for(int index:providerRoutes){
+  reset();auto meta=State::Instance().NVNGX_Init.Read();auto paths=State::Instance().NVNGX_FeatureInfo_Paths.Read();
+  nativeResult=-7;check(routes[index]()==-7);nativeResult=0;
+  check(State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
+  providerResult=-7;check(routes[index]()==-7);providerResult=0;
+  check(State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
+ }
+
  // Native SDK/close and provider SDK/close remain deterministic stand-ins.
- NVNGXProxy::useNativeLedger=true;
+ Nvngx_FG::useLedger=true;NVNGXProxy::useNativeLedger=true;
  for(int index:providerRoutes)for(bool throws:{false,true}){
   reset();Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
   NVNGXProxy::_dx12Devices.Shutdown(nullptr,0,-7,[]{return 0;});

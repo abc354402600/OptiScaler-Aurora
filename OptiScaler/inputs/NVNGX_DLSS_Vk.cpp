@@ -251,13 +251,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
     VkPhysicalDevice InPD, VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
     NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
-                                   [&]
-                                   {
-                                       return NgxCore_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath,
-                                                                       InInstance, InPD, InDevice, InGIPA, InGDPA,
-                                                                       InSDKVersion, InFeatureInfo, false);
-                                   });
+    return NgxExportLifecycle::RunInitialization(
+        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
+        State::Instance().NVNGX_FeatureInfo_Paths,
+        [&]
+        {
+            return NgxCore_VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
+                                            InGDPA, InSDKVersion, InFeatureInfo, false);
+        });
 }
 
 static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext(unsigned long long InApplicationId,
@@ -324,13 +325,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
                                                          NVSDK_NGX_Version InSDKVersion,
                                                          const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
-                                   [&]
-                                   {
-                                       return NgxCore_VULKAN_Init_Ext(InApplicationId, InApplicationDataPath,
-                                                                      InInstance, InPD, InDevice, InSDKVersion,
-                                                                      InFeatureInfo, false);
-                                   });
+    return NgxExportLifecycle::RunInitialization(
+        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
+        State::Instance().NVNGX_FeatureInfo_Paths,
+        [&]
+        {
+            return NgxCore_VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
+                                           InSDKVersion, InFeatureInfo, false);
+        });
 }
 
 static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID_Ext(
@@ -397,14 +399,15 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
     PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA, NVSDK_NGX_Version InSDKVersion,
     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
-                                   [&]
-                                   {
-                                       return NgxCore_VULKAN_Init_ProjectID_Ext(
-                                           InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
-                                           InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion, InFeatureInfo,
-                                           false);
-                                   });
+    return NgxExportLifecycle::RunInitialization(
+        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
+        State::Instance().NVNGX_FeatureInfo_Paths,
+        [&]
+        {
+            return NgxCore_VULKAN_Init_ProjectID_Ext(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
+                                                     InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion,
+                                                     InFeatureInfo, false);
+        });
 }
 
 static NVSDK_NGX_Result NgxCore_VULKAN_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
@@ -472,13 +475,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
                                                      const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                                      NVSDK_NGX_Version InSDKVersion)
 {
-    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
-                                   [&]
-                                   {
-                                       return NgxCore_VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance,
-                                                                  InPD, InDevice, InGIPA, InGDPA, InFeatureInfo,
-                                                                  InSDKVersion, false);
-                                   });
+    return NgxExportLifecycle::RunInitialization(
+        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
+        State::Instance().NVNGX_FeatureInfo_Paths,
+        [&]
+        {
+            return NgxCore_VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
+                                       InGDPA, InFeatureInfo, InSDKVersion, false);
+        });
 }
 
 static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType,
@@ -538,14 +542,15 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
                                 VkDevice InDevice, PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
                                 NVSDK_NGX_Version InSDKVersion, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
-                                   [&]
-                                   {
-                                       return NgxCore_VULKAN_Init_ProjectID(InProjectId, InEngineType, InEngineVersion,
-                                                                            InApplicationDataPath, InInstance, InPD,
-                                                                            InDevice, InGIPA, InGDPA, InSDKVersion,
-                                                                            InFeatureInfo, false);
-                                   });
+    return NgxExportLifecycle::RunInitialization(
+        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
+        State::Instance().NVNGX_FeatureInfo_Paths,
+        [&]
+        {
+            return NgxCore_VULKAN_Init_ProjectID(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
+                                                 InInstance, InPD, InDevice, InGIPA, InGDPA, InSDKVersion,
+                                                 InFeatureInfo, false);
+        });
 }
 
 /**

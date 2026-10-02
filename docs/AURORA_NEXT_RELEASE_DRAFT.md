@@ -83,3 +83,5 @@ HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不�
 - If native initialization succeeds but replacement-provider initialization fails or throws, the selected native state is now retained for cleanup and barred from use until recovery. No native ownership is invented for absent backends, and unrelated explicitly identified devices remain usable. Local integrated checks pass; full Windows validation pending with the batch.
 
 - 初始化前检查 Runtime 路径列表结构，拒绝“长度非零但数组为空”或包含空指针的列表，避免在复制路径时崩溃；错误请求不会修改配置或进入 SDK。正常空列表和空字符串保持兼容。此项为本地聚焦测试结果，等待批次 Windows 构建。
+
+- 初始化整体失败或抛出异常时，恢复调用前的应用信息、ProjectID、日志配置与 Runtime 路径快照；只有成功才保留新配置。该改动不等于撤销 SDK 内部操作，初始化后半段的设备状态协调仍在收尾。已通过本地聚焦检查，等待整批 Windows 构建。
