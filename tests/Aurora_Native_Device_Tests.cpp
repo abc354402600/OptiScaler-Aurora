@@ -235,5 +235,39 @@ int main()
         check(initialize(dx, &absent) == 0);
         check(dx.Shutdown(&absent, 0, -7, success) == 0);
     }
+    NativeDeviceLifecycle combined;
+    for (bool throws : { false, true })
+    {
+        bool caught = false;
+        try
+        {
+            check(combined.CompleteProviderInitialization(&first, -7,
+                                                          [&]
+                                                          {
+                                                              if (throws)
+                                                                  throw std::runtime_error("provider");
+                                                              return -7;
+                                                          }) == -7);
+        }
+        catch (const std::runtime_error&)
+        {
+            caught = true;
+        }
+        check(caught == throws && !combined.AnyReady());
+        int cleanups = 0;
+        check(combined.Shutdown(&first, 0, -7,
+                                [&]
+                                {
+                                    ++cleanups;
+                                    return 0;
+                                }) == 0 &&
+              cleanups == 0);
+    }
+    check(combined.Initialize(&first, 0, -2, -7, [] { return 0; }) == 0);
+    for (int accepted : { 0, -1 })
+    {
+        check(combined.CompleteProviderInitialization(&first, -7, [&] { return accepted; }) == accepted);
+        check(combined.IsReady(&first)); // Success and absent optional provider keep native readiness.
+    }
     std::cout << "PASS: " << checks << " native device lifecycle checks\n";
 }

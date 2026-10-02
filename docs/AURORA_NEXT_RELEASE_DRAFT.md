@@ -79,3 +79,5 @@ HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不�
 - Native D3D12/Vulkan initialization failures retain cleanup ownership once the SDK was entered; retry/use is blocked until successful cleanup. Missing optional DLLs/exports and preparation failures remain retryable. Local focused checks pass; grouped full Windows validation is pending. This does not claim complete multi-backend configuration rollback.
 
 - A started replacement-provider initialization failure now reaches the caller as incomplete initialization, preventing false overall success and local ready/project publication. Absent providers and unsupported APIs retain optional fallback before any attempt. Local validation only until grouped Windows build.
+
+- If native initialization succeeds but replacement-provider initialization fails or throws, the selected native state is now retained for cleanup and barred from use until recovery. No native ownership is invented for absent backends, and unrelated explicitly identified devices remain usable. Local integrated checks pass; full Windows validation pending with the batch.

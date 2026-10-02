@@ -180,8 +180,13 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationI
 
     if (State::Instance().activeFgNvngx != FGNvngxReplacement::None)
     {
-        const auto providerInit =
-            Nvngx_FG::D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, &localFeatureInfo);
+        const auto providerInit = NVNGXProxy::CompleteDx12ProviderInit(
+            InDevice,
+            [&]
+            {
+                return Nvngx_FG::D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion,
+                                                &localFeatureInfo);
+            });
         if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
             return providerInit;
     }

@@ -825,6 +825,13 @@ class NVNGXProxy
     }
 
     static bool IsDx12DeviceInited(ID3D12Device* device) { return _dx12Devices.IsReady(device); }
+
+    template <typename Callback>
+    static NVSDK_NGX_Result CompleteDx12ProviderInit(ID3D12Device* device, Callback&& callback)
+    {
+        return _dx12Devices.CompleteProviderInitialization(device, NVSDK_NGX_Result_FAIL_NotInitialized,
+                                                           std::forward<Callback>(callback));
+    }
     static bool IsDx12Inited() { return _dx12Devices.AnyReady(); }
 
     static NVSDK_NGX_Result ShutdownDx12(ID3D12Device* device)
@@ -988,6 +995,13 @@ class NVNGXProxy
     }
 
     static bool IsVulkanDeviceInited(VkDevice device) { return _vulkanDevices.IsReady(device); }
+
+    template <typename Callback>
+    static NVSDK_NGX_Result CompleteVulkanProviderInit(VkDevice device, Callback&& callback)
+    {
+        return _vulkanDevices.CompleteProviderInitialization(device, NVSDK_NGX_Result_FAIL_NotInitialized,
+                                                             std::forward<Callback>(callback));
+    }
     static bool IsVulkanInited() { return _vulkanDevices.AnyReady(); }
 
     static NVSDK_NGX_Result ShutdownVulkan(VkDevice device)

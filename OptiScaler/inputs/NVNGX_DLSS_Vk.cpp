@@ -174,8 +174,13 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext2(unsigned long long InApplicatio
 
     if (State::Instance().activeFgInput == FGInput::NvngxFG)
     {
-        const auto providerInit = Nvngx_FG::VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD,
-                                                             InDevice, InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+        const auto providerInit = NVNGXProxy::CompleteVulkanProviderInit(
+            InDevice,
+            [&]
+            {
+                return Nvngx_FG::VULKAN_Init_Ext2(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
+                                                  InGIPA, InGDPA, InSDKVersion, &localFeatureInfo);
+            });
         if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
             return providerInit;
     }
@@ -298,8 +303,13 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext(unsigned long long InApplication
         }
     }
 
-    const auto providerInit = Nvngx_FG::VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD,
-                                                        InDevice, InSDKVersion, &localFeatureInfo);
+    const auto providerInit = NVNGXProxy::CompleteVulkanProviderInit(
+        InDevice,
+        [&]
+        {
+            return Nvngx_FG::VULKAN_Init_Ext(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
+                                             InSDKVersion, &localFeatureInfo);
+        });
     if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
         return providerInit;
 
@@ -440,8 +450,13 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init(unsigned long long InApplicationId, 
         }
     }
 
-    const auto providerInit = Nvngx_FG::VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice,
-                                                    InGIPA, InGDPA, &localFeatureInfo, InSDKVersion);
+    const auto providerInit = NVNGXProxy::CompleteVulkanProviderInit(
+        InDevice,
+        [&]
+        {
+            return Nvngx_FG::VULKAN_Init(InApplicationId, InApplicationDataPath, InInstance, InPD, InDevice, InGIPA,
+                                         InGDPA, &localFeatureInfo, InSDKVersion);
+        });
     if (providerInit == NVSDK_NGX_Result_FAIL_NotInitialized)
         return providerInit;
 

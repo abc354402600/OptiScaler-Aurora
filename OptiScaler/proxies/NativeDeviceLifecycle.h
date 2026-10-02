@@ -53,6 +53,34 @@ class NativeDeviceLifecycle
   public:
     bool AnyReady() const { return _usable.load(std::memory_order_acquire) != 0; }
 
+    // Caller holds the exported initialization writer across both backends.
+    // A failed second phase must not leave the native half usable. Retain its
+    // cleanup record without inventing ownership when native Init never ran.
+    template <typename Result, typename Callback>
+    Result CompleteProviderInitialization(const void* device, Result incomplete, Callback&& callback)
+    {
+        struct Completion
+        {
+            NativeDeviceLifecycle& owner;
+            const void* device;
+            bool accepted = false;
+            ~Completion()
+            {
+                if (accepted)
+                    return;
+                std::scoped_lock lock(owner._mutex);
+                if (const auto entry = owner._devices.find(device); entry != owner._devices.end())
+                    entry->second = false;
+                owner.UpdateUsable();
+            }
+        } completion { *this, device };
+        const auto result = std::forward<Callback>(callback)();
+        // Optional unavailability is allowed; an entered failure is normalized
+        // to incomplete by the provider ledger. Exceptions also invalidate.
+        completion.accepted = result != incomplete;
+        return result;
+    }
+
     bool IsReady(const void* device)
     {
         std::scoped_lock lock(_mutex);

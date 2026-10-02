@@ -5,6 +5,7 @@ from test_shutdown_routing import function
 ROOT=Path(__file__).resolve().parents[1]
 PRELUDE=r'''
 #include "proxies/NgxExportLifecycle.h"
+#include "proxies/NativeDeviceLifecycle.h"
 #include <functional>
 #include <cstring>
 #include <memory>
@@ -51,9 +52,12 @@ struct NativeCall{
  template<class...A>int operator()(A...){++nativeCalls;if(onNative)onNative();return nativeResult;}
 };
 struct NVNGXProxy{
+ inline static NativeDeviceLifecycle _dx12Devices,_vulkanDevices;
+ inline static bool useNativeLedger=false;
  static void* NVNGXModule(){return reinterpret_cast<void*>(1);}static void InitNVNGX(){}static void SetDx11Inited(bool){}
- template<class D,class C>static int RunDx12Init(D,C c){return c();}
- template<class D,class C>static int RunVulkanInit(D,C c){return c();}
+ template<class D,class C>static int RunDx12Init(D d,C c){return useNativeLedger?_dx12Devices.Initialize(d,0,-2,-7,c):c();}
+ template<class D,class C>static int RunVulkanInit(D d,C c){return useNativeLedger?_vulkanDevices.Initialize(d,0,-2,-7,c):c();}
+ // COMPLETION_HELPERS
  // NATIVE_GETTERS
 };
 struct Nvngx_FG{
@@ -95,6 +99,8 @@ def main():
     provider=sorted(set(re.findall(r'Nvngx_FG::((?:D3D12|VULKAN)_Init\w*)\(',allsource)))
     cpp=cpp.replace('// NATIVE_GETTERS','\n'.join('static NativeCall '+n+'(){return {};}' for n in native))
     header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
+    proxy=(ROOT/'OptiScaler/proxies/NVNGX_Proxy.h').read_text(encoding='utf-8')
+    cpp=cpp.replace('// COMPLETION_HELPERS','\n'.join(function(proxy,'template <typename Callback> static NVSDK_NGX_Result Complete'+api+'ProviderInit(') for api in ('Dx12','Vulkan')))
     cpp=cpp.replace('// LEDGER_HELPER',function(header,'template <typename Device, typename Callback>'))
     cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){auto call=[] {++providerCalls;if(onProvider)onProvider();return providerResult;};if(useLedger)return InitializeProvider(attempts,ready,&ledgerDevice,call);return call();}' for n in provider))
     cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
@@ -185,6 +191,33 @@ def main():
   Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
   check(routes[index]()==0&&Nvngx_FG::ready.size()==1);
  }
+ // Complete cores + native lifecycle + provider ledger in one executable.
+ // Native SDK/close and provider SDK/close remain deterministic stand-ins.
+ NVNGXProxy::useNativeLedger=true;
+ for(int index:providerRoutes)for(bool throws:{false,true}){
+  reset();Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
+  NVNGXProxy::_dx12Devices.Shutdown(nullptr,0,-7,[]{return 0;});
+  NVNGXProxy::_vulkanDevices.Shutdown(nullptr,0,-7,[]{return 0;});
+  auto& native=index<8?NVNGXProxy::_dx12Devices:NVNGXProxy::_vulkanDevices;
+  const void* selected=index<8?static_cast<void*>(&dx12):static_cast<void*>(&vk);
+  int unrelated=0;
+  check(native.Initialize(&unrelated,0,-2,-7,[]{return 0;})==0);
+  nativeResult=0;providerResult=-8;bool caught=false;
+  if(throws)onProvider=[]{throw 91;};
+  try{check(routes[index]()==-7);}catch(int e){caught=e==91;}
+  onProvider={};check(caught==throws);
+  check(!native.IsReady(selected)&&native.IsReady(&unrelated));
+  check(native.RunOperation(-7,[]{return 0;},selected)==-7);
+  check(native.RunOperation(-7,[]{return 0;})==-7);
+  check(native.RunOperation(-7,[]{return 11;},&unrelated)==11);
+  int before=nativeCalls,providerBefore=providerCalls;providerResult=0;
+  check(routes[index]()==-7&&nativeCalls==before&&providerCalls==providerBefore);
+  check(native.Shutdown(selected,0,-7,[]{return -8;})==-8&&!native.IsReady(selected));
+  int closes=0;check(native.Shutdown(selected,0,-7,[&]{++closes;return 0;})==0&&closes==1);
+  Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
+  check(routes[index]()==0&&native.IsReady(selected));
+ }
+ NVNGXProxy::useNativeLedger=false;
  std::cout<<"PASS: "<<checks<<" complete exported Init chain checks\n";
 }
 '''
