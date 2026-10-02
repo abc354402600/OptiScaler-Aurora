@@ -11,6 +11,7 @@ PRELUDE=r'''
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <unordered_set>
 #define NVSDK_NGX_API
 #define LOG_FUNC(...)
 #define LOG_INFO(...)
@@ -56,6 +57,10 @@ struct NVNGXProxy{
  // NATIVE_GETTERS
 };
 struct Nvngx_FG{
+ inline static bool useLedger=false;
+ inline static int ledgerDevice=0;
+ inline static std::unordered_set<int*> attempts,ready;
+ // LEDGER_HELPER
  // PROVIDER_METHODS
 };
 '''
@@ -89,7 +94,9 @@ def main():
     native=sorted(set(re.findall(r'NVNGXProxy::((?:D3D11|D3D12|VULKAN)_Init\w*)\(',allsource)))
     provider=sorted(set(re.findall(r'Nvngx_FG::((?:D3D12|VULKAN)_Init\w*)\(',allsource)))
     cpp=cpp.replace('// NATIVE_GETTERS','\n'.join('static NativeCall '+n+'(){return {};}' for n in native))
-    cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){++providerCalls;if(onProvider)onProvider();return providerResult;}' for n in provider))
+    header=(ROOT/'OptiScaler/framegen/nvngx/Nvngx_FG.h').read_text(encoding='utf-8')
+    cpp=cpp.replace('// LEDGER_HELPER',function(header,'template <typename Device, typename Callback>'))
+    cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){auto call=[] {++providerCalls;if(onProvider)onProvider();return providerResult;};if(useLedger)return InitializeProvider(attempts,ready,&ledgerDevice,call);return call();}' for n in provider))
     cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
     cpp+='std::vector<std::function<int()>> invalidRoutes={'+','.join(invalid_routes)+'};\n'
     cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
@@ -164,6 +171,20 @@ def main():
  reset();State::Instance().activeFgNvngx=FGNvngxReplacement::None;providerResult=-7;
  int before=providerCalls;check(routes[4]()==0&&routes[4]()==0&&providerCalls==before);
  providerResult=0;
+ // Actual ledger + actual exported cores: entered provider failure is not
+ // optional unavailability. Each route starts with isolated test bookkeeping.
+ Nvngx_FG::useLedger=true;
+ for(int index:providerRoutes)for(int failure:{-1,-8}) {
+  reset();Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
+  providerResult=failure;int projects=projectWrites,before=providerCalls;
+  check(routes[index]()==-7);
+  check(providerCalls==before+1&&Nvngx_FG::attempts.size()==1&&Nvngx_FG::ready.empty());
+  check(!State::Instance().nvngxDx12Inited&&!State::Instance().nvngxVkInited&&projectWrites==projects);
+  providerResult=0;check(routes[index]()==-7&&providerCalls==before+1);
+  // Simulate completed provider cleanup; actual cleanup is tested separately.
+  Nvngx_FG::attempts.clear();Nvngx_FG::ready.clear();
+  check(routes[index]()==0&&Nvngx_FG::ready.size()==1);
+ }
  std::cout<<"PASS: "<<checks<<" complete exported Init chain checks\n";
 }
 '''

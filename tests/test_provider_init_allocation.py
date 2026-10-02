@@ -41,7 +41,7 @@ int main(){
   try{result=Test::InitializeProvider(attempts,ready,&a,[&]{++calls;budget=0;if(sdkThrows)throw 17;return -8;});}
   catch(int){threw=true;}
   budget=-1;
-  check((sdkThrows?threw:result==-8)&&attempts.contains(&a)&&ready.empty());
+  check((sdkThrows?threw:result==-7)&&attempts.contains(&a)&&ready.empty());
   budget=0;result=Test::InitializeProvider(attempts,ready,&a,[&]{++calls;return 0;});budget=-1;
   check(result==-7&&calls==1); // No retry or allocation against unresolved state.
  }

@@ -81,7 +81,9 @@ class Nvngx_FG
         attempts.insert(device);
         const auto result = std::forward<Callback>(callback)();
         completion.succeeded = result == NVSDK_NGX_Result_Success;
-        return result;
+        // An entered provider is not an absent optional backend. Outer adapters
+        // must propagate incomplete initialization instead of accepting fallback.
+        return completion.succeeded ? result : NVSDK_NGX_Result_FAIL_NotInitialized;
     }
 
     static std::unique_ptr<IFGNvngx> createProvider();

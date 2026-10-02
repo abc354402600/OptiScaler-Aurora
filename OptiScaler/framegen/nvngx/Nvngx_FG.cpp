@@ -256,6 +256,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init(unsigned long long InApplicationId, const 
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
+    // Unsupported APIs are optional only before a provider Init attempt.
+    if (!_dx12InitAttempts.contains(InDevice) && !provider->isDx12Available())
+        return NVSDK_NGX_Result_Fail;
+
     return InitializeProvider(_dx12InitAttempts, _dx12InitReady, InDevice,
                               [&]
                               {
@@ -281,6 +285,10 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_Init_Ext(unsigned long long InApplicationId, co
     auto* provider = lookup.provider;
 
     if (!provider)
+        return NVSDK_NGX_Result_Fail;
+
+    // Unsupported APIs are optional only before a provider Init attempt.
+    if (!_dx12InitAttempts.contains(InDevice) && !provider->isDx12Available())
         return NVSDK_NGX_Result_Fail;
 
     return InitializeProvider(_dx12InitAttempts, _dx12InitReady, InDevice,
@@ -545,6 +553,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init(unsigned long long InApplicationId, const
     if (!provider)
         return NVSDK_NGX_Result_Fail;
 
+    // Unsupported APIs are optional only before a provider Init attempt.
+    if (!_vulkanInitAttempts.contains(InDevice) && !provider->isVulkanAvailable())
+        return NVSDK_NGX_Result_Fail;
+
     return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,
                               [&]
                               {
@@ -571,6 +583,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext(unsigned long long InApplicationId, c
     auto* provider = lookup.provider;
 
     if (!provider)
+        return NVSDK_NGX_Result_Fail;
+
+    // Unsupported APIs are optional only before a provider Init attempt.
+    if (!_vulkanInitAttempts.contains(InDevice) && !provider->isVulkanAvailable())
         return NVSDK_NGX_Result_Fail;
 
     return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,
@@ -600,6 +616,10 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_Init_Ext2(unsigned long long InApplicationId, 
     auto* provider = lookup.provider;
 
     if (!provider)
+        return NVSDK_NGX_Result_Fail;
+
+    // Unsupported APIs are optional only before a provider Init attempt.
+    if (!_vulkanInitAttempts.contains(InDevice) && !provider->isVulkanAvailable())
         return NVSDK_NGX_Result_Fail;
 
     return InitializeProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice,

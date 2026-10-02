@@ -30,6 +30,9 @@ SCENARIO = r'''
    Nvngx_FG::status=ProviderStatus::Unavailable;
    check(init(&a)==-1 && attempts.empty() && provider.inits==before);
    Nvngx_FG::status=ProviderStatus::Available;
+   provider.supportsDx=provider.supportsVk=false;
+   check(init(&a)==-1 && attempts.empty() && provider.inits==before);
+   provider.supportsDx=provider.supportsVk=true;
    {
      auto busy=Nvngx_FG::_calls.TryOperation();
      check(init(&a)==-7 && attempts.empty() && provider.inits==before);
@@ -55,7 +58,10 @@ SCENARIO = r'''
    check(close(&a)==0 && all()==0 && provider.calls==before);
    // Failed Init is still a cleanup obligation, not proof of readiness.
    provider.initCallback=[] { return -8; };
-   check(init(&a)==-8 && attempts.contains(&a));
+   check(init(&a)==-7 && attempts.contains(&a));
+   provider.supportsDx=provider.supportsVk=false;
+   check(init(&a)==-7 && attempts.contains(&a) && ready.empty());
+   provider.supportsDx=provider.supportsVk=true;
    before=provider.inits;
    check(!ready.contains(&a) && init(&a)==-7 && provider.inits==before);
    check(close(&a)==0 && attempts.empty());
