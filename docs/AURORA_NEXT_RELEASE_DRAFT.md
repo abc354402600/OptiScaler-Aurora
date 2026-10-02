@@ -81,3 +81,5 @@ HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不�
 - A started replacement-provider initialization failure now reaches the caller as incomplete initialization, preventing false overall success and local ready/project publication. Absent providers and unsupported APIs retain optional fallback before any attempt. Local validation only until grouped Windows build.
 
 - If native initialization succeeds but replacement-provider initialization fails or throws, the selected native state is now retained for cleanup and barred from use until recovery. No native ownership is invented for absent backends, and unrelated explicitly identified devices remain usable. Local integrated checks pass; full Windows validation pending with the batch.
+
+- 初始化前检查 Runtime 路径列表结构，拒绝“长度非零但数组为空”或包含空指针的列表，避免在复制路径时崩溃；错误请求不会修改配置或进入 SDK。正常空列表和空字符串保持兼容。此项为本地聚焦测试结果，等待批次 Windows 构建。

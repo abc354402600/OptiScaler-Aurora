@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <proxies/NgxExportLifecycle.h>
+#include <proxies/NgxInitValidation.h>
 #include <dlssnr/DlssNrFeature_Vk.h>
 #include "Util.h"
 #include "Config.h"
@@ -129,7 +130,7 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext2(unsigned long long InApplicatio
                                                  NVSDK_NGX_Version InSDKVersion,
                                                  const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -265,7 +266,7 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext(unsigned long long InApplication
                                                 NVSDK_NGX_Version InSDKVersion,
                                                 const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -338,7 +339,7 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID_Ext(
     PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA, NVSDK_NGX_Version InSDKVersion,
     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -412,7 +413,7 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init(unsigned long long InApplicationId, 
                                             const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                             NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -487,7 +488,7 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_ProjectID(const char* InProjectId, N
                                                       NVSDK_NGX_Version InSDKVersion,
                                                       const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();

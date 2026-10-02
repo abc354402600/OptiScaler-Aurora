@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 PRELUDE=r'''
 #include "proxies/NgxExportLifecycle.h"
 #include "proxies/NativeDeviceLifecycle.h"
+#include "proxies/NgxInitValidation.h"
 #include <functional>
 #include <cstring>
 #include <memory>
@@ -21,7 +22,7 @@ PRELUDE=r'''
 using NVSDK_NGX_Result=int;using NVSDK_NGX_Version=int;using NVSDK_NGX_EngineType=int;
 using VkInstance=void*;using VkPhysicalDevice=void*;using VkDevice=void*;
 using PFN_vkGetInstanceProcAddr=void*;using PFN_vkGetDeviceProcAddr=void*;
-struct ID3D11Device{};struct ID3D12Device{};struct NVSDK_NGX_FeatureCommonInfo{int LoggingInfo=0;};
+struct ID3D11Device{};struct ID3D12Device{};struct NVSDK_NGX_FeatureCommonInfo{int LoggingInfo=0;struct {const wchar_t* const* Path=nullptr;unsigned Length=0;} PathListInfo;};
 constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0,NVSDK_NGX_Result_FAIL_InvalidParameter=-2;
 constexpr int app_id_override=12;const char* project_id_override="override";
 void* vkGetInstanceProcAddr=nullptr;void* vkGetDeviceProcAddr=nullptr;
@@ -70,14 +71,15 @@ struct Nvngx_FG{
 '''
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');args=parser.parse_args()
-    cpp=PRELUDE;routes=[];invalid_routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
+    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');parser.add_argument('--negative-control',choices=['no-path-validation']);args=parser.parse_args()
+    cpp=PRELUDE;routes=[];path_routes=[];invalid_routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
         cpp+='\nnamespace '+api+'{\n'
         cpp+=('ID3D11Device* D3D11Device=nullptr;\n' if api=='Dx11' else 'ID3D12Device* D3D12Device=nullptr;\n' if api=='Dx12' else 'VkInstance vkInstance=nullptr;VkPhysicalDevice vkPD=nullptr;VkDevice vkDevice=nullptr;PFN_vkGetInstanceProcAddr vkGIPA=nullptr;PFN_vkGetDeviceProcAddr vkGDPA=nullptr;\n')
         for m in re.finditer(r'NVSDK_NGX_API NVSDK_NGX_Result\s+(NVSDK_NGX_\w+_Init\w*)\(',source):
             name=m.group(1);wrapper=function(source,m.group(0));core=function(source,'static NVSDK_NGX_Result NgxCore_'+name.removeprefix('NVSDK_NGX_')+'(')
+            if args.negative_control=='no-path-validation':core=core.replace(' || !ValidNgxInitPaths(InFeatureInfo)','')
             cpp+=core+'\n'+wrapper+'\n'
             signature=wrapper[:wrapper.index('{')];params=signature[signature.index('(')+1:signature.rfind(')')].split(',');values=[]
             for param in params:
@@ -87,6 +89,8 @@ def main():
                 elif '*' in param or re.search(r'\b(Vk\w+|PFN_\w+)\b',param):values.append('nullptr')
                 else:values.append('32')
             routes.append('[&]{return '+api+'::'+name+'('+','.join(values)+');}')
+            path_values=['&featureInfo' if 'InFeatureInfo' in param else value for param,value in zip(params,values)]
+            path_routes.append('[&]{return '+api+'::'+name+'('+','.join(path_values)+');}')
             invalid=[('nullptr' if v in ('&dx11','&dx12','&vk') else v) for v in values]
             invalid_routes.append('[&]{return '+api+'::'+name+'('+','.join(invalid)+');}')
             if api!='Dx11':
@@ -103,7 +107,8 @@ def main():
     cpp=cpp.replace('// COMPLETION_HELPERS','\n'.join(function(proxy,'template <typename Callback> static NVSDK_NGX_Result Complete'+api+'ProviderInit(') for api in ('Dx12','Vulkan')))
     cpp=cpp.replace('// LEDGER_HELPER',function(header,'template <typename Device, typename Callback>'))
     cpp=cpp.replace('// PROVIDER_METHODS','\n'.join('template<class...A>static int '+n+'(A...){auto call=[] {++providerCalls;if(onProvider)onProvider();return providerResult;};if(useLedger)return InitializeProvider(attempts,ready,&ledgerDevice,call);return call();}' for n in provider))
-    cpp+='int main(){ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
+    cpp+='int main(){NVSDK_NGX_FeatureCommonInfo featureInfo;ID3D11Device dx11;ID3D12Device dx12,otherDx12;int vk,otherVk;std::vector<std::function<int()>> routes={'+','.join(routes)+'};\n'
+    cpp+='std::vector<std::function<int()>> pathRoutes={'+','.join(path_routes)+'};\n'
     cpp+='std::vector<std::function<int()>> invalidRoutes={'+','.join(invalid_routes)+'};\n'
     cpp+='std::vector<int> failedProjectRoutes={'+','.join(map(str,failed_project_routes))+'};\n'
     cpp+='std::vector<int> providerRoutes={'+','.join(map(str,provider_routes))+'};std::vector<std::function<int()>> otherDeviceRoutes={'+','.join(other_device_routes)+'};\n'
@@ -121,6 +126,31 @@ def main():
   check(route()==0&&nativeCalls==before+1&&pathWrites==paths+1);onNative={};onProvider={};
   reset();bool threw=false;onNative=[]{throw 17;};
   try{route();}catch(int){threw=true;}onNative={};check(threw);reset();check(route()==0);
+ }
+
+
+ // Malformed path arrays must reject before all writes, including repeat Init.
+ const wchar_t* validPaths[]={L"C:\\游戏 空格",L""};
+ const wchar_t* nullFirst[]={nullptr,L"ok"};
+ const wchar_t* nullLast[]={L"ok",nullptr};
+ for(size_t i=0;i<pathRoutes.size();++i) {
+  for(bool alreadyReady:{false,true}) {
+   for(int malformed=0;malformed<3;++malformed) {
+    reset();if(alreadyReady)check(routes[i]()==0);
+    auto previous=State::Instance();
+    auto d11=Dx11::D3D11Device;auto d12=Dx12::D3D12Device;auto vd=Vk::vkDevice;
+    int native=nativeCalls,provider=providerCalls,paths=pathWrites,metadata=metadataWrites;
+    featureInfo.PathListInfo={malformed==0?nullptr:malformed==1?nullFirst:nullLast,2};
+    check(pathRoutes[i]()==-2);
+    check(nativeCalls==native&&providerCalls==provider&&pathWrites==paths&&metadataWrites==metadata);
+    check(State::Instance().nvngxDx11Inited==previous.nvngxDx11Inited&&State::Instance().nvngxDx12Inited==previous.nvngxDx12Inited&&State::Instance().nvngxVkInited==previous.nvngxVkInited);
+    check(State::Instance().currentD3D11Device==previous.currentD3D11Device&&State::Instance().currentD3D12Device==previous.currentD3D12Device&&State::Instance().currentVkDevice==previous.currentVkDevice);
+    check(d11==Dx11::D3D11Device&&d12==Dx12::D3D12Device&&vd==Vk::vkDevice);
+    featureInfo.PathListInfo={validPaths,2};check(pathRoutes[i]()==0);
+   }
+  }
+  // Empty arrays may have a null array pointer; empty strings are not rejected.
+  for(int empty=0;empty<2;++empty){reset();featureInfo.PathListInfo={empty?nullFirst:nullptr,0};check(pathRoutes[i]()==0);}
  }
 
  // Reject null devices before path/metadata publication, SDK calls or local state changes.

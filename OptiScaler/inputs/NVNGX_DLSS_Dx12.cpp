@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <proxies/NgxExportLifecycle.h>
+#include <proxies/NgxInitValidation.h>
 #include "Util.h"
 #include "Config.h"
 
@@ -130,7 +131,7 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationI
                                                ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -230,7 +231,7 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init(unsigned long long InApplicationId, c
                                            ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                            NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -300,7 +301,7 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_ProjectID(const char* InProjectId, NV
                                                      ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                      const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
@@ -377,7 +378,7 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_with_ProjectID(const char* InProjectI
                                                           const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                                           NVSDK_NGX_Version InSDKVersion, bool delegated)
 {
-    if (InDevice == nullptr)
+    if (InDevice == nullptr || !ValidNgxInitPaths(InFeatureInfo))
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     LOG_FUNC();
