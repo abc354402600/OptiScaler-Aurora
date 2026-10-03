@@ -1,95 +1,13 @@
-# Aurora 下一版发行准备（尚未发布）
+# Aurora v1.1 发布收尾
 
-本文件是待发布说明和同步清单，不代表版本已经合并或上线。2026-09-27 已核对远端正式版仍为 aurora-v1.0；nightly 是另一条预发布记录，不作为 Aurora 正式版本号。拟定下一正式版本为 Aurora v1.1，发布时再次核对标签是否可用。
+## 2026-10-03 发布范围冻结（取代此前无限扩展的收尾计划）
 
-## 发行简介草案
+用户要求尽快收尾。候选 v1.1 撤出 0492dae4（全局配置回滚）、853d92a2（配套设备发布重排）、01dae64f（Vulkan 查询池复用）三项尚未闭环的独立实验。原提交完整保留在 archive/compatibility-pre-release-scope-20261003（bc012e53）。这是代码撤回，不是把未完成事项标为完成；历史记录中这些实验的测试通过仅代表当时局部代码。
 
-本次 Aurora 更新重点改善帧生成相关的初始化、资源生命周期和关闭处理，并吸收经过单独审查的上游兼容性修复。保留 Aurora 原有 RTX 40 多帧生成路线、Streamline 1.x 保护及 DualFeature 策略。
+保留原生初始化失败清理责任、Provider 失败归一化及 native-success/provider-failure 隔离、路径结构预检、已知未就绪 Provider 调用保护、HUD/深度局部防护、Vulkan 查询结果检查和 310.9.1/2.14.1 运行库。外层后段异常完整回滚、GPU 提交退役与自动重建延后，发行说明公开边界；不再把这些较大改造持续加进本批。
 
-本版以源码审查、故障注入、专项回归和完整 Windows 构建作为验证依据。代理未进行真实游戏/GPU 验证。2026-09-30 用户已提供巫师3 RTX 4080 Laptop / DLSSG 310.9.1 / 6X 的正常运行反馈；这项证据仅覆盖该用户场景，不承诺所有游戏闪退或画面异常均已解决。
+当前发布门槛：最终保留代码专项回归、完整 Windows DLL/清单/打包通过、主分支提交与正式标签一致。未通过前不发布。实机验证按用户要求不作为本批前置；不宣称已证实所有游戏崩溃修复。最终构建和发布结果随后记录。
 
-## 已落地的主要改进
+公开发行文案以 [RELEASE_NOTES_AURORA_V1_1.md](RELEASE_NOTES_AURORA_V1_1.md) 为准。旧阶段记录保留在 CODEX_HANDOFF.md / NGX_EXPORTED_TRANSITIONS_20260927.md 和 Git 历史，不能将撤回实验继续列为当前特性。
 
-- 帧生成输入保护：对捕获帧、调度帧、呈现阶段及 Reflex 状态增加检查，输入无效时暂停相关插帧操作，避免继续消费失配的帧资源。
-- 初始化和关闭：区分成功初始化与失败后的清理责任；按 API/设备管理状态；拒绝冲突的对外初始化与关闭；避免 SDK 回调被误当成内部委托。修正全局初始化标记绕过 Provider 状态、以及部分路径跳过第二设备初始化的问题。让 UpdateFeature 配置更新与原生初始化读取互斥，避免调用期间混用路径和应用配置。拒绝空设备初始化的提前写入，并修正 D3D12 项目配置在初始化失败时仍被提交的问题。
-- 资源和句柄生命周期：修复创建失败、发布失败、重复释放及关闭时仍有活动资源的处理；保留无法完成的清理责任，允许有明确所有权的后续重试。
-- Streamline 与接口兼容：完善设备选择后的私有 Streamline 绑定、失败结果检查及类型正确的 DXGI 转发，保留游戏原生 SL1 的既定保护。
-- 精选上游修复：加入旧 UE Runtime 路径查找、空资源与格式分类检查、HUD 拷贝边界和资源状态处理，以及已审查的游戏兼容规则。
-- 构建与维护：增量格式检查、可追溯构建信息和初始化/关闭故障测试，减少无关的构建依赖更新。
-
-这些条目对应兼容性分支已经提交的代码，不意味着全部上游和 fork 改动均已移植。未审完的大型资源跟踪、输入系统及 Vulkan 改写不应列为本版功能。
-
-## 游戏表现与限制
-
-- 巫师3：已针对失配帧、Reflex 失败、初始化和释放路径进行代码修复；本轮没有实测读图、动态 MFG 切换、6X 切换或轻微闪烁是否消失。不得写成“巫师3闪退已彻底修复”。
-- 绝区零：现有组件异常 11008 和文件消失反馈缺少可对应的版本及日志，不能宣称已修复，也不能直接归因为某种拦截机制。
-- 原神/崩铁：已有兼容性调查和通用生命周期修复；桥接工具自身改动与 Aurora 的改动应分开描述，不宣称覆盖全部桥接环境。
-- 异环菜单：驱动 Profile Inspector 设置属于社区反馈的缓解办法，Aurora 不会自动修改全局驱动配置；菜单观感改善不等于已确认恢复 6X。
-- 未做性能实测，不给出帧率提升百分比或“绝无回退”保证。
-
-## 发布前需要完成的代码项
-
-- 联合处理外层 Init、原生/Provider admission 以及路径/配置提交，覆盖已经进入但仅部分成功的失败情况。
-- 收尾普通 Evaluate 共享 HUD/深度资源的并发、设备归属和释放边界。
-- 对最终合并候选运行受影响检查与完整 Windows DLL/打包构建，记录准确提交和构建产物。用户已明确不做实机验证，无需再次索取此项确认。
-
-## 合并与发布时同步
-
-1. 核对远端 aurora 和 Compatibility-fixes 的实际提交，保留已有提交历史，不强推。
-2. 在最终版本确定后同步 resource.h 的 Aurora 版本和 fork 标识；核对打包脚本与 Actions 使用的名称。
-3. 同步根 README 的版本徽章、简介、下载链接、Release Notes 链接和兼容性描述；同步 dist/README.md 与 Changelog.md，避免包内外说明不一致。
-4. 使用最终 aurora 提交对应的构建产物创建新标签/Release 并上传新包，填写上述简介、实际改动、验证范围和已知限制。保留旧版 Release 及其下载资产。
-5. 读回核对 Release 标签指向、资产名称/大小/校验信息及下载链接；未成功上传不能标记发布完成。
-
-最新用户指令已授权成熟后直接合并、发布及更新介绍，无需额外确认。此文件不是发布开关，尚未完成的代码项不能仅通过文案改为“完成”。
-
-## 当前发布链路核对
-
-2026-09-27：`just_build_no_signature.yml` 是当前 Aurora 完整构建、兼容性检查、打包及 Actions 产物上传链路；它尚未创建正式 Release。`build.yml` / `test.yml` 中已有的是 nightly 发布逻辑，不能把下一版 Aurora 正式包上传到 nightly 来代替正式发布。正式发布前补齐或使用面向 Aurora 标签的发布路径，确保它消费最终通过检查的 Aurora 产物和独立版本说明，不覆盖旧正式版。当前本机未发现 gh CLI，已连接 GitHub 工具未暴露 Release 写入/资产上传方法；可以利用受仓库授权的 GitHub Actions 发布阶段，不应为此读取或展示本机凭据。
-
-## 2026-09-30 运行库更新
-
-> **兼容性分支更新（2026-09-30）**：构建包已升级至 DLSS SR/RR/FG 310.9.1、Streamline 2.14.1 及配套文件，并防止 Runtime Sync 降级游戏内较新版本。用户已反馈巫师3 RTX 4080 Laptop / 6X 实测正常；这不代表所有游戏或全部切换场景均已验证。可选 Neural Rendering 组件保持原版本。既有 v1.0 Release 资产尚未更新。
-
-## 2026-09-30 稳定性补充
-
-- 原生 NGX 关闭失败或抛异常后，保留清理记录，但暂停受影响设备的普通调用，避免把可能已部分释放的状态重新当作就绪；关闭成功后才能重新初始化。没有明确设备归属的旧接口采取保守阻止策略。
-- 可选深度复制准备失败时保留游戏原始深度，不再因旧缓冲指针仍非空而继续复制。该功能默认关闭。
-
-这两项修复分别针对已复现的 CPU 调用顺序问题，不表示共享 GPU 缓冲生命周期或所有游戏闪退已全部解决。后续专项验证范围见 NGX_EXPORTED_TRANSITIONS_20260927.md。
-## 2026-10-01 HUD 失败恢复
-
-HUD 修正路径在常量缓冲准备失败时，现在会恢复已经改变的三个资源状态，再返回失败。此前提前返回会把游戏资源留在临时状态，影响后续使用。新增实际 Dispatch 函数体测试覆盖 9 种传入状态组合及失败后重试，共 225 条断言；不将该 CPU 测试当作 GPU 并发与执行完成验证。
-## 2026-10-01 HUD 尺寸／格式变化保护
-
-HUD 内部缓冲与当前画面的尺寸、格式、子资源或采样参数不一致时，跳过本次 HUD 修正，避免继续执行不兼容的整资源复制。保留旧缓冲，不在未确认 GPU 完成的情况下直接释放。NGX/FSR 调用路径仍继续帧生成。
-
-这是安全保护，不是完整的自动重建：新参数持续存在时，HUD 修正会保持跳过，直到可用上下文重建或进程重启；安全自动重建及 GPU 完成跟踪仍在完善。测试扩展为 345 条状态与重试断言。
-## 2026-10-01 HUD 设备归属与 CPU 并发
-
-- HUD 修正前检查命令列表、输入资源和内部缓冲的设备归属；无法确认或不一致时跳过可选修正，保留原始帧生成流程。
-- 同一个 HUD 对象的 CPU Dispatch 不再允许并发或重入改写缓冲、描述符及计数状态。采用非等待保护，避免在外部回调中相互等待。
-- NGX 共享 HUD 对象改为完整构造后一次发布，防止首次调用时重复创建／替换；从当前命令列表查询设备，不再依赖全局当前设备。
-
-这是 CPU 调用与发布保护，不表示 GPU 已完成此前提交的工作。跨设备自动重建、GPU 常量／描述符复用和资源退役仍需单独完善。
-- HUD initialization failures no longer permanently disable the optional HUD pass through a cached unready context; early-return partial shader allocations are reclaimed before retry. CPU ownership checks cover failed/ready context teardown and later retry; real GPU allocation-failure recovery remains unverified.
-
-- Local depth-copy batch: validate the actual command-list device and resource descriptors before copying; retain incompatible allocations instead of releasing potentially active GPU resources, reject self-copy, and protect optional copy state from CPU reentry/concurrency. This is bounded protection, not automatic resize recovery or proven GPU retirement. Pending grouped Windows build before publication.
-
-- Native D3D12/Vulkan initialization failures retain cleanup ownership once the SDK was entered; retry/use is blocked until successful cleanup. Missing optional DLLs/exports and preparation failures remain retryable. Local focused checks pass; grouped full Windows validation is pending. This does not claim complete multi-backend configuration rollback.
-
-- A started replacement-provider initialization failure now reaches the caller as incomplete initialization, preventing false overall success and local ready/project publication. Absent providers and unsupported APIs retain optional fallback before any attempt. Local validation only until grouped Windows build.
-
-- If native initialization succeeds but replacement-provider initialization fails or throws, the selected native state is now retained for cleanup and barred from use until recovery. No native ownership is invented for absent backends, and unrelated explicitly identified devices remain usable. Local integrated checks pass; full Windows validation pending with the batch.
-
-- 初始化前检查 Runtime 路径列表结构，拒绝“长度非零但数组为空”或包含空指针的列表，避免在复制路径时崩溃；错误请求不会修改配置或进入 SDK。正常空列表和空字符串保持兼容。此项为本地聚焦测试结果，等待批次 Windows 构建。
-
-- 初始化整体失败或抛出异常时，恢复调用前的应用信息、ProjectID、日志配置与 Runtime 路径快照；只有成功才保留新配置。该改动不等于撤销 SDK 内部操作，初始化后半段的设备状态协调仍在收尾。已通过本地聚焦检查，等待整批 Windows 构建。
-
-- 延后 D3D12/Vulkan 当前设备及就绪标记的写入：Hook、输入或计时准备异常时，保留原有本地设备状态，避免留下新旧设备混合的标记。失败注入覆盖首次初始化、切换设备和重试；SDK 内部副作用的清理协调仍在完善。
-
-- Vulkan 耗时统计不再使用尚未就绪或失败的 GPU 查询输出；跳过无效样本，不增加 GPU 等待。耗时记录写入异常时自动释放互斥锁，避免统计线程后续被锁住。查询池生命周期与跨提交复用仍需完善，此项不代表巫师3 DX12 闪退已获验证。
-
-- Vulkan 可选计时池仅在创建成功后启用；同一设备重复初始化复用原池，其他设备暂时停用这项统计，避免覆盖尚未确认 GPU 已使用完的旧资源。补充空参数、错误设备读取与失败重试保护。此项仍不代表完整的跨设备计时或资源退役支持。
-
-- 替换组件已知处于初始化未完成／关闭失败状态时，拒绝继续 Create／Evaluate，防止重复初始化被拒绝却仍能执行帧生成；Release 保持可用以便清理。明确属于其他正常设备的调用不受影响，无法确定设备归属的旧版 Vulkan 调用采用保守拒绝。
+正式发布流程：最终候选通过 Windows 构建后同步 aurora；显式 aurora-v1.1 标签触发再次验证并上传新包、SHA256 和独立版本说明。保留 v1.0 和 Runtime 依赖资产。

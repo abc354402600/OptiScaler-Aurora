@@ -1,3 +1,9 @@
+# Aurora v1.1
+
+DLSS SR/RR/FG 310.9.1、Streamline 2.14.1、运行库防降级与兼容性修复。
+
+完整改动、验证范围及未解决限制见 [Aurora v1.1 版本说明](docs/RELEASE_NOTES_AURORA_V1_1.md)。不包含 RC3 安装器或尚未闭环的全局初始化回滚实验。
+
 ## Release and Build Change Log (Newest to Oldest)
 
 ## v0.7.8

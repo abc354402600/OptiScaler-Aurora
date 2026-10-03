@@ -1,4 +1,4 @@
-> **兼容性分支更新（2026-09-30）**：构建包已升级至 DLSS SR/RR/FG 310.9.1、Streamline 2.14.1 及配套文件，并防止 Runtime Sync 降级游戏内较新版本。用户已反馈巫师3 RTX 4080 Laptop / 6X 实测正常；这不代表所有游戏或全部切换场景均已验证。可选 Neural Rendering 组件保持原版本。既有 v1.0 Release 资产尚未更新。
+> **Aurora v1.1**：DLSS SR/RR/FG 310.9.1、Streamline 2.14.1、运行库防降级，以及初始化、释放和资源访问保护。保留 SL1 与默认 DualFeature=false。详见 [版本说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1)；未承诺所有游戏闪退均已解决。
 
 # OptiScaler, y4my4my4m fork
 

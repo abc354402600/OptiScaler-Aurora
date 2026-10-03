@@ -203,13 +203,13 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationI
     LOG_INFO("SDK: {0:x}", (unsigned int) InSDKVersion);
     LOG_INFO(L"InApplicationDataPath {0}", std::wstring(InApplicationDataPath));
 
-    // Preparation may throw. Publish local device state only after it completes.
-    D3D12Hooks::HookDevice(InDevice);
-    UpscalerInputsDx12::Init(InDevice);
-
     D3D12Device = InDevice;
     State::Instance().currentD3D12Device = InDevice;
+    D3D12Hooks::HookDevice(InDevice);
+
     State::Instance().nvngxDx12Inited = true;
+
+    UpscalerInputsDx12::Init(InDevice);
 
     return NVSDK_NGX_Result_Success;
 }
@@ -219,14 +219,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_Ext(unsigned long long InApp
                                                         NVSDK_NGX_Version InSDKVersion,
                                                         const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::RunInitialization(
-        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
-        State::Instance().NVNGX_FeatureInfo_Paths,
-        [&]
-        {
-            return NgxCore_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice, InSDKVersion, InFeatureInfo,
-                                          false);
-        });
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_Ext(InApplicationId, InApplicationDataPath, InDevice,
+                                                                     InSDKVersion, InFeatureInfo, false);
+                                   });
 }
 
 static NVSDK_NGX_Result NgxCore_D3D12_Init(unsigned long long InApplicationId, const wchar_t* InApplicationDataPath,
@@ -290,14 +288,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init(unsigned long long InApplica
                                                     const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
                                                     NVSDK_NGX_Version InSDKVersion)
 {
-    return NgxExportLifecycle::RunInitialization(
-        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
-        State::Instance().NVNGX_FeatureInfo_Paths,
-        [&]
-        {
-            return NgxCore_D3D12_Init(InApplicationId, InApplicationDataPath, InDevice, InFeatureInfo, InSDKVersion,
-                                      false);
-        });
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init(InApplicationId, InApplicationDataPath, InDevice,
+                                                                 InFeatureInfo, InSDKVersion, false);
+                                   });
 }
 
 static NVSDK_NGX_Result NgxCore_D3D12_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType InEngineType,
@@ -366,14 +362,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_ProjectID(const char* InProj
                                                               ID3D12Device* InDevice, NVSDK_NGX_Version InSDKVersion,
                                                               const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo)
 {
-    return NgxExportLifecycle::RunInitialization(
-        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
-        State::Instance().NVNGX_FeatureInfo_Paths,
-        [&]
-        {
-            return NgxCore_D3D12_Init_ProjectID(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
-                                                InDevice, InSDKVersion, InFeatureInfo, false);
-        });
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_ProjectID(InProjectId, InEngineType, InEngineVersion,
+                                                                           InApplicationDataPath, InDevice,
+                                                                           InSDKVersion, InFeatureInfo, false);
+                                   });
 }
 
 // Not sure about this one, original nvngx does not export this method
@@ -406,14 +401,13 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_Init_with_ProjectID(
     const wchar_t* InApplicationDataPath, ID3D12Device* InDevice, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo,
     NVSDK_NGX_Version InSDKVersion)
 {
-    return NgxExportLifecycle::RunInitialization(
-        NVSDK_NGX_Result_FAIL_NotInitialized, NVSDK_NGX_Result_Success, State::Instance().NVNGX_Init,
-        State::Instance().NVNGX_FeatureInfo_Paths,
-        [&]
-        {
-            return NgxCore_D3D12_Init_with_ProjectID(InProjectId, InEngineType, InEngineVersion, InApplicationDataPath,
-                                                     InDevice, InFeatureInfo, InSDKVersion, false);
-        });
+    return NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,
+                                   [&]
+                                   {
+                                       return NgxCore_D3D12_Init_with_ProjectID(
+                                           InProjectId, InEngineType, InEngineVersion, InApplicationDataPath, InDevice,
+                                           InFeatureInfo, InSDKVersion, false);
+                                   });
 }
 
 #pragma endregion

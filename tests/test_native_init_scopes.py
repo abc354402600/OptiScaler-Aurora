@@ -13,8 +13,6 @@ from test_shutdown_routing import function
 ROOT=Path(__file__).resolve().parents[1]
 PRELUDE=r'''
 #include "proxies/NgxExportLifecycle.h"
-#include "proxies/NgxInitMetadata.h"
-#include "proxies/NgxPathSnapshot.h"
 #include <functional>
 #include <future>
 #include <chrono>
@@ -27,8 +25,7 @@ using NVSDK_NGX_Result=int;using NVSDK_NGX_Version=int;using NVSDK_NGX_EngineTyp
 using VkInstance=void*;using VkPhysicalDevice=void*;using VkDevice=void*;
 using PFN_vkGetInstanceProcAddr=void*;using PFN_vkGetDeviceProcAddr=void*;
 struct ID3D11Device{};struct ID3D12Device{};struct NVSDK_NGX_FeatureCommonInfo{};
-constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0;
-struct State {NgxInitMetadata<int,int,int> NVNGX_Init{0,0};NgxPathCache NVNGX_FeatureInfo_Paths;static State& Instance(){static State s;return s;}};
+constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7;
 int checks=0,calls=0,last=-1;std::function<int()> callback;
 void check(bool ok){if(!ok){std::cerr<<"Export admission check "<<checks+1<<" failed\n";std::exit(2);}++checks;}
 int CoreCalled(int id,bool delegated=false){check(!delegated);++calls;last=id;return callback?callback():31;}

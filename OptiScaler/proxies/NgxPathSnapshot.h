@@ -40,14 +40,6 @@ class NgxPathCache
     NgxPathSnapshot::Owner _snapshot;
 
   public:
-    // Only restore a snapshot captured under the exported initialization writer.
-    // Existing readers keep their immutable owners; restoration allocates nothing.
-    void Restore(NgxPathSnapshot::Owner snapshot)
-    {
-        std::scoped_lock lock(_mutex);
-        _snapshot = std::move(snapshot);
-    }
-
     NgxPathSnapshot::Owner Read()
     {
         std::scoped_lock lock(_mutex);

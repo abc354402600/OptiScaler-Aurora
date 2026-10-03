@@ -1,4 +1,4 @@
-> **兼容性分支更新（2026-09-30）**：构建包已升级至 DLSS SR/RR/FG 310.9.1、Streamline 2.14.1 及配套文件，并防止 Runtime Sync 降级游戏内较新版本。用户已反馈巫师3 RTX 4080 Laptop / 6X 实测正常；这不代表所有游戏或全部切换场景均已验证。可选 Neural Rendering 组件保持原版本。既有 v1.0 Release 资产尚未更新。
+> **Aurora v1.1**：DLSS SR/RR/FG 310.9.1、Streamline 2.14.1、运行库防降级，以及初始化、释放和资源访问保护。保留 SL1 与默认 DualFeature=false。详见 [版本说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1)；未承诺所有游戏闪退均已解决。
 
 <div align="center">
 
@@ -7,10 +7,10 @@
 **RTX 40 Multi Frame Generation · DLSS Neural Rendering · Automatic Runtime Sync**  
 **RTX 40 多帧生成 · DLSS 神经渲染 · 自动运行库同步**
 
-[![Aurora v1.0](https://img.shields.io/badge/Aurora-v1.0-7c3aed?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.0)
+[![Aurora v1.1](https://img.shields.io/badge/Aurora-v1.1-7c3aed?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1)
 [![RTX 40 MFG](https://img.shields.io/badge/RTX%2040%20MFG-Up%20to%206X-76B900?style=for-the-badge&logo=nvidia&logoColor=white)](https://github.com/abc354402600/OptiScaler-Aurora)
-[![DLSS](https://img.shields.io/badge/DLSS-310.9-00AEEF?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora)
-[![Streamline](https://img.shields.io/badge/Streamline-2.14-2563eb?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora)
+[![DLSS](https://img.shields.io/badge/DLSS-310.9.1-00AEEF?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora)
+[![Streamline](https://img.shields.io/badge/Streamline-2.14.1-2563eb?style=for-the-badge)](https://github.com/abc354402600/OptiScaler-Aurora)
 
 [![DLSS Neural Rendering](https://img.shields.io/badge/DLSS%20Neural%20Rendering-310.8-8b5cf6?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora)
 [![Runtime Sync](https://img.shields.io/badge/Runtime%20Sync-Auto%20Backup%20%7C%20Repair%20%7C%20Restore-16a34a?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora)
@@ -18,10 +18,10 @@
 
 <br>
 
-<a href="https://github.com/abc354402600/OptiScaler-Aurora/releases/download/aurora-v1.0/OptiScaler_Aurora_v1.0_20260910.7z">
-  <img src="https://img.shields.io/badge/⬇%20Download-Aurora%20v1.0-22c55e?style=for-the-badge" alt="Download Aurora v1.0">
+<a href="https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1">
+  <img src="https://img.shields.io/badge/⬇%20Download-Aurora%20v1.1-22c55e?style=for-the-badge" alt="Download Aurora v1.1">
 </a>
-<a href="https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.0">
+<a href="https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1">
   <img src="https://img.shields.io/badge/Release%20Notes-版本说明-334155?style=for-the-badge" alt="Release Notes">
 </a>
 
@@ -32,18 +32,18 @@
 **Aurora focuses on three things: better RTX 40 MFG compatibility, lower-cost DLSS Neural Rendering, and a much easier installation workflow.**  
 **Aurora 主要解决三件事：更好的 RTX 40 多帧生成兼容性、更低开销的 DLSS 神经渲染，以及更省事的自动化安装流程。**
 
-> **Aurora v1.0 = RTX 40 MFG + DLSS Neural Rendering + DLSS 310.9 + Streamline 2.14 + Automatic Runtime Sync**  
-> **极光版 v1.0 = RTX 40 多帧生成 + DLSS 神经渲染 + DLSS 310.9 + Streamline 2.14 + 自动运行库同步**
+> **Aurora v1.1 = RTX 40 MFG + DLSS Neural Rendering + DLSS 310.9.1 + Streamline 2.14.1 + Automatic Runtime Sync**
+> **极光版 v1.1 = RTX 40 多帧生成 + DLSS 神经渲染 + DLSS 310.9.1 + Streamline 2.14.1 + 自动运行库同步**
 
 ---
 
 ## Why Aurora? / 极光版有什么不同？
 
-| Feature / 功能 | Aurora v1.0 |
+| Feature / 功能 | Aurora v1.1 |
 |---|---|
 | RTX 40 Multi Frame Generation | ✅ Up to **6X** tested / 已验证最高 **6X** |
-| DLSS Runtime | ✅ **310.9** |
-| Bundled Streamline Runtime / 集成 Streamline 运行库 | ✅ **2.14** |
+| DLSS Runtime | ✅ **310.9.1** |
+| Bundled Streamline Runtime / 集成 Streamline 运行库 | ✅ **2.14.1** |
 | DLSS Neural Rendering | ✅ **310.8** |
 | Adjustable NR model resolution | ✅ 可调神经渲染模型分辨率 |
 | Automatic DLSS / Streamline sync | ✅ 自动同步 |
@@ -90,9 +90,9 @@ Aurora 已集成 **DLSS Neural Rendering 310.8** 运行库，并支持调节神�
 
 Current bundled NVIDIA runtimes / 当前集成 NVIDIA 运行库：
 
-- **DLSS 310.9**
+- **DLSS 310.9.1**
 - **DLSS Neural Rendering 310.8**
-- **Streamline 2.14**
+- **Streamline 2.14.1**
 
 > [!NOTE]
 > **DLSS Neural Rendering is experimental and game-dependent.**  
@@ -293,7 +293,7 @@ Aurora Runtime Sync v1.3 会自动识别并保护这些 SL1 文件，不再使�
 Verified configuration / 已验证配置：
 
 - Proxy: `dxgi.dll`
-- DLSS 310.9: ✅
+- DLSS 310.9.1: ✅
 - DLSS Neural Rendering: ✅
 - RTX 40 Multi Frame Generation: ✅ **2X–6X**
 - Game-native Streamline 1.5.6 protection: ✅

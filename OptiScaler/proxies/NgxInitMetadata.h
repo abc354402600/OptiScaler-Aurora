@@ -47,14 +47,6 @@ template <typename Version, typename Engine, typename Logging> class NgxInitMeta
         _snapshot = std::move(initial);
     }
 
-    // Only restore a snapshot captured under the exported initialization writer.
-    // Existing readers keep their immutable owners; restoration allocates nothing.
-    void Restore(Owner snapshot)
-    {
-        std::scoped_lock lock(_mutex);
-        _snapshot = std::move(snapshot);
-    }
-
     Owner Read()
     {
         std::scoped_lock lock(_mutex);
