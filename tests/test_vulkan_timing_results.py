@@ -27,6 +27,8 @@ struct Samples {
 };
 struct State {Mutex frameTimeMutex;Samples upscaleTimes;static State& Instance(){static State s;return s;}};
 struct UpscalerTimeVk {
+ static inline VkDevice _device=nullptr;
+ static inline bool _enabled=true;
  static inline VkQueryPool _queryPool=nullptr;
  static inline double _timeStampPeriod=1;
  static inline bool _vkUpscaleTrig=false;
@@ -43,7 +45,7 @@ int vkGetQueryPoolResults(VkDevice device,VkQueryPool pool,int first,int count,s
 // BODY
 int main(){
  int device,pool;
- UpscalerTimeVk::_queryPool=&pool;
+ UpscalerTimeVk::_queryPool=&pool;UpscalerTimeVk::_device=&device;
  auto& state=State::Instance();
  auto read=[&]{UpscalerTimeVk::_vkUpscaleTrig=true;UpscalerTimeVk::ReadUpscalingTime(&device);};
  auto original=state.upscaleTimes.values;
