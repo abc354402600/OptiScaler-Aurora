@@ -26,9 +26,11 @@ $assetName = [IO.Path]::GetFileName($Archive)
 "$hash  $assetName" | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ascii
 
 # Never replace published assets. A failed upload can resume its draft only.
-$existing = & gh release view $tag --repo $repo --json isDraft
-if ($LASTEXITCODE -eq 0) {
-    if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Release already published; refusing asset replacement.' }
+$releaseList = & gh api "repos/$repo/releases?per_page=100"
+if ($LASTEXITCODE) { throw 'Cannot inspect existing releases.' }
+$existing = @($releaseList | ConvertFrom-Json | Where-Object { $_.tag_name -eq $tag })
+if ($existing.Count -gt 0) {
+    if ($existing.Count -ne 1 -or -not $existing[0].draft) { throw 'Release already published; refusing asset replacement.' }
     & gh release edit $tag --repo $repo --title 'OptiScaler Aurora v1.1' --notes-file docs/RELEASE_NOTES_AURORA_V1_1.md
     if ($LASTEXITCODE) { throw 'Draft notes update failed.' }
 } else {

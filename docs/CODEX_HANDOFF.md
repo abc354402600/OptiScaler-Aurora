@@ -1,3 +1,11 @@
+## 2026-10-03 v1.1 最终候选构建通过
+
+候选 ae860411971da9757e249a9f7736d0a7185b1c8e：Windows run 37134428438 / job 111235931619、format run 37134428436 全部成功。完整 DLL、16 项 Runtime SHA256（源码及包内）、17 项防降级、全部配置的兼容性测试、7z 完整性和上传通过。重点断言包括 Init 完整链 1438、admission 590、native lifecycle 107、HUD publication 1168、HUD Dispatch 564、Provider API 81。相对原 aurora 的 86 个修改 C/C++ 文件也通过增量格式检查。
+
+候选 Artifact：OptiScaler_Aurora_v1.1_20261003_compat_ae860411.7z，id 11277851934，219580926 bytes，Actions digest sha256:276688d04a039fc2d997938ed31309ae189383db9554729abdc99f21829293ae（不是独立下载后的内层归档校验值）。
+
+候选后的唯一功能变更限于正式发布脚本：用成功返回的 Release 列表识别首次发布，避免将预期 404 当作 Windows PowerShell 错误；脚本 new/draft/published/branch 四种模拟检查通过，未触碰 DLL 源码。随后将本提交快进同步 aurora 并打 aurora-v1.1 标签；标签工作流必须再次完整构建通过后才发布。最终发布结果以该标签工作流及 GitHub Release 读回为准，不将此记录单独视为已上传证明。
+
 ## 2026-10-03 发布范围冻结（取代此前无限扩展的收尾计划）
 
 用户要求尽快收尾。候选 v1.1 撤出 0492dae4（全局配置回滚）、853d92a2（配套设备发布重排）、01dae64f（Vulkan 查询池复用）三项尚未闭环的独立实验。原提交完整保留在 archive/compatibility-pre-release-scope-20261003（bc012e53）。这是代码撤回，不是把未完成事项标为完成；历史记录中这些实验的测试通过仅代表当时局部代码。
