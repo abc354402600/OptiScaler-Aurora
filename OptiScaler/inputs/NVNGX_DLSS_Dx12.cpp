@@ -203,13 +203,13 @@ static NVSDK_NGX_Result NgxCore_D3D12_Init_Ext(unsigned long long InApplicationI
     LOG_INFO("SDK: {0:x}", (unsigned int) InSDKVersion);
     LOG_INFO(L"InApplicationDataPath {0}", std::wstring(InApplicationDataPath));
 
+    // Preparation may throw. Publish local device state only after it completes.
+    D3D12Hooks::HookDevice(InDevice);
+    UpscalerInputsDx12::Init(InDevice);
+
     D3D12Device = InDevice;
     State::Instance().currentD3D12Device = InDevice;
-    D3D12Hooks::HookDevice(InDevice);
-
     State::Instance().nvngxDx12Inited = true;
-
-    UpscalerInputsDx12::Init(InDevice);
 
     return NVSDK_NGX_Result_Success;
 }

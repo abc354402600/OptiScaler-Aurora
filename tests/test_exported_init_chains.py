@@ -30,7 +30,7 @@ constexpr int NVSDK_NGX_Result_FAIL_NotInitialized=-7,NVSDK_NGX_Result_Success=0
 constexpr int app_id_override=12;const char* project_id_override="override";
 void* vkGetInstanceProcAddr=nullptr;void* vkGetDeviceProcAddr=nullptr;
 int checks=0,nativeCalls=0,providerCalls=0,pathWrites=0,metadataWrites=0,projectWrites=0,nativeResult=0,providerResult=0;
-std::function<void()> onNative,onProvider;int throwStage=0;
+std::function<void()> onNative,onProvider;int throwStage=0;int finalizationStage=0;
 void check(bool b,std::source_location loc=std::source_location::current()){if(!b){std::cerr<<"Init chain check "<<checks+1<<" failed at generated line "<<loc.line()<<"\n";std::exit(2);}++checks;}
 NgxPathSnapshot::Owner UpdateInitPaths(NVSDK_NGX_FeatureCommonInfo*);
 enum class FGNvngxReplacement{None,Yes};enum class FGInput{NvngxFG};
@@ -51,9 +51,9 @@ struct StateView {bool nvngxDx11Inited,nvngxDx12Inited,nvngxVkInited;ID3D11Devic
 StateView ReadState(){auto& s=State::Instance();return {s.nvngxDx11Inited,s.nvngxDx12Inited,s.nvngxVkInited,s.currentD3D11Device,s.currentD3D12Device,s.currentVkDevice};}
 struct Option{bool v;bool value_or_default(){return v;}};
 struct Config{Option DLSSEnabled{true},UseGenericAppIdWithDlss{false};static Config* Instance(){static Config c;return &c;}};
-struct D3D12Hooks{static void HookDevice(ID3D12Device*){}};
-struct UpscalerInputsDx12{static void Init(ID3D12Device*){}};
-struct UpscalerTimeVk{static void Init(VkDevice,VkPhysicalDevice){}};
+struct D3D12Hooks{static void HookDevice(ID3D12Device*){if(finalizationStage==1)throw 99;}};
+struct UpscalerInputsDx12{static void Init(ID3D12Device*){if(finalizationStage==2)throw 99;}};
+struct UpscalerTimeVk{static void Init(VkDevice,VkPhysicalDevice){if(finalizationStage==3)throw 99;}};
 struct NativeCall{
  bool operator!=(std::nullptr_t)const{return true;}
  template<class...A>int operator()(A...){++nativeCalls;if(onNative)onNative();return nativeResult;}
@@ -77,7 +77,7 @@ struct Nvngx_FG{
 '''
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');parser.add_argument('--negative-control',choices=['no-path-validation','no-configuration-rollback']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--compiler',required=True);parser.add_argument('--driver');parser.add_argument('--negative-control',choices=['no-path-validation','no-configuration-rollback','early-device-publication','early-vulkan-publication']);args=parser.parse_args()
     cpp=PRELUDE;routes=[];path_routes=[];invalid_routes=[];failed_project_routes=[];provider_routes=[];other_device_routes=[];allsource=''
     for api in ('Dx11','Dx12','Vk'):
         source=(ROOT/f'OptiScaler/inputs/NVNGX_DLSS_{api}.cpp').read_text(encoding='utf-8');allsource+=source
@@ -88,6 +88,11 @@ def main():
             if args.negative_control=='no-configuration-rollback':
                 wrapper,count=re.subn(r'NgxExportLifecycle::RunInitialization\(\s*NVSDK_NGX_Result_FAIL_NotInitialized,\s*NVSDK_NGX_Result_Success,\s*State::Instance\(\).NVNGX_Init,\s*State::Instance\(\).NVNGX_FeatureInfo_Paths,', 'NgxExportLifecycle::Run(NVSDK_NGX_Result_FAIL_NotInitialized,',wrapper)
                 assert count==1, 'negative control must change every Init wrapper'
+            if args.negative_control in ('early-device-publication','early-vulkan-publication'):
+                if args.negative_control=='early-device-publication' and 'NgxCore_D3D12_Init_Ext(' in core[:core.index('{')]:
+                    core=core.replace('    D3D12Hooks::HookDevice(InDevice);','    D3D12Device = InDevice;State::Instance().currentD3D12Device = InDevice;State::Instance().nvngxDx12Inited = true;\n    D3D12Hooks::HookDevice(InDevice);')
+                if 'NgxCore_VULKAN_Init_Ext2(' in core[:core.index('{')]:
+                    core=core.replace('    UpscalerTimeVk::Init(InDevice, InPD);','    vkDevice = InDevice;State::Instance().currentVkDevice = InDevice;\n    UpscalerTimeVk::Init(InDevice, InPD);')
             if args.negative_control=='no-path-validation':core=core.replace(' || !ValidNgxInitPaths(InFeatureInfo)','')
             cpp+=core+'\n'+wrapper+'\n'
             signature=wrapper[:wrapper.index('{')];params=signature[signature.index('(')+1:signature.rfind(')')].split(',');values=[]
@@ -268,6 +273,30 @@ def main():
   check(State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
   providerResult=-7;check(routes[index]()==-7);providerResult=0;
   check(State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
+ }
+
+
+ // Late preparation exceptions preserve all preexisting local device fields.
+ // SDK calls stay stand-ins here: this proves publication order, not their rollback.
+ for(size_t route=0;route<providerRoutes.size();++route) {
+  int index=providerRoutes[route];
+  for(bool previouslyReady:{false,true})for(int stage:(index<8?std::vector<int>{1,2}:std::vector<int>{3})) {
+   reset();if(previouslyReady)check(otherDeviceRoutes[route]()==0);
+   // Distinct non-null dispatch pointers ensure a failed Init cannot overwrite them.
+   Vk::vkInstance=&otherVk;Vk::vkPD=&otherVk;Vk::vkGIPA=&otherVk;Vk::vkGDPA=&otherVk;
+   auto previous=ReadState();auto d11=Dx11::D3D11Device;auto d12=Dx12::D3D12Device;auto vd=Vk::vkDevice;
+   auto meta=State::Instance().NVNGX_Init.Read();auto paths=State::Instance().NVNGX_FeatureInfo_Paths.Read();
+   finalizationStage=stage;bool threw=false;try{routes[index]();}catch(int e){threw=e==99;}finalizationStage=0;
+   check(threw);
+   check(Dx11::D3D11Device==d11&&Dx12::D3D12Device==d12&&Vk::vkDevice==vd);
+   auto after=ReadState();check(after.nvngxDx11Inited==previous.nvngxDx11Inited&&after.nvngxDx12Inited==previous.nvngxDx12Inited&&after.nvngxVkInited==previous.nvngxVkInited);
+   check(after.currentD3D11Device==previous.currentD3D11Device&&after.currentD3D12Device==previous.currentD3D12Device&&after.currentVkDevice==previous.currentVkDevice);
+   check(Vk::vkInstance==&otherVk&&Vk::vkPD==&otherVk&&Vk::vkGIPA==&otherVk&&Vk::vkGDPA==&otherVk);
+   check(State::Instance().NVNGX_Init.Read()==meta&&State::Instance().NVNGX_FeatureInfo_Paths.Read()==paths);
+   check(routes[index]()==0);
+   if(index<8)check(State::Instance().currentD3D12Device==&dx12&&Dx12::D3D12Device==&dx12);
+   else check(State::Instance().currentVkDevice==&vk&&Vk::vkDevice==&vk&&Vk::vkGIPA==vkGetInstanceProcAddr&&Vk::vkGDPA==vkGetDeviceProcAddr);
+  }
  }
 
  // Native SDK/close and provider SDK/close remain deterministic stand-ins.

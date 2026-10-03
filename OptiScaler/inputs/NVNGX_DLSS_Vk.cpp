@@ -197,49 +197,31 @@ static NVSDK_NGX_Result NgxCore_VULKAN_Init_Ext2(unsigned long long InApplicatio
     LOG_INFO("SDK: {0:x}", (unsigned int) InSDKVersion);
     LOG_INFO(L"InApplicationDataPath {0}", std::wstring(InApplicationDataPath));
 
+    // Complete logging/timing preparation before publishing any local device fields.
     if (InInstance)
-    {
         LOG_INFO("InInstance exist!");
-        vkInstance = InInstance;
-    }
-
     if (InPD)
-    {
         LOG_INFO("InPD exist!");
-        vkPD = InPD;
-    }
-
-    if (InDevice)
-    {
-        LOG_INFO("InDevice exist!");
-        vkDevice = InDevice;
-    }
-
+    LOG_INFO("InDevice exist!");
     if (InGDPA)
-    {
         LOG_INFO("InGDPA exist!");
-        vkGDPA = InGDPA;
-    }
     else
-    {
         LOG_INFO("InGDPA does not exist!");
-        vkGDPA = vkGetDeviceProcAddr;
-    }
-
     if (InGIPA)
-    {
         LOG_INFO("InGIPA exist!");
-        vkGIPA = InGIPA;
-    }
     else
-    {
         LOG_INFO("InGIPA does not exist!");
-        vkGIPA = vkGetInstanceProcAddr;
-    }
-
-    State::Instance().currentVkDevice = InDevice;
 
     UpscalerTimeVk::Init(InDevice, InPD);
+
+    if (InInstance)
+        vkInstance = InInstance;
+    if (InPD)
+        vkPD = InPD;
+    vkDevice = InDevice;
+    vkGDPA = InGDPA ? InGDPA : vkGetDeviceProcAddr;
+    vkGIPA = InGIPA ? InGIPA : vkGetInstanceProcAddr;
+    State::Instance().currentVkDevice = InDevice;
 
     State::Instance().nvngxVkInited = true;
 
