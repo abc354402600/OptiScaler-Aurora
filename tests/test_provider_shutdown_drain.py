@@ -51,7 +51,7 @@ int main() {
  check(read(ha)==-3&&read(hb)==0);provider.releaseCallback={};
  before=provider.releases;check(closeA()==0&&provider.releases==before);
  // A later initialization cannot resurrect the retired token.
- Nvngx_FG::_dx12InitAttempts.insert(&a);auto* newer=create(&a);
+ Nvngx_FG::_dx12InitAttempts.insert(&a);Nvngx_FG::_dx12InitReady.insert(&a);auto* newer=create(&a);
  check(newer!=ha&&read(ha)==-3&&Nvngx_FG::D3D12_ReleaseFeature(ha)==-3);
  provider.releaseCallback=[]()->int{throw std::runtime_error("release");};bool threw=false;
  try{closeA();}catch(const std::runtime_error&){threw=true;}
@@ -86,13 +86,13 @@ int main() {
  check(Nvngx_FG::VULKAN_CreateFeature1(&a,nullptr,0,nullptr,&known)==0);
  check(Nvngx_FG::VULKAN_CreateFeature(nullptr,0,nullptr,&unknown)==0);
  Nvngx_FG::_vulkanInitAttempts.insert(&a);before=provider.releases;
- check(Nvngx_FG::VULKAN_Shutdown1(&a)==-7&&provider.releases==before&&vkread(known)==0&&vkread(unknown)==0);
+ check(Nvngx_FG::VULKAN_Shutdown1(&a)==-7&&provider.releases==before&&vkread(known)==-7&&vkread(unknown)==-7);
  check(Nvngx_FG::VULKAN_Shutdown()==0&&provider.releases==before+2&&vkread(known)==-3&&vkread(unknown)==-3);
  // API and device isolation with only explicit Vulkan handles.
  NVSDK_NGX_Handle* vkB=nullptr;
  check(Nvngx_FG::VULKAN_CreateFeature1(&a,nullptr,0,nullptr,&known)==0);
  check(Nvngx_FG::VULKAN_CreateFeature1(&b,nullptr,0,nullptr,&vkB)==0);
- Nvngx_FG::_vulkanInitAttempts={&a,&b};ha=create(&a);Nvngx_FG::_dx12InitAttempts.insert(&a);
+ Nvngx_FG::_vulkanInitAttempts={&a,&b};Nvngx_FG::_vulkanInitReady={&a,&b};ha=create(&a);Nvngx_FG::_dx12InitAttempts.insert(&a);Nvngx_FG::_dx12InitReady.insert(&a);
  check(Nvngx_FG::VULKAN_Shutdown1(&a)==0&&vkread(known)==-3&&vkread(vkB)==0&&read(ha)==0);
  check(Nvngx_FG::D3D12_Shutdown()==0&&read(ha)==-3&&vkread(vkB)==0);
  check(Nvngx_FG::VULKAN_Shutdown()==0&&vkread(vkB)==-3);
@@ -126,10 +126,6 @@ def main():
     cpp=make_fixture('\n'.join(extra)+CHECKS)
     cpp='struct State { bool isShuttingDown=false; static State& Instance(){static State s;return s;} };\n'+cpp
     cpp=cpp.replace('struct Nvngx_FG {','''struct Nvngx_FG {
- inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts;
- inline static std::unordered_set<ID3D12Device*> _dx12InitReady;
- inline static std::unordered_set<VkDevice> _vulkanInitAttempts;
- inline static std::unordered_set<VkDevice> _vulkanInitReady;
  struct Publication {Provider* Peek(){return &provider;}};
  inline static Publication _provider;
 ''')

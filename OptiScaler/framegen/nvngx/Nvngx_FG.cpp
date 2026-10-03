@@ -388,6 +388,9 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_CreateFeature(ID3D12GraphicsCommandList* InCmdL
     if (!InCmdList || FAILED(InCmdList->GetDevice(IID_PPV_ARGS(&device))) || !device)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
+    if (!CanUseProvider(_dx12InitAttempts, _dx12InitReady, device.Get()))
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     return CreateProviderHandle(
         _handles, OutHandle,
         Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::D3D12, device.Get() },
@@ -465,6 +468,9 @@ NVSDK_NGX_Result Nvngx_FG::D3D12_EvaluateFeature(ID3D12GraphicsCommandList* InCm
         {
             if (handle.api != HandleApi::D3D12)
                 return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+
+            if (!CanUseProvider(_dx12InitAttempts, _dx12InitReady, handle.device))
+                return NVSDK_NGX_Result_FAIL_NotInitialized;
 
             bool applyHudCutoff = Config::Instance()->FGHudCutoff.value_or_default() > 0.0f ||
                                   State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup;
@@ -667,6 +673,9 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature(VkCommandBuffer InCmdBuffer, NVS
     if (!lease)
         return NVSDK_NGX_Result_FAIL_NotInitialized;
 
+    if (!CanUseProvider(_vulkanInitAttempts, _vulkanInitReady, nullptr))
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
+
     return CreateProviderHandle(
         _handles, OutHandle, Nvngx_FG_Handle { lastIdCreated++ + NVNGX_PROVIDER_ID_OFFSET, nullptr, HandleApi::Vulkan },
         NVSDK_NGX_Result_Success, NVSDK_NGX_Result_FAIL_InvalidParameter, NVSDK_NGX_Result_Fail,
@@ -693,6 +702,9 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_CreateFeature1(VkDevice InDevice, VkCommandBuf
 
     if (!InDevice)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
+    if (!CanUseProvider(_vulkanInitAttempts, _vulkanInitReady, InDevice))
+        return NVSDK_NGX_Result_FAIL_NotInitialized;
 
     return CreateProviderHandle(
         _handles, OutHandle,
@@ -771,6 +783,9 @@ NVSDK_NGX_Result Nvngx_FG::VULKAN_EvaluateFeature(VkCommandBuffer InCmdList, con
                          {
                              if (handle.api != HandleApi::Vulkan)
                                  return NVSDK_NGX_Result_FAIL_FeatureNotFound;
+
+                             if (!CanUseProvider(_vulkanInitAttempts, _vulkanInitReady, handle.device))
+                                 return NVSDK_NGX_Result_FAIL_NotInitialized;
 
                              // LOG_TRACE("Handle received from the game: {:X}", (uint64_t) InFeatureHandle);
 

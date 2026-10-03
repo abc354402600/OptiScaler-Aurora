@@ -86,6 +86,19 @@ class Nvngx_FG
         return completion.succeeded ? result : NVSDK_NGX_Result_FAIL_NotInitialized;
     }
 
+    // Caller holds operation admission. Preserve pre-Init discovery behavior,
+    // but block known incomplete devices. A legacy handle without device identity
+    // cannot distinguish an incomplete device from a usable one.
+    template <typename Device>
+    static bool CanUseProvider(const std::unordered_set<Device>& attempts, const std::unordered_set<Device>& ready,
+                               const void* device)
+    {
+        for (const auto owned : attempts)
+            if ((!device || owned == device) && !ready.contains(owned))
+                return false;
+        return true;
+    }
+
     static std::unique_ptr<IFGNvngx> createProvider();
     static ProviderLookup<IFGNvngx> lookupProvider();
     static IFGNvngx* getProvider();

@@ -53,6 +53,35 @@ int main() {
    provider.result=-8;
    check(create()==-8 && !token);
  }
+
+ // Actual Init ledger plus actual operation bodies; close bookkeeping simulated.
+ for(int variant=0;variant<3;++variant){
+  bool dx=variant==0;ID3D12Device other;
+  // Exercise both typed-device and erased-device ledger instantiations.
+  auto run=[&](auto& attempts,auto& ready){
+  attempts.clear();ready.clear();provider.result=0;
+  NVSDK_NGX_Handle* token=nullptr;
+  auto create=[&]{return dx?Nvngx_FG::D3D12_CreateFeature(&command,0,nullptr,&token):
+    variant==1?Nvngx_FG::VULKAN_CreateFeature(nullptr,0,nullptr,&token):Nvngx_FG::VULKAN_CreateFeature1(&device,nullptr,0,nullptr,&token);};
+  auto evaluate=[&]{return dx?Nvngx_FG::D3D12_EvaluateFeature(nullptr,token,nullptr,nullptr):Nvngx_FG::VULKAN_EvaluateFeature(nullptr,token,nullptr,nullptr);};
+  auto release=[&]{return dx?Nvngx_FG::D3D12_ReleaseFeature(token):Nvngx_FG::VULKAN_ReleaseFeature(token);};
+  using Device=typename std::decay_t<decltype(attempts)>::value_type;
+  auto selected=static_cast<Device>(&device);auto unrelated=static_cast<Device>(&other);
+  check(Nvngx_FG::InitializeProvider(attempts,ready,selected,[]{return -8;})==-7);
+  int before=provider.creates;check(create()==-7&&!token&&provider.creates==before);
+  attempts.clear();ready.clear();check(Nvngx_FG::InitializeProvider(attempts,ready,selected,[]{return 0;})==0);
+  check(create()==0&&token);check(evaluate()==0);
+  check(Nvngx_FG::InitializeProvider(attempts,ready,unrelated,[]{return -8;})==-7);
+  before=provider.evaluates;check(evaluate()==(variant==1?-7:0));
+  check(provider.evaluates==before+(variant==1?0:1));
+  ready.erase(selected);before=provider.evaluates;
+  check(evaluate()==-7&&provider.evaluates==before);
+  before=provider.releases;check(release()==0&&provider.releases==before+1);
+  attempts.clear();ready.clear();check(create()==0&&token);check(evaluate()==0);check(release()==0);
+  };
+  if(dx)run(Nvngx_FG::_dx12InitAttempts,Nvngx_FG::_dx12InitReady);
+  else run(Nvngx_FG::_vulkanInitAttempts,Nvngx_FG::_vulkanInitReady);
+ }
  std::cout<<"PASS: "<<checks<<" provider API handle routing checks\n";
 }
 '''
@@ -100,6 +129,12 @@ namespace Microsoft::WRL { template<class T> struct ComPtr {
  inline static std::atomic_uint32_t lastIdCreated=0;
  static Provider* getProvider() { return &provider; }
 '''+types+'\ninline static ProviderHandleRegistry<Nvngx_FG_Handle> _handles;\n'+'\n'.join('static '+s+';' for s in signatures)+'\n};\n'
+    cls = cls.replace('struct Nvngx_FG {', 'struct Nvngx_FG {\n'+
+        function(header,'template <typename Device, typename Callback>')+'\n'+
+        function(header,'template <typename Device>\n    static bool CanUseProvider(')+'''
+ inline static std::unordered_set<ID3D12Device*> _dx12InitAttempts,_dx12InitReady;
+ inline static std::unordered_set<VkDevice> _vulkanInitAttempts,_vulkanInitReady;
+''')
     dx = bodies[3]
     bodies[3] = dx[:dx.index('            bool applyHudCutoff')] + '''
             return provider->D3D12_EvaluateFeature(InCmdList,handle.nativeHandle,InParameters,InCallback);
@@ -113,11 +148,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--compiler', required=True)
     parser.add_argument('--driver')
+    parser.add_argument('--negative-control',action='store_true')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='aurora-handle-api-') as directory:
         path = Path(directory)
         cpp, exe = path/'test.cpp', path/'test.exe'
-        cpp.write_text(make_fixture(), encoding='utf-8')
+        fixture=make_fixture()
+        if args.negative_control:
+            old=function(fixture,'template <typename Device>\n    static bool CanUseProvider(')
+            fixture=fixture.replace(old,old[:old.index('{')]+'{return true;}')
+        cpp.write_text(fixture, encoding='utf-8')
         command = [args.compiler]+([args.driver] if args.driver else [])
         if Path(args.compiler).stem.lower() == 'cl':
             command += ['/nologo', '/EHsc', '/std:c++20', '/I'+str(ROOT/'OptiScaler'), str(cpp), '/Fe:'+str(exe)]
