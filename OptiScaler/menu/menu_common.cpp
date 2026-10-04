@@ -3407,10 +3407,12 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
     nvngxOptions[fgNvngxArtursIndex].set_disabled(!state.artursFgFileAvailable, AuroraUtf8(L"缺少 dlss-enabler-headless.dll"));
 
     auto constexpr fgNvngxFfxIndex = (uint32_t) FGNvngxReplacement::FFX;
+    nvngxOptions[fgNvngxFfxIndex].set_disabled(state.swapchainApi == API::Vulkan, AuroraUtf8(L"当前 API 不支持"));
     nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReady(false),
                                                AuroraUtf8(L"缺少 amd_fidelityfx_framegeneration_dx12.dll"));
 
     auto constexpr fgNvngxComboIndex = (uint32_t) FGNvngxReplacement::Combo;
+    nvngxOptions[fgNvngxComboIndex].set_disabled(state.swapchainApi == API::Vulkan, AuroraUtf8(L"当前 API 不支持"));
     nvngxOptions[fgNvngxComboIndex].set_disabled(
         !FfxApiProxy::IsFGReady(false) || !state.artursFgFileAvailable,
         AuroraUtf8(L"缺少 amd_fidelityfx_framegeneration_dx12.dll\n或缺少 dlss-enabler-headless.dll"));
@@ -5266,12 +5268,15 @@ void MenuCommon::RenderFakenvapiSettings(RenderMenuContext& ctx)
     auto& state = ctx.state;
     auto config = ctx.config;
 
-    // FAKENVAPI ---------------------------
-    ImGui::SeparatorText("fakenvapi");
-
     // Using state.reflexLimitsFps as a detection for Reflex being used on Nvidia
-    bool showLatencyFlex =
+    const bool showLatencyFlex =
         fakenvapi::isUsingAsMainNvapi() || (state.activeFgOutput == FGOutput::XeFG && state.reflexLimitsFps);
+
+    const bool showForceXell = state.swapchainApi != API::Vulkan;
+    if (!showLatencyFlex && !showForceXell)
+        return;
+
+    ImGui::SeparatorText("fakenvapi");
 
     if (showLatencyFlex)
     {
@@ -5284,25 +5289,27 @@ void MenuCommon::RenderFakenvapiSettings(RenderMenuContext& ctx)
         ShowHelpMarker(AURORA_CN("默认情况下，只要可用就优先使用 FSR Anti-Lag 2.0 / XeLL。\n启用此项可强制改用 LatencyFlex。"));
         ImGui::EndDisabled();
 
-        // Keep Force XeLL on the same line if LatencyFlex is visible
-        ImGui::SameLine(0.0f, 16.0f);
     }
 
-    // Force XeLL is always visible
-    bool forceXell = config->ForceXeLL.value_or_default();
-    static bool activeForceXeLL = forceXell;
-
-    if (ImGui::Checkbox(AURORA_CN("强制 XeLL"), &forceXell))
+    if (showForceXell)
     {
-        config->ForceXeLL = forceXell;
-    }
-    ShowHelpMarker(AURORA_CN("允许非 Intel 显卡在未启用 FG 时使用 XeLL。\n\n会禁用 FG 选项。\n\n需要重启游戏。"));
+        if (showLatencyFlex)
+            ImGui::SameLine(0.0f, 16.0f);
+        bool forceXell = config->ForceXeLL.value_or_default();
+        static bool activeForceXeLL = forceXell;
 
-    if (activeForceXeLL != forceXell)
-    {
-        ImGui::Spacing();
-        ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.0f, 1.f)), AURORA_CN("请保存 INI 并重启游戏后生效"));
-        ImGui::Spacing();
+        if (ImGui::Checkbox(AURORA_CN("强制 XeLL"), &forceXell))
+        {
+            config->ForceXeLL = forceXell;
+        }
+        ShowHelpMarker(AURORA_CN("允许非 Intel 显卡在未启用 FG 时使用 XeLL。\n\n会禁用 FG 选项。\n\n需要重启游戏。"));
+
+        if (activeForceXeLL != forceXell)
+        {
+            ImGui::Spacing();
+            ImGui::TextColored(toneMapColor(ImVec4(1.f, 0.f, 0.0f, 1.f)), AURORA_CN("请保存 INI 并重启游戏后生效"));
+            ImGui::Spacing();
+        }
     }
 
     if (showLatencyFlex)
