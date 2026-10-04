@@ -2,7 +2,7 @@
 
 [简体中文](COMPATIBILITY.zh-CN.md) | **English** · [Home](../README.en.md)
 
-Current for Aurora v1.1. Historical game reports, code validation and unresolved symptoms are distinct; older reports are not fresh full-version validation.
+Current for Aurora v1.1.1. Historical game reports, code validation and unresolved symptoms are distinct; older reports are not fresh full-version validation.
 
 v1.1.1 adds zero-size swapchain and scoped Control Resonant fixes. Runtime versions and the game-validation limits below remain unchanged. [Maintenance notes](RELEASE_NOTES_AURORA_V1_1_1.en.md).
 
