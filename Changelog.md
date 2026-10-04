@@ -2,6 +2,12 @@
 
 **简体中文** | [English](Changelog.en.md) · [返回首页](README.md)
 
+## 后续维护（尚未发布）
+
+- 修复合法零宽高交换链被当作覆盖层跳过的问题，覆盖普通、DLSSG 和包装调用路径。
+- 为 Control Resonant 增加交换链与 Streamline 自动下载兼容策略，保留用户显式配置。
+- 详细来源与验证范围见 [10 月 4 日维护记录](docs/COMPATIBILITY_MAINTENANCE_20261004.md)。这些改动不在已发布的 v1.1 包内，不代表相关游戏已完成实机回归。
+
 ## v1.1
 
 [正式发行页](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1) · [完整改动与限制](docs/RELEASE_NOTES_AURORA_V1_1.md)

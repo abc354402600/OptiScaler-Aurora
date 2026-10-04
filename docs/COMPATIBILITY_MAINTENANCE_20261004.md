@@ -16,4 +16,10 @@
 
 这些检查使用 CPU 及接口替身，不模拟完整 DXGI 创建、Streamline 插件加载或真实 GPU，不代表 Soulframe、Control Resonant 或其他游戏已实测通过。本批不声称修复巫师3此前全部崩溃、绝区零 11008，也不承诺帧数提升。
 
-完整 Windows DLL 构建及打包结果将在完成后补充。未通过前不视为正式合并候选。不重开安装器、XeFG 所有权、加载锁或 NR/重投影功能项目。
+## 2026-10-05 构建结果确认
+
+生产提交 `5e73669cd3d7df7ff8332a2b933acedfc63f4007` 的 Windows 构建 [37181605984](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37181605984) 全部通过：完整 DLL、运行库清单、防降级检查、配置的兼容性检查、7z 打包与 Artifact 上传。格式检查 [37181605941](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37181605941) 通过；本地七个修改 C/C++ 文件的增量格式检查也通过。另核对 GameQuirk 共 56 个有效值，未超出 64 位容量；SL1 初始化函数与维护前逐字一致。
+
+产物 `OptiScaler_Aurora_v1.1_20261004_compat_5e73669c.7z`，Artifact id `11295751099`。GitHub Artifact digest 为 `sha256:f8961da0c1726dd808648feaed638ffe756f134808f60335067535c5cf521503`，不是独立下载内层 7z 后计算的散列。
+
+随后仅补齐文档并同步 aurora；正式 `aurora-v1.1` 标签和发行资产不替换。中英 Changelog 将这一批明确列为尚未发布的维护改动。不重开安装器、XeFG 所有权、加载锁或 NR/重投影功能项目。
