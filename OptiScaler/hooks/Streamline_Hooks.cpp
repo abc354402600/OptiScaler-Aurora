@@ -109,6 +109,13 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
 
     sl::Preferences localPref = pref;
 
+    // Apply before the DLSSG feature-list early return; leave the caller's preferences unchanged.
+    if (Config::Instance()->DisableOTA.value_or_default())
+    {
+        localPref.flags &= ~sl::PreferenceFlags::eAllowOTA;
+        localPref.flags &= ~sl::PreferenceFlags::eLoadDownloadedPlugins;
+    }
+
     if (localPref.logMessageCallback != &streamlineLogCallback)
         o_logCallback = localPref.logMessageCallback;
     localPref.logLevel = sl::LogLevel::eCount;
@@ -262,19 +269,6 @@ sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVe
         // return so that localFeaturesToLoad is valid
         return o_slInit(localPref, sdkVersion);
     }
-
-    // bool hookSetTag =
-    //     (State::Instance().activeFgInput == FGInput::NvngxFG || State::Instance().activeFgInput == FGInput::DLSSG);
-
-    // if (hookSetTag)
-    //     localPref->flags &= ~(sl::PreferenceFlags::eAllowOTA | sl::PreferenceFlags::eLoadDownloadedPlugins);
-
-    // To prevent mixed up OTA situations
-    // if (State::Instance().activeFgOutput == FGOutput::DLSSG)
-    //{
-    //    localPref.flags &= ~sl::PreferenceFlags::eAllowOTA;
-    //    localPref.flags &= ~sl::PreferenceFlags::eLoadDownloadedPlugins;
-    //}
 
     return o_slInit(localPref, sdkVersion);
 }

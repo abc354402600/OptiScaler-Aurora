@@ -41,6 +41,7 @@ enum class GameQuirk : uint64_t
     DoNotLoadAmdxc64,
     DontUseUnrealMVBarriers,
     DontUseUnrealColorBarriers,
+    DisableOTA,
 
     // Quirks that are applied deeper in code
     CyberpunkHudlessState,
@@ -457,7 +458,8 @@ static const QuirkEntry quirkTable[] = {
 
     // CONTROL Resonant
     // SL spoof enough to unlock everything DLSS
-    QUIRK_ENTRY("controlresonant.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("controlresonant.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::DoNotPreserveFGSwapChain,
+                GameQuirk::DisableOTA),
 
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //

@@ -726,6 +726,7 @@ bool Config::Reload(std::filesystem::path iniPath)
         // NvApi
         {
             DisableFlipMetering.set_from_config(readBool("NvApi", "DisableFlipMetering"));
+            DisableOTA.set_from_config(readBool("NvApi", "DisableOTA"));
             DisableReflexSync.set_from_config(readBool("NvApi", "DisableReflexSync"));
         }
 
@@ -1560,6 +1561,7 @@ bool Config::SaveIni()
 
     // NvApi
     {
+        ini.SetValue("NvApi", "DisableOTA", GetBoolValue(Instance()->DisableOTA.value_for_config()).c_str());
         ini.SetValue("NvApi", "DisableFlipMetering",
                      GetBoolValue(Instance()->DisableFlipMetering.value_for_config()).c_str());
         ini.SetValue("NvApi", "DisableReflexSync",
