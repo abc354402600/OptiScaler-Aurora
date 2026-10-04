@@ -23,3 +23,7 @@
 产物 `OptiScaler_Aurora_v1.1_20261004_compat_5e73669c.7z`，Artifact id `11295751099`。GitHub Artifact digest 为 `sha256:f8961da0c1726dd808648feaed638ffe756f134808f60335067535c5cf521503`，不是独立下载内层 7z 后计算的散列。
 
 随后仅补齐文档并同步 aurora；正式 `aurora-v1.1` 标签和发行资产不替换。中英 Changelog 将这一批明确列为尚未发布的维护改动。不重开安装器、XeFG 所有权、加载锁或 NR/重投影功能项目。
+
+## 正式包更新（2026-10-05，取代上述尚未发布状态）
+
+用户随后要求更新下载包。本批已随 [v1.1.1](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1) 正式发布并设为 latest。标签 `b7dbe773`；[正式构建 37218434111](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37218434111) 完整 DLL、测试、运行库、打包和发布全部通过。包为 `OptiScaler_Aurora_v1.1.1_20261004.7z`，219568627 bytes，SHA256 `7254001662b7872ff7c4afd007b44f88cb1cf433a4b16eef03703537e8c18f3a`，资产 digest 与下载的校验文件一致。v1.1 保留历史包，不再是默认下载版本。

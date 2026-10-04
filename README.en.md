@@ -10,7 +10,7 @@
 ![DLSS 310.9.1](https://img.shields.io/badge/DLSS-310.9.1-76b900?style=flat-square)
 ![Streamline 2.14.1](https://img.shields.io/badge/Streamline-2.14.1-2563eb?style=flat-square)
 
-**[Download v1.1.1](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1) · [Getting started](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.en.md) · [Compatibility](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.en.md) · [Release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1.en.md)**
+**[Download v1.1.1](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1) · [Getting started](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.en.md) · [Compatibility](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.en.md) · [Release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_1.en.md)**
 
 </div>
 
@@ -39,7 +39,7 @@ Fixes zero-size swapchain classification and adds scoped Control Resonant polici
 - **Resource access guards:** frame-state, Reflex, HUD/depth-copy and device checks, plus CPU concurrency protection for shared objects.
 - **Preserved defaults:** `DualFeature=false`. The discontinued RC3 automatic multi-entry installer is not included.
 
-The release passed a full Windows build, configured compatibility checks, runtime inventory verification and archive validation. See the [full release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1.en.md) for scope and limitations.
+The release passed a full Windows build, configured compatibility checks, runtime inventory verification and archive validation. See the [full release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_1.en.md) for scope and limitations.
 
 ## Quick start
 

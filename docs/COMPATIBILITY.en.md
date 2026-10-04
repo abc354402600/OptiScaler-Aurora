@@ -4,6 +4,8 @@
 
 Current for Aurora v1.1. Historical game reports, code validation and unresolved symptoms are distinct; older reports are not fresh full-version validation.
 
+v1.1.1 adds zero-size swapchain and scoped Control Resonant fixes. Runtime versions and the game-validation limits below remain unchanged. [Maintenance notes](RELEASE_NOTES_AURORA_V1_1_1.en.md).
+
 ## The Witcher 3
 
 On 2026-09-30 the user reported normal RTX 4080 Laptop / DLSSG 310.9.1 / 6X operation. The screenshot identifies DLSSG and the ratio, but not the loaded Streamline version.
