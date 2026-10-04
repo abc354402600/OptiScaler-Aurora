@@ -2,6 +2,12 @@
 
 [简体中文](Changelog.md) | **English** · [Home](README.en.md)
 
+## v1.1.2
+
+- Adopt upstream XeLL module routing; avoid redirecting all exports of another DLL in normal loading.
+- Disable unsupported FFX/Combo options and hide Force XeLL under Vulkan.
+- [Provenance and limits](docs/UPSTREAM_AUDIT_20261005.md). Runtime versions are unchanged; this does not add Vulkan FG backends or resolve all game errors.
+
 ## v1.1.1
 
 - Stop treating valid zero-size swapchain requests as overlay calls, including ordinary, DLSSG and wrapped routes.

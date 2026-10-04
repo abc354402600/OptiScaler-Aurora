@@ -2,9 +2,11 @@
 
 **简体中文** | [English](COMPATIBILITY.en.md) · [返回首页](../README.md)
 
-更新至 Aurora v1.1.1。这里区分历史实机反馈、本版代码验证和未解决问题；不把旧记录改写为新版本全量实测。
+更新至 Aurora v1.1.2。这里区分历史实机反馈、本版代码验证和未解决问题；不把旧记录改写为新版本全量实测。
 
 v1.1.1 增加零尺寸交换链及 Control Resonant 限定修复；运行库版本和以下实机验证边界保持不变。[维护版说明](RELEASE_NOTES_AURORA_V1_1_1.md)。
+
+v1.1.2 增加 XeLL 模块选择及 Vulkan 菜单能力限制，未新增游戏实测结论。[说明](RELEASE_NOTES_AURORA_V1_1_2.md)。
 
 ## 巫师3
 

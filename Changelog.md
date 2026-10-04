@@ -2,6 +2,12 @@
 
 **简体中文** | [English](Changelog.en.md) · [返回首页](README.md)
 
+## v1.1.2
+
+- 吸收官方 XeLL 模块查询修复，普通加载路径不再重定向另一份 DLL 的全部导出。
+- Vulkan 禁用不支持的 FFX／Combo 选项，隐藏强制 XeLL，保留中文提示。
+- [来源和验证范围](docs/UPSTREAM_AUDIT_20261005.md)。不改变运行库版本，不宣称增加 Vulkan FG 后端或修复全部游戏报错。
+
 ## v1.1.1
 
 - 修复合法零宽高交换链被当作覆盖层跳过的问题，覆盖普通、DLSSG 和包装调用路径。

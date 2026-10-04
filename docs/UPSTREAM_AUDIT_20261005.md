@@ -24,3 +24,5 @@ deYangar 中文 fork 新到 `b6c9cc5c`，新增翻译空响应兜底修复、官
 `tests/test_xell_module_routing.py` 抽取生产模块查询函数，在普通模式 118 项、LOW_LATENCY_INPUTS 模式 108 项检查通过；覆盖目标/非目标模块、未初始化、Windows API 失败、标志和空指针原样转发，并执行 Vulkan 菜单条件及显示前缀。模块引用由计数替身验证，不是在 Windows loader/GPU 中运行；检查不证明所有模块生命周期安全。
 
 完整 Windows DLL 构建和打包结果随后记录；通过前不把本批称为正式发布。没有真实游戏/性能测试，不承诺 FPS 增幅或巫师3、绝区零症状全部解决。
+
+候选 `b5f5ad62` 的 [Windows run 37219898063](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37219898063) 完整构建、配置的兼容性检查、运行库、防降级、打包和上传均成功；format 37219897934 成功。另以错误的按文件名查询替换按地址查询，新增测试成功捕获回归，随后恢复代码。发布准备只更新版本和文档/脚本，不增加生产逻辑；正式发布状态以标签流程读回为准。

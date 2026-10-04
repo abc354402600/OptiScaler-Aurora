@@ -6,11 +6,11 @@
 
 **简体中文** | [English](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/README.en.md)
 
-[![Aurora v1.1.1](https://img.shields.io/badge/Aurora-v1.1.1-7c3aed?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1)
+[![Aurora v1.1.2](https://img.shields.io/badge/Aurora-v1.1.2-7c3aed?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2)
 ![DLSS 310.9.1](https://img.shields.io/badge/DLSS-310.9.1-76b900?style=flat-square)
 ![Streamline 2.14.1](https://img.shields.io/badge/Streamline-2.14.1-2563eb?style=flat-square)
 
-**[下载 v1.1.1](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1) · [安装与使用](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.zh-CN.md) · [游戏兼容性](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.zh-CN.md) · [更新说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1)**
+**[下载 v1.1.2](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2) · [安装与使用](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.zh-CN.md) · [游戏兼容性](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.zh-CN.md) · [更新说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2)**
 
 </div>
 
@@ -27,9 +27,13 @@
 | 游戏内面板 | 按 `Insert` 调节参数并保存配置。 |
 | 恢复与排错 | 提供运行库检查和卸载恢复流程，便于处理游戏更新后的文件变化。 |
 
+## v1.1.2 维护更新
+
+吸收官方 XeLL 模块选择修复，移除普通加载路径的全导出重定向；Vulkan 菜单不再提供不支持的 FFX／Combo 和强制 XeLL 选项。运行库与原有功能保持不变。
+
 ## v1.1.1 维护更新
 
-修复零宽高交换链误判，补充 Control Resonant 帧生成兼容策略与可配置的 Streamline 自动下载控制。保留 v1.1 的运行库和功能；详情见[维护版发行说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1)。
+修复零宽高交换链误判，补充 Control Resonant 帧生成兼容策略与可配置的 Streamline 自动下载控制。保留 v1.1 的运行库和功能；详情见[维护版发行说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2)。
 
 ## v1.1 功能基础
 
@@ -39,7 +43,7 @@
 - **增加资源访问保护**：完善帧状态、Reflex、HUD／深度复制和设备归属检查，改善共享对象的 CPU 并发处理。
 - **保留默认兼容策略**：`DualFeature=false`；不包含已停止开发的 RC3 自动多入口安装器。
 
-本版已通过完整 Windows 编译、配置的兼容性专项检查、运行库清单与压缩包校验。[完整发行说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1)记录了改动和未解决限制。
+本版已通过完整 Windows 编译、配置的兼容性专项检查、运行库清单与压缩包校验。[完整发行说明](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2)记录了改动和未解决限制。
 
 ## 快速开始
 

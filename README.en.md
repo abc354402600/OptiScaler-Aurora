@@ -6,19 +6,23 @@
 
 [简体中文](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/README.md) | **English**
 
-[![Aurora v1.1.1](https://img.shields.io/badge/Aurora-v1.1.1-7c3aed?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1)
+[![Aurora v1.1.2](https://img.shields.io/badge/Aurora-v1.1.2-7c3aed?style=flat-square)](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2)
 ![DLSS 310.9.1](https://img.shields.io/badge/DLSS-310.9.1-76b900?style=flat-square)
 ![Streamline 2.14.1](https://img.shields.io/badge/Streamline-2.14.1-2563eb?style=flat-square)
 
-**[Download v1.1.1](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1) · [Getting started](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.en.md) · [Compatibility](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.en.md) · [Release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_1.en.md)**
+**[Download v1.1.2](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2) · [Getting started](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/GUIDE.en.md) · [Compatibility](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/COMPATIBILITY.en.md) · [Release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_2.en.md)**
 
 </div>
 
 Aurora is a free, open-source community fork based on [OptiScaler](https://github.com/optiscaler/OptiScaler) and related community work. It offers upscaler replacement, frame generation and image tuning, with additions for RTX 40 MFG, DLSS Neural Rendering and game compatibility. It is not an official OptiScaler or NVIDIA release.
 
+## v1.1.2 maintenance update
+
+Adopts upstream XeLL module selection fixes and removes whole-export redirection from the normal loading path. Vulkan menus no longer offer unsupported FFX/Combo and Force XeLL options. Runtime versions and existing features are retained.
+
 ## v1.1.1 maintenance update
 
-Fixes zero-size swapchain classification and adds scoped Control Resonant policies with configurable Streamline OTA handling. Runtime versions and v1.1 features are retained. See the [maintenance release notes](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.1).
+Fixes zero-size swapchain classification and adds scoped Control Resonant policies with configurable Streamline OTA handling. Runtime versions and v1.1 features are retained. See the [maintenance release notes](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1.2).
 
 ## Features
 
@@ -39,7 +43,7 @@ Fixes zero-size swapchain classification and adds scoped Control Resonant polici
 - **Resource access guards:** frame-state, Reflex, HUD/depth-copy and device checks, plus CPU concurrency protection for shared objects.
 - **Preserved defaults:** `DualFeature=false`. The discontinued RC3 automatic multi-entry installer is not included.
 
-The release passed a full Windows build, configured compatibility checks, runtime inventory verification and archive validation. See the [full release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_1.en.md) for scope and limitations.
+The release passed a full Windows build, configured compatibility checks, runtime inventory verification and archive validation. See the [full release notes](https://github.com/abc354402600/OptiScaler-Aurora/blob/aurora/docs/RELEASE_NOTES_AURORA_V1_1_2.en.md) for scope and limitations.
 
 ## Quick start
 

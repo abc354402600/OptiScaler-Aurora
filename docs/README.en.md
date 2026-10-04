@@ -2,13 +2,13 @@
 
 [简体中文](README.md) | **English** · [Home](../README.en.md)
 
-Current release: **v1.1.1**, published from `b7dbe773`. This index separates user guidance from historical engineering notes.
+Current release: **v1.1.2**. This index separates user guidance from historical engineering notes.
 
 | Document | Purpose |
 |---|---|
 | [Installation and usage](GUIDE.en.md) | Setup, settings, Runtime Sync and removal |
 | [Game compatibility](COMPATIBILITY.en.md) | Working reports, version differences and unresolved issues |
-| [v1.1.1 release notes](RELEASE_NOTES_AURORA_V1_1_1.en.md) | Released changes and validation scope |
+| [v1.1.2 release notes](RELEASE_NOTES_AURORA_V1_1_2.en.md) | Released changes and validation scope |
 | [Changelog](../Changelog.en.md) | Aurora versions and upstream history |
 | [Configuration reference](../Config.md) | Detailed parameter reference |
 | [GPU spoofing reference](../Spoofing.md) | Inherited technical reference |
