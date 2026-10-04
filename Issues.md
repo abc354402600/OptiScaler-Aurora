@@ -1,3 +1,5 @@
+> 当前 Aurora v1.1 已知问题请见[游戏兼容性](docs/COMPATIBILITY.zh-CN.md)或 [English](docs/COMPATIBILITY.en.md)。以下保留上游问题参考，不代表所有条目均在 v1.1 复现。
+
 # Known Issues
 
 ## In-game Menu

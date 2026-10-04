@@ -1,3 +1,9 @@
+## 2026-10-04 v1.1 发布完成与文档整理
+
+正式版 aurora-v1.1 已发布，标签提交 671ccdedcae5b4ad4143d7b9d13ec9e1be7f0abf；正式构建 37134982022 全部成功。Release 为非草稿、非预发布且为 latest。包 OptiScaler_Aurora_v1.1_20261003.7z，219579266 bytes；SHA256 b0d862ae3289b69d480b1b70c57a1fbb95816ff533ebd088432e4c3a9ae272e4，已与发布的 SHA256SUMS.txt 及资产 digest 核对。旧记录中的发布待办已经完成，不再自动扩展修复范围。
+
+本轮用户要求默认中文首页、手动切换英文及同步介绍：README.md / README.en.md 分离；新增中英指南、兼容性与文档索引；更新 Changelog、dist/README 和 v1.1 说明；上游 README、更新记录与旧 fork 教程原文移至明确的存档入口，保留致谢与许可证。仅文档变更，不移动发行标签、不替换已发布二进制，不重复 DLL/安装器套件。后续构建会从仓库读取新的中文包内 README，语言切换及指南使用在线地址。
+
 ## 2026-10-03 v1.1 最终候选构建通过
 
 候选 ae860411971da9757e249a9f7736d0a7185b1c8e：Windows run 37134428438 / job 111235931619、format run 37134428436 全部成功。完整 DLL、16 项 Runtime SHA256（源码及包内）、17 项防降级、全部配置的兼容性测试、7z 完整性和上传通过。重点断言包括 Init 完整链 1438、admission 590、native lifecycle 107、HUD publication 1168、HUD Dispatch 564、Provider API 81。相对原 aurora 的 86 个修改 C/C++ 文件也通过增量格式检查。

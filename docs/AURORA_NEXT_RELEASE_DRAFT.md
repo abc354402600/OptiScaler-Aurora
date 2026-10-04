@@ -1,3 +1,5 @@
+> **已完成：Aurora v1.1 已正式发布。** [发行页](https://github.com/abc354402600/OptiScaler-Aurora/releases/tag/aurora-v1.1) · [当前文档导航](README.md)。下文是发布前的范围冻结记录，不是尚待执行的发布任务。
+
 # Aurora v1.1 发布收尾
 
 ## 2026-10-03 发布范围冻结（取代此前无限扩展的收尾计划）

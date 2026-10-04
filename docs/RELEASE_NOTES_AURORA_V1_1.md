@@ -1,5 +1,7 @@
 # OptiScaler Aurora v1.1 — 运行库更新与兼容性修复
 
+**简体中文** | [English](RELEASE_NOTES_AURORA_V1_1.en.md) · [返回首页](../README.md)
+
 本版更新 DLSS / Streamline 运行库，重点修复帧生成初始化、失败清理、资源访问及关闭过程中的问题。保留 Aurora 的 RTX 40 多帧生成路线和默认 `DualFeature=false`，不包含已停止开发的 RC3 一键安装器。
 
 ## 更新内容

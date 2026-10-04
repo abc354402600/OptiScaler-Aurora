@@ -1,3 +1,5 @@
+> 当前 Aurora v1.1 功能请见[中文首页](README.md)或 [English](README.en.md)。以下为上游功能参考，其中版本号与 Aurora 版本分开。
+
 ## Features
 * Supports multiple upscaling backends (XeSS, FSR 2.1.2, FSR 2.2.1, FSR 3.1 and DLSS)
 * Experimental support for frame generation (OptiFG by FSR) with version 0.7.0 and above
