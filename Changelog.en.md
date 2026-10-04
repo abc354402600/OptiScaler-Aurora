@@ -2,11 +2,11 @@
 
 [简体中文](Changelog.md) | **English** · [Home](README.en.md)
 
-## Maintenance (unreleased)
+## v1.1.1
 
 - Stop treating valid zero-size swapchain requests as overlay calls, including ordinary, DLSSG and wrapped routes.
 - Add scoped Control Resonant swapchain and Streamline OTA policies while honoring explicit user settings.
-- See the [October 4 maintenance record](docs/COMPATIBILITY_MAINTENANCE_20261004.md) for provenance and validation limits. These changes are not included in the published v1.1 package and do not establish in-game compatibility.
+- See the [October 4 maintenance record](docs/COMPATIBILITY_MAINTENANCE_20261004.md) for provenance and validation limits. This maintenance release includes these changes; code/build checks do not establish in-game compatibility.
 
 ## v1.1
 

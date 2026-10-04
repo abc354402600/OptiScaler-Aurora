@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ "aurora", "Compatibility-fixes" ]
-    tags: [ "aurora-v1.1" ]
+    tags: [ "aurora-v1.1.1" ]
 #  pull_request:
 #    branches: [ "master" ]
 
@@ -170,8 +170,8 @@ jobs:
         compression-level: 0
         if-no-files-found: error
 
-    - name: Publish Aurora v1.1 / 发布正式版
-      if: github.ref == 'refs/tags/aurora-v1.1'
+    - name: Publish Aurora v1.1.1 / 发布正式版
+      if: github.ref == 'refs/tags/aurora-v1.1.1'
       shell: powershell
       env:
         GH_TOKEN: ${{ github.token }}

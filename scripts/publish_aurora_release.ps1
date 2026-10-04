@@ -2,10 +2,10 @@ param([Parameter(Mandatory=$true)][string]$Archive)
 $ErrorActionPreference = 'Stop'
 
 # Only the explicit formal tag can publish; branch/manual builds remain artifacts.
-$tag = 'aurora-v1.1'
+$tag = 'aurora-v1.1.1'
 $repo = 'abc354402600/OptiScaler-Aurora'
 if ($env:GITHUB_REF -ne "refs/tags/$tag" -or $env:GITHUB_REPOSITORY -ne $repo) {
-    throw 'Formal release requires the Aurora v1.1 tag in the expected repository.'
+    throw 'Formal release requires the Aurora v1.1.1 tag in the expected repository.'
 }
 $head = (& git rev-parse HEAD).Trim()
 if ($LASTEXITCODE) { throw 'Cannot resolve build commit.' }
@@ -15,7 +15,7 @@ if (($mainRef -split '\s+')[0] -ne $head -or $env:GITHUB_SHA -ne $head) {
     throw 'Release build must match the current aurora head and tag event commit.'
 }
 $resource = Get-Content -LiteralPath 'OptiScaler/resource.h' -Raw
-if ($resource -notmatch '(?m)^#define VER_AURORA_VERSION "1\.1"\s*$') {
+if ($resource -notmatch '(?m)^#define VER_AURORA_VERSION "1\.1\.1"\s*$') {
     throw 'Resource version does not match the release tag.'
 }
 if (-not (Test-Path -LiteralPath $Archive -PathType Leaf) -or (Get-Item -LiteralPath $Archive).Length -eq 0) {
@@ -31,10 +31,10 @@ if ($LASTEXITCODE) { throw 'Cannot inspect existing releases.' }
 $existing = @($releaseList | ConvertFrom-Json | Where-Object { $_.tag_name -eq $tag })
 if ($existing.Count -gt 0) {
     if ($existing.Count -ne 1 -or -not $existing[0].draft) { throw 'Release already published; refusing asset replacement.' }
-    & gh release edit $tag --repo $repo --title 'OptiScaler Aurora v1.1' --notes-file docs/RELEASE_NOTES_AURORA_V1_1.md
+    & gh release edit $tag --repo $repo --title 'OptiScaler Aurora v1.1.1' --notes-file docs/RELEASE_NOTES_AURORA_V1_1_1.md
     if ($LASTEXITCODE) { throw 'Draft notes update failed.' }
 } else {
-    & gh release create $tag --repo $repo --verify-tag --draft --title 'OptiScaler Aurora v1.1' --notes-file docs/RELEASE_NOTES_AURORA_V1_1.md
+    & gh release create $tag --repo $repo --verify-tag --draft --title 'OptiScaler Aurora v1.1.1' --notes-file docs/RELEASE_NOTES_AURORA_V1_1_1.md
     if ($LASTEXITCODE) { throw 'Draft release creation failed.' }
 }
 & gh release upload $tag $Archive 'SHA256SUMS.txt' --repo $repo --clobber
