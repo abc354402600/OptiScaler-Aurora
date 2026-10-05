@@ -1,0 +1,57 @@
+# D3D12 状态跟踪重构移植评审（2026-10-05）
+
+结论：**不直接吸收当前原版；保留为需要适配修正的候选。** 用户授权是“认真评估，没有问题再吸收”，本次已复现三个状态记录/恢复缺口，尚不满足该条件。正式 v1.1.2 DLL、运行库和下载资产不变。
+
+## 范围与来源
+
+- Aurora 基线：`5351ff89`（发布源码 `1d22875d`）。
+- 官方候选：[500ed3354f61c7463e086243f6968645c2a90148](https://github.com/optiscaler/OptiScaler/commit/500ed3354f61c7463e086243f6968645c2a90148)。两文件，930 行增加、1204 行删除。
+- 审查了状态结构、记录入口、Reset、原函数转发、恢复顺序、调用线程开关与当前 Aurora 对应实现。没有整体覆盖 Aurora 的设备捕获/关闭代码。
+
+## 有价值的改进
+
+1. `t_upscalerActive` 改为线程局部，避免一个线程执行超分时阻止其他线程记录；这是正确方向，但仍需检查嵌套调用与现有调用点。
+2. 成功 Reset 后清空已有状态，失败 Reset 不清空。
+3. 相同根签名重复设置保留参数；未知签名布局按记录扩展，并限制参数索引。
+4. 常量使用位掩码，按实际写入的连续区间恢复，避免恢复未设置的 DWORD。
+5. 合并 compute/graphics 记录代码；恢复时用线程局部抑制作用域，避免链式 Hook 再记录自身恢复调用。
+
+未做性能测量，不能据此声称提高 FPS。
+
+## 已复现的吸收阻碍
+
+| 路径 | 原函数实际行为 | 应补齐的条件 |
+| --- | --- | --- |
+| 首次 `RecordReset(cmd, initialPSO)` | `GetCmdListState(cmd, false)` 找不到记录就返回。后续首次绑定创建空记录，初始 PSO 已丢失 | 在应跟踪的首次 Reset 捕获初始 PSO；同时考虑创建命令列表时的初始状态 |
+| `RecordDescriptorHeaps(cmd, 0, nullptr)` | 因数组为空直接返回，旧堆仍记录为已绑定 | 区分合法清空与错误输入，并明确记录空状态 |
+| 已记录零堆，Opti 临时绑定堆，再调用恢复 | `RestoreDescriptorHeaps` 遇到零堆直接返回 false，临时堆继续绑定 | 区分“未捕获”和“明确为空”；后者需要实际解除绑定 |
+
+第三项复现使用非空数组地址和零计数，不依赖第二项的空数组参数。
+
+这些是候选版本中的缺口，**不是三个新引入回归的断言**：Aurora 旧实现也会跳过空数组记录/零堆恢复，且没有这套 Reset 跟踪。不能因此声称旧版完美，也不能声称本次发现已解释巫师3闪退。
+
+Microsoft 文档明确 [Reset 的初始 PSO 参数设置命令列表初始管线状态](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-reset)，以及 [SetDescriptorHeaps 会解除之前的堆绑定](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-setdescriptorheaps)。
+
+## 可复现验证
+
+新增 `tests/audit_upstream_d3d12_state.py`，从固定 Git 提交直接提取三个原函数体，使用 C++20 CPU 替身运行；不手写替代被测算法。Git 对象需存在（本仓库已 fetch），无需 checkout 上游。
+
+```text
+python tests/audit_upstream_d3d12_state.py --compiler <zig.exe>
+BLOCKER 1: first Reset loses initial PSO
+BLOCKER 2: zero/null heap unbind retains old heap
+BLOCKER 3: recorded empty heap state is not restored
+3/3 adoption blockers reproduced; 3 controls passed
+```
+
+三个对照分别确认已有记录的 Reset 正常更新 PSO、零计数非空数组可以记成空堆、非空堆恢复正常。脚本成功退出表示复现了阻碍，**不是安全检查全部通过**；因此没有纳入正式 DLL 的通过型 CI。没有运行旧安装测试或无关全量构建。
+
+## 后续适配门槛
+
+- 修复上述记录/恢复语义，增加首次/失败 Reset、未知/明确空状态的回归。
+- `ClearState`、命令列表创建/销毁与地址复用在该新状态表中尚无完整生命周期闭环；不能只依靠裸指针 key。签名地址重用也需结合命令列表生命周期评估。
+- 表锁保护容器，返回的 `CommandListState*` 本身不带锁。D3D12 同一命令列表通常要求调用者串行；不能仅凭无对象锁宣布数据竞争，也不能直接增加异步 erase 导致悬空指针。
+- 核对 Aurora 现有设备、代理和关闭保护；线程开关检查嵌套/提前返回；链式 Hook 检查重入和首次安装发布时序。
+- 适配完成后才做完整 Windows DLL 构建和发布决策。CPU 复现与构建均不等同于 GPU/实机兼容性确认。
+
+本次完成评估并保存证据，不恢复无限扩大范围的生命周期重写，也不因报告变更重发同一份二进制。
