@@ -18,6 +18,8 @@ Aurora is a free, open-source community fork based on [OptiScaler](https://githu
 
 ## v1.1.2 maintenance update
 
+> Unreleased on the main branch: per-thread D3D12 recording isolation and two corrected UAV tracking conditions, validated by a Windows build and focused checks. **The existing v1.1.2 download does not include these fixes.** The large state-tracking rewrite remains disabled.
+
 Adopts upstream XeLL module selection fixes and removes whole-export redirection from the normal loading path. Vulkan menus no longer offer unsupported FFX/Combo and Force XeLL options. Runtime versions and existing features are retained.
 
 ## v1.1.1 maintenance update

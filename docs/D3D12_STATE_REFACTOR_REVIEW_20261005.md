@@ -73,3 +73,7 @@ BLOCKER 3: recorded empty heap state is not restored
 - 保留 Aurora 原有设备捕获、关闭、Intel、NR exposure、状态存储和 SL1/6X 逻辑。生产 C++ 差异为一个 TLS 声明和两个条件，不引入实验头文件。
 
 新增 `tests/test_d3d12_tracking_isolation.py`：86 项 CPU 检查，覆盖 compute/graphics、early/late 串联、零地址、参数越界、空命令列表、暂停跟踪、线程隔离和原调用转发；三个负向变异（全局开关/两处条件反转）都被断言拒绝。为计数重复记录，测试将锁类型替换为计数替身，其余函数体直接提取生产源文件；跨线程操作通过 join 串行，测试本身不制造共享表数据竞争。已加入 Windows 构建检查，完整 DLL 结果以 Actions 为准。
+
+### 2026-10-06 完整构建结果
+
+生产候选 `3b810809` 的 [Windows 构建 37273821059](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37273821059) 全部必要步骤成功，包括完整 DLL、运行库清单、版本保留、配置的兼容性检查、打包与上传。正式发布步骤按分支规则跳过。[格式检查 37273821063](https://github.com/abc354402600/OptiScaler-Aurora/actions/runs/37273821063) 成功。仅这两项小修正达到源码合入门槛，不代表大型候选获得集成验证。v1.1.2 下载资产仍保持原样，新维护包尚未发布。
