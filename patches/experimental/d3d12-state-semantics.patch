@@ -1,6 +1,14 @@
 --- a/OptiScaler/hooks/D3D12_Hooks.cpp
 +++ b/OptiScaler/hooks/D3D12_Hooks.cpp
-@@ -207,6 +207,7 @@
+@@ -110,6 +110,7 @@
+ namespace CmdListVTable
+ {
+ constexpr int Reset = 10;
++constexpr int ClearState = 11;
+ constexpr int SetPipelineState = 25;
+ constexpr int SetDescriptorHeaps = 28;
+ constexpr int SetComputeRootSignature = 29;
+@@ -207,6 +208,7 @@
  
  struct CommandListState
  {
@@ -8,7 +16,7 @@
      UINT numDescriptorHeaps = 0;
      ID3D12DescriptorHeap* descriptorHeaps[kMaxDescriptorHeaps] {};
      ID3D12PipelineState* pipelineState = nullptr;
-@@ -216,6 +217,7 @@
+@@ -216,6 +218,7 @@
  
      void Clear()
      {
@@ -16,7 +24,16 @@
          numDescriptorHeaps = 0;
          std::fill(std::begin(descriptorHeaps), std::end(descriptorHeaps), nullptr);
          pipelineState = nullptr;
-@@ -403,10 +405,7 @@
+@@ -230,6 +233,8 @@
+ static std::shared_mutex s_rootSigLayoutsMutex;
+ static ankerl::unordered_dense::map<ID3D12RootSignature*, std::shared_ptr<const RootSigLayout>> s_rootSigLayouts;
+ 
++using PFN_ClearState = rewrite_signature<decltype(&ID3D12GraphicsCommandList::ClearState)>::type;
++static RootRestoreHook<PFN_ClearState> s_ClearState {};
+ static RootRestoreHook<PFN_Reset> s_Reset {};
+ static RootRestoreHook<PFN_SetDescriptorHeaps> s_SetDescriptorHeaps {};
+ static RootRestoreHook<PFN_SetPipelineState> s_SetPipelineState {};
+@@ -403,10 +408,7 @@
      if (commandList == nullptr || t_suppressRecording > 0)
          return;
  
@@ -28,7 +45,7 @@
      state->Clear();
      state->pipelineState = pInitialState;
  }
-@@ -425,7 +424,8 @@
+@@ -425,7 +427,8 @@
  static void RecordDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
                                    ID3D12DescriptorHeap* const* ppDescriptorHeaps)
  {
@@ -38,7 +55,7 @@
          return;
  
      auto config = Config::Instance();
-@@ -433,11 +433,12 @@
+@@ -433,11 +436,12 @@
      if (config->FGHudfixPersistentBindings.value_or_default())
          ResTrack_Dx12::OnSetDescriptorHeaps(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
  
@@ -53,7 +70,70 @@
  
      for (UINT i = 0; i < kMaxDescriptorHeaps; ++i)
          state->descriptorHeaps[i] = (i < state->numDescriptorHeaps) ? ppDescriptorHeaps[i] : nullptr;
-@@ -1070,7 +1071,8 @@
+@@ -559,6 +563,13 @@
+ 
+ // ---------------------------------------------------------------------------- Early hooks (Opti's own cmdlist vtable)
+ 
++VALIDATE_HOOK(hkClearState, PFN_ClearState)
++static void hkClearState(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pInitialState)
++{
++    s_ClearState.o_earlyHook(commandList, pInitialState);
++    RecordReset(commandList, pInitialState);
++}
++
+ VALIDATE_HOOK(hkReset, PFN_Reset)
+ static HRESULT hkReset(ID3D12GraphicsCommandList* commandList, ID3D12CommandAllocator* pAllocator,
+                        ID3D12PipelineState* pInitialState)
+@@ -703,6 +714,16 @@
+ 
+ // ---------------------------------------------------------------------------- Late hooks (from upscaler eval)
+ // Record first, then call down with recording suppressed so a chained early hook doesn't record again.
++
++VALIDATE_HOOK(hkClearStateLate, PFN_ClearState)
++static void hkClearStateLate(ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pInitialState)
++{
++    {
++        SuppressRecordingScope suppress;
++        s_ClearState.o_lateHook(commandList, pInitialState);
++    }
++    RecordReset(commandList, pInitialState);
++}
+ 
+ VALIDATE_HOOK(hkResetLate, PFN_Reset)
+ static HRESULT hkResetLate(ID3D12GraphicsCommandList* commandList, ID3D12CommandAllocator* pAllocator,
+@@ -872,6 +893,7 @@
+ template <typename F> static void ForEachCmdListHook(F&& f)
+ {
+     f(s_Reset);
++    f(s_ClearState);
+     f(s_SetPipelineState);
+     f(s_SetDescriptorHeaps);
+     f(s_SetComputeRootSignature);
+@@ -900,6 +922,7 @@
+ 
+     using namespace CmdListVTable;
+     load(s_Reset, Reset);
++    load(s_ClearState, ClearState);
+     load(s_SetPipelineState, SetPipelineState);
+     load(s_SetDescriptorHeaps, SetDescriptorHeaps);
+     load(s_SetComputeRootSignature, SetComputeRootSignature);
+@@ -968,6 +991,7 @@
+ 
+     // Common
+     AttachIf(c.restoreCompute || c.restoreGraphics, s_Reset.o_lateHook, hkResetLate);
++    AttachIf(c.restoreCompute || c.restoreGraphics, s_ClearState.o_lateHook, hkClearStateLate);
+     AttachIf(c.extended, s_SetPipelineState.o_lateHook, hkSetPipelineStateLate);
+     AttachIf(c.hookDescriptorHeaps, s_SetDescriptorHeaps.o_lateHook, hkSetDescriptorHeapsLate);
+ 
+@@ -1025,6 +1049,7 @@
+ 
+         // Common
+         AttachIf(c.restoreCompute || c.restoreGraphics, s_Reset.o_earlyHook, hkReset);
++        AttachIf(c.restoreCompute || c.restoreGraphics, s_ClearState.o_earlyHook, hkClearState);
+         AttachIf(c.extended, s_SetPipelineState.o_earlyHook, hkSetPipelineState);
+         AttachIf(c.hookDescriptorHeaps, s_SetDescriptorHeaps.o_earlyHook, hkSetDescriptorHeaps);
+ 
+@@ -1070,7 +1095,8 @@
  
  static bool RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList, const CommandListState& state)
  {

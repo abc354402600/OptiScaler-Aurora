@@ -1,3 +1,7 @@
+## 2026-10-05 D3D12 ClearState 候选与私有状态原型
+
+继续适配：实验 patch 增加 ClearState early/late Hook 的加载/注册/恢复清理，状态检查从 68 增至 78，原三个负向变异仍通过。独立 `patches/experimental/D3D12PrivateState.h` 原型使用 D3D12 私有接口持有 shared_ptr 状态，测试 29 个生命周期断言及 1000 次读取，通过两个引用泄漏负向变异。已验证替身对象同地址重建不会读旧记录。原型尚未接入 Hook；包装对象身份、模块卸载后的回调代码存活、初始化串行与失败调用点仍是门槛。真实 D3D12/Detours/MSVC 集成未验证，不重复构建正式 DLL、不发布。详见实验 README，生产代码保持 v1.1.2。
+
 ## 2026-10-05 D3D12 候选语义修正已验证，尚未生产集成
 
 用户确认继续适配。新增 `patches/experimental/d3d12-state-semantics.patch`，仅针对官方 500ed335；`tests/test_d3d12_state_candidate.py` 独立临时目录应用并执行真实函数，68 项 CPU 检查和三个负向变异通过。修正首次 Reset PSO、空数组解绑记录、明确空堆恢复；增加未知/已知区分。生产文件未改，未推送或重发包。剩余生产门槛：ClearState/对象销毁与地址复用、根签名布局生命周期，以及移除对 Aurora 不存在的 HUDfix 持久绑定接口的依赖；保留 Aurora 设备、Intel、NR exposure 和 HookToDevice 差异。见实验目录 README 与专项评审的进度段。不要将实验补丁直接应用到 Aurora 工作树或声称完整 DLL 已验证。

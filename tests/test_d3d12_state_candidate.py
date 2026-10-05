@@ -78,10 +78,14 @@ HRESULT resetOriginal(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12P
  ++resetCalls;return resetResult;
 }
 struct ResetHook {decltype(&resetOriginal) o_earlyHook=resetOriginal,o_lateHook=resetOriginal;}s_Reset;
+int clearCalls=0;
+void clearOriginal(ID3D12GraphicsCommandList*,ID3D12PipelineState*){++clearCalls;}
+struct ClearHook {decltype(&clearOriginal) o_earlyHook=clearOriginal,o_lateHook=clearOriginal;}s_ClearState;
 '''
         for decl in ['static void RecordReset(', 'static void RecordDescriptorHeaps(',
                      'static bool RestoreDescriptorHeaps(', 'static HRESULT hkReset(',
-                     'static HRESULT hkResetLate(']:
+                     'static HRESULT hkResetLate(', 'static void hkClearState(',
+                     'static void hkClearStateLate(']:
             cpp += function(source, decl)+'\n'
         cpp += r'''
 int main(){int checks=0;auto check=[&](bool ok){++checks;if(!ok){std::cerr<<"FAIL "<<checks;std::exit(2);}};
@@ -132,6 +136,15 @@ int main(){int checks=0;auto check=[&](bool ok){++checks;if(!ok){std::cerr<<"FAI
  Config::Instance()->ExtendedStateRestore.enabled=false;
  RecordDescriptorHeaps(&cmd,1,gameArray);check(s->numDescriptorHeaps==0);
  Config::Instance()->ExtendedStateRestore.enabled=true;
+ s_ClearState.o_lateHook=&hkClearState;
+ auto clear=late?&hkClearStateLate:&hkClearState;
+ RecordDescriptorHeaps(&cmd,2,two);s->compute.sentinel=7;s->graphics.sentinel=9;
+ clearCalls=0;clear(&cmd,&pso);check(clearCalls==1);
+ check(s->pipelineState==&pso&&s->descriptorHeapsKnown&&s->numDescriptorHeaps==0);
+ check(s->compute.sentinel==0&&s->graphics.sentinel==0);
+ clear(&cmd,nullptr);check(s->pipelineState==nullptr);
+ states.clear();clear(&cmd,&second);s=GetCmdListState(&cmd,false);
+ check(s&&s->pipelineState==&second&&s->descriptorHeapsKnown);
  }
  std::cout<<checks<<" candidate state checks passed (CPU stand-ins only)\n";
 }
