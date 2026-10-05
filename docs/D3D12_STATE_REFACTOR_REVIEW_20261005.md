@@ -61,3 +61,15 @@ BLOCKER 3: recorded empty heap state is not restored
 用户确认继续后，新增 `patches/experimental/d3d12-state-semantics.patch`（固定官方基线，不应用到 Aurora 生产文件）。通过已知/未知堆标志及首次 Reset 建档修正上述三个缺口。新增 `tests/test_d3d12_state_candidate.py`：68 项 CPU 检查通过，三个撤回修正的负向变异均被断言拒绝，涵盖 late→early Hook 链与 TLS 跨线程隔离。原复现脚本保留不变，用于证明未修正基线的问题。
 
 额外确认了依赖缺口：官方新版需要 Aurora 当前没有的 HUDfix 持久绑定接口。生产适配仍未完成；需处理这一差异与 ClearState/对象生命周期，不能将当前局部验证表述为整套重构已闭环。未改生产 DLL、未推送、未发布新包。实验补丁说明见 `patches/experimental/README.md`。
+
+## 分拆吸收决定与生产小修正
+
+继续审查确认私有接口原型需要在 D3D12 对象持有回调期间保证 DLL 代码存活。当前 `dllmain.cpp` 的 DLL_PROCESS_DETACH 路径并未完整解除所有 Hook；不能凭 CPU 引用计数测试声称支持动态卸载。强制 pin 模块会改变卸载行为，因此本轮不引入这一新策略。
+
+将能独立验证的改进先落地：
+
+- `isUpscalerActive` 使用 thread_local，与官方候选一致；一个线程暂停跟踪不再影响其他命令列表记录线程。该 bool 不是嵌套深度计数，本轮不声称解决同线程任意重入。
+- compute/graphics early UAV 两处条件由 `lateInProgress...` 修正为 `!lateInProgress...`，与其他入口和上游“记录一次、链式抑制”的行为一致。旧代码会在直接 early 调用时漏记，late→early 时重复记录。本次不声称此缺陷已被证明是巫师3闪退原因。
+- 保留 Aurora 原有设备捕获、关闭、Intel、NR exposure、状态存储和 SL1/6X 逻辑。生产 C++ 差异为一个 TLS 声明和两个条件，不引入实验头文件。
+
+新增 `tests/test_d3d12_tracking_isolation.py`：86 项 CPU 检查，覆盖 compute/graphics、early/late 串联、零地址、参数越界、空命令列表、暂停跟踪、线程隔离和原调用转发；三个负向变异（全局开关/两处条件反转）都被断言拒绝。为计数重复记录，测试将锁类型替换为计数替身，其余函数体直接提取生产源文件；跨线程操作通过 join 串行，测试本身不制造共享表数据竞争。已加入 Windows 构建检查，完整 DLL 结果以 Actions 为准。

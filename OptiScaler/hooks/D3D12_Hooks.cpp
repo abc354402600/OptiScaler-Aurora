@@ -207,7 +207,8 @@ static thread_local bool lateInProgressSetGraphicsRootUnorderedAccessView = fals
 static std::shared_mutex rootSigParameterCountMutex;
 static ankerl::unordered_dense::map<ID3D12RootSignature*, UINT> rootSigParameterCount;
 
-static bool isUpscalerActive = false;
+// Internal work on this thread must not suppress another command-list recorder.
+static thread_local bool isUpscalerActive = false;
 
 // Intel Atomic Extension
 struct UE_D3D12_RESOURCE_DESC
@@ -538,7 +539,7 @@ VALIDATE_HOOK(hkSetComputeRootUnorderedAccessView, PFN_SetComputeRootUnorderedAc
 static void hkSetComputeRootUnorderedAccessView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                 D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (lateInProgressSetComputeRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetComputeRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
@@ -668,7 +669,7 @@ VALIDATE_HOOK(hkSetGraphicsRootUnorderedAccessView, PFN_SetGraphicsRootUnordered
 static void hkSetGraphicsRootUnorderedAccessView(ID3D12GraphicsCommandList* commandList, UINT RootParameterIndex,
                                                  D3D12_GPU_VIRTUAL_ADDRESS BufferLocation)
 {
-    if (lateInProgressSetGraphicsRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
+    if (!lateInProgressSetGraphicsRootUnorderedAccessView && !isUpscalerActive && commandList != nullptr)
     {
         std::unique_lock<std::shared_mutex> lock(rootStatesMutex);
         auto& table = rootStates[commandList];
