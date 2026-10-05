@@ -55,3 +55,9 @@ BLOCKER 3: recorded empty heap state is not restored
 - 适配完成后才做完整 Windows DLL 构建和发布决策。CPU 复现与构建均不等同于 GPU/实机兼容性确认。
 
 本次完成评估并保存证据，不恢复无限扩大范围的生命周期重写，也不因报告变更重发同一份二进制。
+
+## 后续适配进度：三个语义缺口已有候选修正
+
+用户确认继续后，新增 `patches/experimental/d3d12-state-semantics.patch`（固定官方基线，不应用到 Aurora 生产文件）。通过已知/未知堆标志及首次 Reset 建档修正上述三个缺口。新增 `tests/test_d3d12_state_candidate.py`：68 项 CPU 检查通过，三个撤回修正的负向变异均被断言拒绝，涵盖 late→early Hook 链与 TLS 跨线程隔离。原复现脚本保留不变，用于证明未修正基线的问题。
+
+额外确认了依赖缺口：官方新版需要 Aurora 当前没有的 HUDfix 持久绑定接口。生产适配仍未完成；需处理这一差异与 ClearState/对象生命周期，不能将当前局部验证表述为整套重构已闭环。未改生产 DLL、未推送、未发布新包。实验补丁说明见 `patches/experimental/README.md`。

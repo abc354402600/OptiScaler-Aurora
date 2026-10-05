@@ -1,0 +1,65 @@
+--- a/OptiScaler/hooks/D3D12_Hooks.cpp
++++ b/OptiScaler/hooks/D3D12_Hooks.cpp
+@@ -207,6 +207,7 @@
+ 
+ struct CommandListState
+ {
++    bool descriptorHeapsKnown = false;
+     UINT numDescriptorHeaps = 0;
+     ID3D12DescriptorHeap* descriptorHeaps[kMaxDescriptorHeaps] {};
+     ID3D12PipelineState* pipelineState = nullptr;
+@@ -216,6 +217,7 @@
+ 
+     void Clear()
+     {
++        descriptorHeapsKnown = true;
+         numDescriptorHeaps = 0;
+         std::fill(std::begin(descriptorHeaps), std::end(descriptorHeaps), nullptr);
+         pipelineState = nullptr;
+@@ -403,10 +405,7 @@
+     if (commandList == nullptr || t_suppressRecording > 0)
+         return;
+ 
+-    auto* state = GetCmdListState(commandList, false);
+-    if (state == nullptr)
+-        return;
+-
++    auto* state = GetCmdListState(commandList, true);
+     state->Clear();
+     state->pipelineState = pInitialState;
+ }
+@@ -425,7 +424,8 @@
+ static void RecordDescriptorHeaps(ID3D12GraphicsCommandList* commandList, UINT NumDescriptorHeaps,
+                                   ID3D12DescriptorHeap* const* ppDescriptorHeaps)
+ {
+-    if (!ShouldRecord(commandList))
++    if (!ShouldRecord(commandList) || NumDescriptorHeaps > kMaxDescriptorHeaps ||
++        (NumDescriptorHeaps != 0 && ppDescriptorHeaps == nullptr))
+         return;
+ 
+     auto config = Config::Instance();
+@@ -433,11 +433,12 @@
+     if (config->FGHudfixPersistentBindings.value_or_default())
+         ResTrack_Dx12::OnSetDescriptorHeaps(commandList, NumDescriptorHeaps, ppDescriptorHeaps);
+ 
+-    if (!config->ExtendedStateRestore.value_or_default() || ppDescriptorHeaps == nullptr)
++    if (!config->ExtendedStateRestore.value_or_default())
+         return;
+ 
+     auto* state = GetCmdListState(commandList, true);
+-    state->numDescriptorHeaps = std::min(NumDescriptorHeaps, kMaxDescriptorHeaps);
++    state->descriptorHeapsKnown = true;
++    state->numDescriptorHeaps = NumDescriptorHeaps;
+ 
+     for (UINT i = 0; i < kMaxDescriptorHeaps; ++i)
+         state->descriptorHeaps[i] = (i < state->numDescriptorHeaps) ? ppDescriptorHeaps[i] : nullptr;
+@@ -1070,7 +1071,8 @@
+ 
+ static bool RestoreDescriptorHeaps(ID3D12GraphicsCommandList* cmdList, const CommandListState& state)
+ {
+-    if (state.numDescriptorHeaps == 0 || state.descriptorHeaps[0] == nullptr)
++    if (!state.descriptorHeapsKnown || state.numDescriptorHeaps > kMaxDescriptorHeaps ||
++        (state.numDescriptorHeaps != 0 && state.descriptorHeaps[0] == nullptr))
+         return false;
+ 
+     auto hook = s_SetDescriptorHeaps.GetHook();

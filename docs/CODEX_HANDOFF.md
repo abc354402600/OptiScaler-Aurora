@@ -1,3 +1,7 @@
+## 2026-10-05 D3D12 候选语义修正已验证，尚未生产集成
+
+用户确认继续适配。新增 `patches/experimental/d3d12-state-semantics.patch`，仅针对官方 500ed335；`tests/test_d3d12_state_candidate.py` 独立临时目录应用并执行真实函数，68 项 CPU 检查和三个负向变异通过。修正首次 Reset PSO、空数组解绑记录、明确空堆恢复；增加未知/已知区分。生产文件未改，未推送或重发包。剩余生产门槛：ClearState/对象销毁与地址复用、根签名布局生命周期，以及移除对 Aurora 不存在的 HUDfix 持久绑定接口的依赖；保留 Aurora 设备、Intel、NR exposure 和 HookToDevice 差异。见实验目录 README 与专项评审的进度段。不要将实验补丁直接应用到 Aurora 工作树或声称完整 DLL 已验证。
+
 ## 2026-10-05 大型 D3D12 重构评估：暂不原样移植
 
 用户要求评估官方 `500ed335`，无问题才吸收。见 [专项评审](D3D12_STATE_REFACTOR_REVIEW_20261005.md)。直接提取候选原函数的 C++20 CPU 复现确认三个状态记录/恢复缺口，三个对照通过；不是三个确定新增回归，也不是巫师3崩溃根因证明。新增 `tests/audit_upstream_d3d12_state.py` 成功退出代表复现了阻碍，勿纳入通过型产品 CI。生产 DLL/运行库/发行资产未变。后续若适配，先补 Reset 初始 PSO、空堆恢复与生命周期语义，再核对 Aurora 保护并完整构建；不要整体覆盖此候选。
